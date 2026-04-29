@@ -51,7 +51,7 @@ def main():
         # 1. Define your search paths
         loc_name = str(args.stage_dir)
         os.chdir(loc_name)
-        print("Changing to {loc_name}")
+        print(f"Changing to {loc_name}")
         search_paths = [str(args.stage_dir)]
         search_paths = [loc_name]
 
@@ -83,16 +83,20 @@ def main():
         metadata_path = args.output_dir / naming.metadata_filename(index)
         usd_path = args.stage_dir / naming.usd_filename(index)
 
-        vs, cs, ts, fs = lmu.plant_gl_scene_to_vertices_and_faces(scene)
-        meta_data = lsb.get_metadata(vs, cs)
+        mesh_components = lmu.plant_gl_scene_to_vertices_and_faces(scene)
+        meta_data = lsb.get_metadata(mesh_components)
+        tree, mapping = lsb.create_tree_structure()
+        meta_data["tree"] = tree
+        meta_data["tree_mapping"] = mapping
 
+        mesh_components_ordered = lmu.stitch_cylinders(mesh_components, meta_data)
         if stage_context is not []:
             # Where the usd files are stored
-            create_mesh_usd(stage_context, naming._prefix(index), usd_path, vs, cs, ts, fs, meta_data)
+            create_mesh_usd(stage_context, naming._prefix(index), usd_path, mesh_components, meta_data)
 
         # Write the metadata/mesh to the output directory
-        lmu.write(str(mesh_path), vs, cs, fs)
-        lsb.export_metadata(vs, cs, metadata_path=str(metadata_path))
+        lmu.write(str(mesh_path), mesh_components)
+        lsb.export_metadata(mesh_components, metadata_path=str(metadata_path))
 
         # Metadata
 

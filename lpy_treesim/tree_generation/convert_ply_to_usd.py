@@ -94,7 +94,7 @@ def check_texture(stage_context):
         stage.GetRootLayer().Export("tree_texture_check.usda")
 
 
-def create_mesh_usd(stage_context, tree_name, path_tree_name, vertices, colors, textures, faces, meta_data):
+def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, mesh_components:dict, meta_data:dict):
     # 1. Create a new USD stage
     # Set the up axis and units
     #stage = Usd.Stage.CreateNew("/World")
@@ -110,57 +110,61 @@ def create_mesh_usd(stage_context, tree_name, path_tree_name, vertices, colors, 
 
     # This fixes the "Cannot reference... has no default prim" error
     stage.SetDefaultPrim(root_xform.GetPrim())
-        
-    
-    trunk_parts = {}
-    branch_parts = {}
-    tertiary_parts = {}
-    
-    for cs, vs in zip(colors, vertices):
-        r, g, b = cs
-        color_key = f"({r}, {g}, {b})"
 
-        look_up = meta_data["cylinder_data"][color_key]["part_name"]
+    color_name_mapping = meta_data["color_mapping"]
+    name_tree_mapping = meta_data["tree_mapping"]
+    tree = meta_data["tree"]
+    for counter, mesh_component in mesh_components:
+        color_key = mesh_component["unique_id"]
+        lsystem_name = color_name_mapping[color_key]
+        tree_parts = tree[lsystem_name]
 
-        if mesh_parts
+        # 2. Define the Mesh primitive
 
-    # 2. Define the Mesh primitive
-    mesh = UsdGeom.Mesh.Define(stage, f"/{tree_name}/body")
+        mesh_name = f"/{tree_name}/{tree_parts['usd_name']}"
+        mesh = UsdGeom.Mesh.Define(stage, mesh_name)
 
+        # 3. Set the vertex positions (points)
+        vs = [(pt[0], pt[2], pt[1]) for pt in mesh_component["vertices"]]
+        mesh.CreatePointsAttr(vs)
 
-    # 3. Set the vertex positions (points)
-    vs = [(pt[0], pt[2], pt[1]) for pt in vertices]
-    mesh.CreatePointsAttr(vs)
+        # 4. Define face topology
+        # face_counts: how many vertices in each face (e.g., [3, 3, 3] for triangles)
+        # face_indices: flat list of vertex indices for all faces
+        face_counts = [len(face) for face in mesh_component["faces"]]
+        face_indices = [idx for face in mesh_component["faces"] for idx in face]
 
-    # 4. Define face topology
-    # face_counts: how many vertices in each face (e.g., [3, 3, 3] for triangles)
-    # face_indices: flat list of vertex indices for all faces
-    face_counts = [len(face) for face in faces]
-    face_indices = [idx for face in faces for idx in face]
+        mesh.CreateFaceVertexCountsAttr(face_counts)
+        mesh.CreateFaceVertexIndicesAttr(face_indices)
 
-    mesh.CreateFaceVertexCountsAttr(face_counts)
-    mesh.CreateFaceVertexIndicesAttr(face_indices)
+        # --- ADDING COLOR ---
+        # 1. Create the displayColor Primvar
+        color_primvar = mesh.CreateDisplayColorAttr()
+        cs = [(col[0] / 255.0, col[1] / 255.0, col[2] / 255.0) for col in mesh_component["colors"]]
+        color_primvar.Set(cs)
 
-    # --- ADDING COLOR ---
-    # 1. Create the displayColor Primvar
-    color_primvar = mesh.CreateDisplayColorAttr()
-    cs = [(col[0] / 255.0, col[1] / 255.0, col[2] / 255.0) for col in colors]
-    color_primvar.Set(cs)
+        # 2. Define Texture Coordinates (UVs)
+        # We use 'st' as the name.
+        # 'interpolation' determines how UVs map to the geometry.
+        tex_coords = UsdGeom.PrimvarsAPI(mesh).CreatePrimvar(
+            "st",
+            Sdf.ValueTypeNames.TexCoord2fArray,
+            UsdGeom.Tokens.varying
+        )
+        # 3. Set the UV values
+        # These correspond to the points defined above: (u, v)
+        ts = [(t[0], t[1]) for t in mesh_component["textures"]]
+        tex_coords.Set(ts)
 
-    # 2. Define Texture Coordinates (UVs)
-    # We use 'st' as the name.
-    # 'interpolation' determines how UVs map to the geometry.
-    tex_coords = UsdGeom.PrimvarsAPI(mesh).CreatePrimvar(
-        "st",
-        Sdf.ValueTypeNames.TexCoord2fArray,
-        UsdGeom.Tokens.varying
-    )
-    # 3. Set the UV values
-    # These correspond to the points defined above: (u, v)
-    ts = [(t[0], t[1]) for t in textures]
-    tex_coords.Set(ts)
+        # 2. Set Interpolation
+        # 'constant' = 1 color for whole mesh
+        # 'vertex'   = 1 color per point (blends across faces)
+        # 'uniform'  = 1 color per face
+        mesh.GetDisplayColorPrimvar().SetInterpolation(UsdGeom.Tokens.vertex)
+        # 5. Set optional subdivision scheme (none for a poly mesh)
+        mesh.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
 
-    # 2. Create the Material
+    # 2. Create the Material at the top level
     material_path = Sdf.Path("/textures/pine_bark_vmbibe2g_2k")
     material = UsdShade.Material.Define(stage, material_path)
 
@@ -186,22 +190,10 @@ def create_mesh_usd(stage_context, tree_name, path_tree_name, vertices, colors, 
         st_reader.CreateOutput("result", Sdf.ValueTypeNames.Float2))
 
     # 6. Bind the Material to the Mesh
-    UsdShade.MaterialBindingAPI(mesh).Bind(material)
+    UsdShade.MaterialBindingAPI(root_xform).Bind(material)
 
     # Example transform
     # UsdGeom.XformCommonAPI(mesh).SetRotate((0, 0, 25))
-
-    # 2. Set Interpolation
-    # 'constant' = 1 color for whole mesh
-    # 'vertex'   = 1 color per point (blends across faces)
-    # 'uniform'  = 1 color per face
-    if len(colors) == 1:
-        mesh.GetDisplayColorPrimvar().SetInterpolation(UsdGeom.Tokens.constant)
-    else:
-        mesh.GetDisplayColorPrimvar().SetInterpolation(UsdGeom.Tokens.vertex)
-
-    # 5. Set optional subdivision scheme (none for a poly mesh)
-    mesh.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
 
     # 6. Save the stage
     print(f"Saving file to {str(path_tree_name)}")

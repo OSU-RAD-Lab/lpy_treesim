@@ -113,11 +113,11 @@ def compute_cylinder_params(vertices):
     # The principal axis is the direction of the cylinder
     orientation = principal_axis.tolist()
 
-    return centroid.tolist(), float(radius), float(length), orientation
+    return {"centroid":centroid.tolist(), "radius":float(radius), "length":float(length), "orientation":orientation}
 
 
-def get_cylinder_params(vs, cs, cylinder_metadata: dict) -> dict:
-    vertices_by_color = sort_by_color(vs, cs)
+def get_cylinder_params(mesh_component: dict, cylinder_metadata: dict) -> dict:
+    vertices_by_color = sort_by_color(mesh_component["vertices"], mesh_component["colors"])
     cylinder_params = {}
     for color_key, vertices in vertices_by_color.items():
         centroid, radius, length, orientation = compute_cylinder_params(vertices)
@@ -130,6 +130,16 @@ def get_cylinder_params(vs, cs, cylinder_metadata: dict) -> dict:
             "orientation": orientation,
         }
 
+    return cylinder_params
+
+
+def get_all_cylinder_params(mesh_all_components, cylinder_metadata: dict) -> dict:
+    cylinder_params = {}
+    for mesh_component in mesh_all_components:
+        cylinder_param = compute_cylinder_params(mesh_component["vertices"])
+        mesh_component_params = get_cylinder_params(mesh_component, cylinder_metadata)
+        for key, item in mesh_component_params.items():
+            cylinder_params[key] = item
     return cylinder_params
 
 

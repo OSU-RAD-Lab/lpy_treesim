@@ -93,7 +93,7 @@ class BasicWoodConfig:
     max_length: float = 7.0
     tie_axis: tuple = None
     order: int = 0
-    color: int = 0
+    color: tuple = (0, 0, 0)
     material: int = 0
     prunable: bool = True
     name: str = None

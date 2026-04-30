@@ -77,7 +77,7 @@ def main():
             print(f"INFO: Generating {args.tree_name} tree #{index:03d}")
         logging.info(f"Generating {args.tree_name} tree #{index:03d} with seed {tree_seed}")
 
-        lstring, scene = lsb.generate_tree()
+        lstring, scene = lsb.generate_tree(b_interactive=False)
         # PLY
         mesh_path = args.output_dir / naming.mesh_filename(index)
         metadata_path = args.output_dir / naming.metadata_filename(index)
@@ -85,6 +85,7 @@ def main():
 
         mesh_components = lmu.plant_gl_scene_to_vertices_and_faces(scene)
         meta_data = lsb.get_metadata(mesh_components)
+        lsb.export_metadata(mesh_components, metadata_path=str(metadata_path))
         tree, mapping = lsb.create_tree_structure()
         meta_data["tree"] = tree
         meta_data["tree_mapping"] = mapping
@@ -92,11 +93,10 @@ def main():
         mesh_components_ordered = lmu.stitch_cylinders(mesh_components, meta_data)
         if stage_context is not []:
             # Where the usd files are stored
-            create_mesh_usd(stage_context, naming._prefix(index), usd_path, mesh_components, meta_data)
+            create_mesh_usd(stage_context, naming._prefix(index), usd_path, mesh_components_ordered, meta_data)
 
         # Write the metadata/mesh to the output directory
         lmu.write(str(mesh_path), mesh_components)
-        lsb.export_metadata(mesh_components, metadata_path=str(metadata_path))
 
         # Metadata
 

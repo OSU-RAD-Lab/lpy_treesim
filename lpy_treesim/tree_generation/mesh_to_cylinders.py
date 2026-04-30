@@ -133,10 +133,10 @@ def get_cylinder_params(mesh_component: dict, cylinder_metadata: dict) -> dict:
     return cylinder_params
 
 
-def get_all_cylinder_params(mesh_all_components, cylinder_metadata: dict) -> dict:
+def get_all_cylinder_params(mesh_all_components : list, cylinder_metadata: dict) -> dict:
     cylinder_params = {}
     for mesh_component in mesh_all_components:
-        cylinder_param = compute_cylinder_params(mesh_component["vertices"])
+        # cylinder_param = compute_cylinder_params(mesh_component["vertices"])
         mesh_component_params = get_cylinder_params(mesh_component, cylinder_metadata)
         for key, item in mesh_component_params.items():
             cylinder_params[key] = item

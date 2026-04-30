@@ -5,7 +5,7 @@ from pathlib import Path
 from lpy_treesim import ColorManager
 import json
 from openalea.lpy import Lsystem
-import lpy_treesim.tree_generation.lpy_mesh_utils as lmu
+from openalea.plantgl.all import *
 from lpy_treesim.tree_generation.mesh_to_cylinders import add_cylinder_params_to_json, get_all_cylinder_params
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
 
@@ -55,16 +55,19 @@ class TreeBuilder:
     def lsystem(self) -> Lsystem:
         return self.__lsystem
 
-    def generate_tree(self):
-
+    def generate_tree(self, b_interactive=False):
         lstring = self.__lsystem.axiom
+        if b_interactive:
+            Viewer.start()
         for iteration in range(self.__lsystem.derivationLength):
             lstring = self.__lsystem.derive(lstring, iteration, 1)
-            # self.__lsystem.plot(lstring)
-            # Viewer.hide()
-            # input("Press Enter to continue...")
-        # print(dir(self.__lsystem))
+            if b_interactive:
+                scene =  self.__lsystem.sceneInterpretation(lstring)
+                Viewer.display(scene)
+                input("Press Enter to continue...")
 
+        if b_interactive:
+            Viewer.exit()
         return lstring, self.__lsystem.sceneInterpretation(lstring)
     
     def export_hierarchy_dict(self) -> dict:
@@ -134,7 +137,7 @@ class TreeBuilder:
                 named_hierarchy[child_name] = {"start": self.convert_vec3_to_tuple(child.location.start), "end": self.convert_vec3_to_tuple(child.location.end)}
         return named_hierarchy
     
-    def get_metadata(self, part_dict: dict) -> None:
+    def get_metadata(self, part_dict: list) -> dict:
         """Export metadata based on label settings. Includes hierarchy and L-Py vars."""
         export_dict = {
             "seed_value": int(self.extern_vars["seed_value"]),
@@ -158,7 +161,7 @@ class TreeBuilder:
             export_dict["cylinder_data"] = get_all_cylinder_params(part_dict, cylinder_metadata=color_data)
         return export_dict
 
-    def export_metadata(self, part_dict: dict, metadata_path: str) -> None:
+    def export_metadata(self, part_dict: list, metadata_path: str) -> dict:
         """Export metadata based on label settings. Includes hierarchy and L-Py vars."""
         logger.info(f"Exporting metadata to {metadata_path}...")
         export_dict = self.get_metadata(part_dict)

@@ -5,7 +5,7 @@ from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
 
 
 # Convert the PlantGL to a list of vertices and faces
-def plant_gl_scene_to_vertices_and_faces(scene):
+def plant_gl_scene_to_vertices_and_faces(scene) ->list:
     """ extract vertices and faces from a plantGL scene graph.
     helper function for creating ply and usd files"""
     d = alg.Discretizer()
@@ -16,7 +16,7 @@ def plant_gl_scene_to_vertices_and_faces(scene):
     faces = []  # list  of tuple (offset,index List)
 
     counter = 0
-    ret_dict = []
+    ret_list = []
     for item in scene:
         if not item.apply(d):
             continue
@@ -44,47 +44,42 @@ def plant_gl_scene_to_vertices_and_faces(scene):
                 flatten_f = list(map(lambda x: x + counter, j))
                 mesh_component["faces"].append(flatten_f)
         counter += n
-        ret_dict.append(mesh_component)
+        ret_list.append(mesh_component)
         if n != 16:
             print(f"Diff number of vs {n}")
-    return ret_dict
+    return ret_list
 
 
-def stitch_cylinders(mesh_components:dict, meta_data: dict)->dict:
+def stitch_cylinders(mesh_components:list, meta_data: dict)->dict:
     name_tree_mapping = meta_data["tree_mapping"]
     tree = meta_data["tree"]
     color_name_mapping = meta_data["color_mapping"]
 
     collect_components = {}
-    collect_spur_components = {}
     for key, item in tree.part_list[TreeNamingConvention.part_names[TreeNamingConvention.TRUNK]].items():
         collect_components[key] = {"part_dict": item, "mesh_cyl": [], "spur": []}
     for key, item in tree.part_list[TreeNamingConvention.part_names[TreeNamingConvention.BRANCH]].items():
         collect_components[key] = {"part_dict": item, "mesh_cyl": [], "spur": []}
-    for key, item in tree.part_list[TreeNamingConvention.part_names[TreeNamingConvention.SPUR]].items():
-        collect_spur_components[key] = item
 
-    for key, item in mesh_components.items():
-        hierarchy_name = color_name_mapping[key]
+    for mc in mesh_components:
+        key = mc["unique_id"]
+        hierarchy_name = color_name_mapping[key]["part_name"]
         tree_part_name = name_tree_mapping[hierarchy_name]
 
-        spur = False
-        if tree_part_name in collect_spur_components:
-            spur_dict = collect_spur_components[tree_part_name]
-            spur = True
-            get_c = collect_components[spur_dict["paret_name"]]
+        if tree_part_name["type"] == 'spur':
+            parent_name = tree_part_name["parent_name"]
+            get_c = collect_components[parent_name]
+            get_c["spur"].append(mc)
         else:
-            get_c = collect_components[tree_part_name]
-        if spur:
-            get_c["spur"].append(item)
-        else:
-            get_c["mesh_cyl"].append(item)
+            part_name = tree_part_name["name"]
+            get_c = collect_components[part_name]
+            get_c["mesh_cyl"].append(mc)
 
     return collect_components
 
 
 # PlantGL -> PLY
-def write(fname, mesh_components: dict):
+def write(fname, mesh_components: list):
     """Write a PLY file from a plantGL scene graph.
     This method will convert a PlantGL scene graph into an OBJ file.
     It does not manage  materials correctly yet.

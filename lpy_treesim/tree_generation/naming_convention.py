@@ -72,6 +72,10 @@ class TreeNamingConvention:
     def _branch_key():
         return TreeNamingConvention.part_names[TreeNamingConvention.BRANCH]
 
+    @staticmethod
+    def _spur_key():
+        return TreeNamingConvention.part_names[TreeNamingConvention.SPUR]
+
     def trunk_parts(self):
         return self.part_list[TreeNamingConvention._trunk_key()]
 
@@ -79,8 +83,9 @@ class TreeNamingConvention:
         return self.part_list[TreeNamingConvention._branch_key()]
 
     @staticmethod
-    def _part_dictionary(id:int, full_name:str, part_name:str, usd_name:str)->dict:
+    def _part_dictionary(kind:str, id:int, full_name:str, part_name:str, usd_name:str)->dict:
         blank_dict = {}
+        blank_dict["type"] = kind
         blank_dict["id"] = id
         blank_dict["full_name"] = full_name
         blank_dict["usd_name"] = usd_name
@@ -200,7 +205,11 @@ class TreeNamingConvention:
         full_name = TreeNamingConvention.trunk_full_name(root_stock=root_stock, trunk_id=self.current_trunk_id)
         trunk_name = TreeNamingConvention._trunk_name(self.current_trunk_id)
         usd_name = TreeNamingConvention.trunk_usd_name(trunk_id=self.current_trunk_id)
-        trunk_dict = TreeNamingConvention._part_dictionary(id=self.current_trunk_id, full_name=full_name, part_name=trunk_name, usd_name=usd_name)
+        trunk_dict = TreeNamingConvention._part_dictionary(kind=TreeNamingConvention._trunk_key(),
+                                                           id=self.current_trunk_id,
+                                                           full_name=full_name,
+                                                           part_name=trunk_name,
+                                                           usd_name=usd_name)
         trunk_dict[TreeNamingConvention._root_key()] = root_stock
         trunk_dict[TreeNamingConvention._trunk_key()] = self.current_trunk_id
         trunk_dict["parent_name"] = TreeNamingConvention._rootstock_name(root_stock)
@@ -228,7 +237,11 @@ class TreeNamingConvention:
         full_name = self.branch_full_name(root_stock=root_stock, trunk_id=trunk_id, branch_and_parent_ids=branch_and_parent_ids)
         usd_name = self.branch_usd_name(trunk_id=trunk_id, branch_and_parent_ids=branch_and_parent_ids)
         branch_name = TreeNamingConvention._branch_name(level, self.current_branch[level])
-        branch_dict = TreeNamingConvention._part_dictionary(id=self.current_branch[level], full_name=full_name, part_name=branch_name, usd_name=usd_name)
+        branch_dict = TreeNamingConvention._part_dictionary(kind=TreeNamingConvention._branch_key(),
+                                                            id=self.current_branch[level],
+                                                            full_name=full_name,
+                                                            part_name=branch_name,
+                                                            usd_name=usd_name)
 
         if level == 0:
             branch_dict["parent_name"] = trunk_name
@@ -240,7 +253,6 @@ class TreeNamingConvention:
             branch_dict["parent_type"] = TreeNamingConvention._branch_key()
             branch_dict["parent_id"] = parent_ids[-1]
 
-        branch_dict = TreeNamingConvention._part_dictionary(self.current_branch[level], full_name=full_name, part_name=trunk_name, usd_name=usd_name)
         branch_dict[TreeNamingConvention._root_key()] = root_stock
         branch_dict[TreeNamingConvention._trunk_key()] = trunk_id
         branch_dict[TreeNamingConvention._branch_key()].extend(parent_ids)
@@ -264,7 +276,11 @@ class TreeNamingConvention:
         full_name = TreeNamingConvention.spur_full_name(root_stock=root_stock, trunk_id=trunk_id, branch_and_parent_ids=parent_and_branch_ids, spur_id=self.current_spur)
         usd_name = TreeNamingConvention.spur_usd_name(trunk_id=trunk_id, branch_and_parent_ids=parent_and_branch_ids, spur_id=self.current_spur)
         spur_name = TreeNamingConvention._spur_name(self.current_spur)
-        spur_dict = TreeNamingConvention._part_dictionary(id=self.current_spur, full_name=full_name, part_name=spur_name, usd_name=usd_name)
+        spur_dict = TreeNamingConvention._part_dictionary(kind=TreeNamingConvention._spur_key(),
+                                                          id=self.current_spur,
+                                                          full_name=full_name,
+                                                          part_name=spur_name,
+                                                          usd_name=usd_name)
 
         spur_dict[TreeNamingConvention._root_key()] = root_stock
         spur_dict[TreeNamingConvention._trunk_key()] = TreeNamingConvention.get_trunk_id(part_dict=parent_dict)

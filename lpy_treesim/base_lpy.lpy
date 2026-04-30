@@ -188,20 +188,21 @@ grow_object(plant_segment, hierarchy):
     # Continue growing - update segment properties
     if plant_segment.contour is not None:
       nproduce SetContour(plant_segment.contour)
-    #Update internal state of the plant segment
+    # Update internal state of the plant segment
     plant_segment.grow_one()
     #Update physical representation
     if enable_semantic_labeling:
       # Add color visualization if labeling is enabled -- Can this be moved to the start of building the segment?
       r, g, b = plant_segment.info.color
-      plant_part = plant_segment.name.split("_")[0] # Get the part type (e.g., "trunk", "branch")
-      color_manager.set_unique_color((r,g,b), plant_part)  # Ensure part type has a color assig
+      # Get the part type (e.g., "trunk", "branch")
+      plant_part = plant_segment.name.split("_")[0]
+      # Ensure part type has a color assigned
+      color_manager.set_unique_color((r,g,b), plant_part)
       nproduce SetColor(r,g,b)
     if enable_instance_labeling:
-      # Instance-level labeling (unique color per branch instance)
+      # Instance-level labeling, unique color per branch instance
       r, g, b = color_manager.get_unique_color(plant_segment.name)
       nproduce SetColor(r,g,b)
-
     # Produce internode segments (n cylinders per growth step)
     n_cylinders = int(plant_segment.growth.growth_length / plant_segment.growth.cylinder_length)
     for i in range(n_cylinders):
@@ -213,15 +214,12 @@ grow_object(plant_segment, hierarchy):
     if plant_segment.pre_bud_rule(plant_segment, simulation_config):
       for generated in plant_segment.post_bud_rule(plant_segment, simulation_config):
         nproduce new(generated[0], *generated[1])
-
     if should_bud(plant_segment, simulation_config):
         # Age-based bud production for lateral branching
         nproduce bud(ParameterSet(type = plant_segment, num_buds = 0), hierarchy)
-        
         if plant_segment.post_bud_rule(plant_segment, simulation_config):
           for generated in plant_segment.post_bud_rule(plant_segment, simulation_config):
             nproduce new(generated[0], *generated[1])
-    
     produce grow_object(plant_segment, hierarchy)
 
 # BUD PRODUCTION RULE

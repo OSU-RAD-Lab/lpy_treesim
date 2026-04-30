@@ -124,7 +124,7 @@ def build_basicwood_prototypes(rng: np.random.Generator):
         growth_length=0.05,
         cylinder_length=0.01,
         thickness_increment=0.0,
-        color=[0, 255, 0],
+        color=(0, 255, 0),
         bud_spacing_age=1,  # Spurs bud every 1 age unit
         curve_x_range=(-0.2, 0.2),  # Tighter bounds for spur curves
         curve_y_range=(-0.2, 0.2),  # Tighter bounds for spur curves
@@ -140,7 +140,7 @@ def build_basicwood_prototypes(rng: np.random.Generator):
         growth_length=0.05,
         cylinder_length=0.01,
         thickness_increment=0.00001,
-        color=[0, 255, 0],
+        color=(0, 255, 0),
         bud_spacing_age=2,  # Tertiary branches bud every 3 age units
         curve_x_range=(-0.5, 0.5),  # Moderate bounds for tertiary branches
         curve_y_range=(-0.5, 0.5),  # Moderate bounds for tertiary branches
@@ -156,7 +156,7 @@ def build_basicwood_prototypes(rng: np.random.Generator):
         thickness_increment=0.00001,
         growth_length=0.1,
         cylinder_length=0.02,
-        color=[255, 0, 0],
+        color=(255, 0, 0),
         bud_spacing_age=2,  # Trunk buds every 4 age units
         curve_x_range=(-0.3, 0.3),  # Conservative bounds for trunk
         curve_y_range=(-0.3, 0.3),  # Conservative bounds for trunk
@@ -173,7 +173,7 @@ def build_basicwood_prototypes(rng: np.random.Generator):
         thickness_increment=0.00001,
         growth_length=0.1,
         cylinder_length=0.02,
-        color=[255, 150, 0],
+        color=(255, 150, 0),
         bud_spacing_age=2,  # Branches bud every 2 age units
         curve_x_range=(-0.4, 0.4),  # Moderate bounds for primary branches
         curve_y_range=(-0.4, 0.4),  # Moderate bounds for primary branches

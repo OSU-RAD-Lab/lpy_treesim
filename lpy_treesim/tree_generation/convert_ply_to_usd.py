@@ -96,7 +96,7 @@ def check_texture(stage_context):
 
 
 def make_mesh_from_components(mesh, cyls):
-    # 2 Set the vertex positions (points)
+    # Vertices, texture coords for vs, and faces
     vs = []
     vs_texs = []
     face_counts = []
@@ -109,17 +109,23 @@ def make_mesh_from_components(mesh, cyls):
             vs_texs.append((tex[0], tex[1]))
         for face in cyl["faces"]:
             face_counts.append(len(face))
-            face_indices = []
+            face_vs = []
             for idx in face:
-                face_indices.append(idx + offset)
+                v_id = idx + offset
+                face_vs.append(v_id)
+            face_indices.append(face_vs)
         offset += len(cyl["vertices"])
 
-    # vs = [(pt[0], pt[2], pt[1]) for pt in mesh_component["vertices"]]
-    mesh.CreatePointsAttr(vs)
+    # I don't know if you need to do this, but it balks otherwise
+    vs_ind_gen = [(pt[0], pt[2], pt[1]) for pt in vs]
+    mesh.CreatePointsAttr(vs_ind_gen)
     mesh.CreateFaceVertexCountsAttr(face_counts)
-    mesh.CreateFaceVertexIndicesAttr(face_indices)
 
-    # 2. Define Texture Coordinates (UVs)
+    # Convert face_indices into a generator
+    face_ind_gen = [idx for face in face_indices for idx in face]
+    mesh.CreateFaceVertexIndicesAttr(face_ind_gen)
+
+    # Add Texture Coordinates (UVs)
     # We use 'st' as the name.
     # 'interpolation' determines how UVs map to the geometry.
     tex_coords = UsdGeom.PrimvarsAPI(mesh).CreatePrimvar(
@@ -127,10 +133,45 @@ def make_mesh_from_components(mesh, cyls):
         Sdf.ValueTypeNames.TexCoord2fArray,
         UsdGeom.Tokens.varying
     )
-    # 3. Set the UV values
+    # Set the UV values
     # These correspond to the points defined above: (u, v)
     # ts = [(t[0], t[1]) for t in mesh_component["textures"]]
-    tex_coords.Set(vs_texs)
+    ts_ind_gen = [(pt[0], pt[1]) for pt in vs_texs]
+    tex_coords.Set(ts_ind_gen)
+
+    # No subdivision, please
+    mesh.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
+
+
+def setup_top_level_textures(stage):
+    # 1. Create the Material at the top level
+    material_path = Sdf.Path("/textures/pine_bark_vmbibe2g_2k")
+    material = UsdShade.Material.Define(stage, material_path)
+
+    # 2 Create the Shader (UsdPreviewSurface)
+    shader = UsdShade.Shader.Define(stage, material_path.AppendChild("PBRShader"))
+    shader.CreateIdAttr("UsdPreviewSurface")
+    shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
+
+    # 3. Create the Texture Sampler (UsdUVTexture)
+    reader = UsdShade.Shader.Define(stage, material_path.AppendChild("TexSampler"))
+    reader.CreateIdAttr("UsdUVTexture")
+    reader.CreateInput("file", Sdf.ValueTypeNames.Asset).Set("../textures/Pine_Bark_vmbibe2g_2K_BaseColor.jpg")
+    
+    # 4 Connect texture output to shader's diffuseColor input
+    shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(
+        reader.CreateOutput("rgb", Sdf.ValueTypeNames.Color3f))
+
+    # 5 Create the Primvar Reader (To tell the texture to use 'st')
+    st_reader = UsdShade.Shader.Define(stage, material_path.AppendChild("STReader"))
+    st_reader.CreateIdAttr("UsdPrimvarReader_float2")
+    st_reader.CreateInput("varname", Sdf.ValueTypeNames.String).Set("st")
+    
+    # Connect reader output to texture sampler's st input
+    reader.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(
+        st_reader.CreateOutput("result", Sdf.ValueTypeNames.Float2))
+
+    return material
 
 
 def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, mesh_components:dict, meta_data:dict):
@@ -150,108 +191,71 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, mesh_compo
     # This fixes the "Cannot reference... has no default prim" error
     stage.SetDefaultPrim(root_xform.GetPrim())
 
-    # 2. Create the Material at the top level
-    material_path = Sdf.Path("/textures/pine_bark_vmbibe2g_2k")
-    material = UsdShade.Material.Define(stage, material_path)
-
-    # 3. Create the Shader (UsdPreviewSurface)
-    shader = UsdShade.Shader.Define(stage, material_path.AppendChild("PBRShader"))
-    shader.CreateIdAttr("UsdPreviewSurface")
-    shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
-
-    # 4. Create the Texture Sampler (UsdUVTexture)
-    reader = UsdShade.Shader.Define(stage, material_path.AppendChild("TexSampler"))
-    reader.CreateIdAttr("UsdUVTexture")
-    reader.CreateInput("file", Sdf.ValueTypeNames.Asset).Set("../textures/Pine_Bark_vmbibe2g_2K_BaseColor.jpg")
-    # Connect texture output to shader's diffuseColor input
-    shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(
-        reader.CreateOutput("rgb", Sdf.ValueTypeNames.Color3f))
-
-    # 5. Create the Primvar Reader (To tell the texture to use 'st')
-    st_reader = UsdShade.Shader.Define(stage, material_path.AppendChild("STReader"))
-    st_reader.CreateIdAttr("UsdPrimvarReader_float2")
-    st_reader.CreateInput("varname", Sdf.ValueTypeNames.String).Set("st")
-    # Connect reader output to texture sampler's st input
-    reader.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(
-        st_reader.CreateOutput("result", Sdf.ValueTypeNames.Float2))
-
-
-    color_name_mapping = meta_data["color_mapping"]
-    name_tree_mapping = meta_data["tree_mapping"]
-    tree = meta_data["tree"]
+    # Set up texture maps
+    material = setup_top_level_textures(stage)    
+ 
+    # Loop through all of the (organized) mesh components, adding meshes for each
     for key, item in mesh_components.items():
         part_dict = item["part_dict"]
         cyls = item["mesh_cyl"]
         spurs = item["spur"]
 
+        if len(cyls) == 0 and len(spurs) == 0:
+            print(f"Skipping {key}, no mesh parts")
+            continue
+
         # 1 Define the Mesh primitive
         usd_name = part_dict["usd_name"]
-        mesh_name = f"/{tree_name}{usd_name}"
-        mesh = UsdGeom.Mesh.Define(stage, mesh_name)
+        xform_name = f"/{tree_name}{usd_name}"
+        mesh_name = f"/{tree_name}{usd_name}/meshGeom"
 
-        # 2. Create the displayColor primvar with 'constant' interpolation
+        # Xform for the tree part
+        branch_xform = UsdGeom.Xform.Define(stage, xform_name)
+        # Mesh for the tree part
+        mesh = UsdGeom.Mesh.Define(stage, mesh_name)
+        #  Bind the Material to the Mesh
+        UsdShade.MaterialBindingAPI(branch_xform).Bind(material)
+
+        # Add semantic label
+        labels_api = UsdSemantics.LabelsAPI.Apply(mesh.GetPrim(), "class")
+        print(dir(labels_api))
+        
+        # Set the mesh's color based on what part it is
         # 'constant' means one value is used for the entire primitive
         color_primvar = mesh.CreateDisplayColorPrimvar(interpolation=UsdGeom.Tokens.constant)
         if part_dict["type"] == TreeNamingConvention._trunk_key():
             color_primvar.Set([Gf.Vec3f(0.1, 0.4, 0.9)])
+            labels_api.CreateLabelsAttr().Set([TreeNamingConvention._trunk_key()])
         elif part_dict["type"] == TreeNamingConvention._branch_key():
-            color_primvar.Set([Gf.Vec3f(0.1, 0.9, 0.4)])
-        elif part_dict["type"] == TreeNamingConvention._spur_key():
-            color_primvar.Set([Gf.Vec3f(0.9, 0.1, 0.4)])
+            color_primvar.Set([Gf.Vec3f(0.1, 0.9, 0.4)])            
+            labels_api.CreateLabelsAttr().Set([TreeNamingConvention._branch_key()])
         else:
             color_primvar.Set([Gf.Vec3f(0.2, 0.2, 0.2)])
 
+        # Actually adds the vertices, faces, and texture map coords
         make_mesh_from_components(mesh, cyls)
-
-        # 6. Bind the Material to the Mesh
-        UsdShade.MaterialBindingAPI(root_xform).Bind(material)
 
         if len(spurs) == 0:
             continue
 
-        # 1 Define the Mesh primitive
+        # Repeat for any spurs attached to this part
         mesh_spurs_name = f"/{tree_name}{usd_name}/spurs"
         mesh_spurs = UsdGeom.Mesh.Define(stage, mesh_spurs_name)
 
-        # 2. Create the displayColor primvar with 'constant' interpolation
-        # 'constant' means one value is used for the entire primitive
+        # Add semantic label
+        labels_api = UsdSemantics.LabelsAPI.Apply(mesh_spurs.GetPrim(), "class")
+        labels_api.CreateLabelsAttr().Set([TreeNamingConvention._spur_key()])
+
+        # Make the spurs be red
         color_primvar = mesh_spurs.CreateDisplayColorPrimvar(interpolation=UsdGeom.Tokens.constant)
         color_primvar.Set([Gf.Vec3f(0.9, 0.1, 0.4)])
 
-        make_mesh_from_components(mesh_spurs, cyls)
+        # Glom together all the vertices/faces of the spurs
+        make_mesh_from_components(mesh_spurs, spurs)
 
-        # 4. Define face topology
-        # face_counts: how many vertices in each face (e.g., [3, 3, 3] for triangles)
-        # face_indices: flat list of vertex indices for all faces
-        #face_counts = [len(face) for face in mesh_component["faces"]]
-        #face_indices = [idx for face in mesh_component["faces"] for idx in face]
-
-
-        # --- ADDING COLOR ---
-        # 1. Create the displayColor Primvar
-        #color_primvar = mesh.CreateDisplayColorAttr()
-        #cs = [(col[0] / 255.0, col[1] / 255.0, col[2] / 255.0) for col in mesh_component["colors"]]
-        #color_primvar.Set(cs)
-
-
-        # 2. Set Interpolation
-        # 'constant' = 1 color for whole mesh
-        # 'vertex'   = 1 color per point (blends across faces)
-        # 'uniform'  = 1 color per face
-        #mesh.GetDisplayColorPrimvar().SetInterpolation(UsdGeom.Tokens.vertex)
-        # 5. Set optional subdivision scheme (none for a poly mesh)
-        mesh.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
-        mesh_spurs.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
-
-        # 6. Bind the Material to the Mesh
-        UsdShade.MaterialBindingAPI(root_xform).Bind(material)
-
-        # Example transform
-        # UsdGeom.XformCommonAPI(mesh).SetRotate((0, 0, 25))
-
-    # 6. Save the stage
+    #  Save the stage
     print(f"Saving file to {str(path_tree_name)}")
-    print(stage.GetRootLayer().ExportToString())
+    #print(stage.GetRootLayer().ExportToString())
     stage.GetRootLayer().Export(str(path_tree_name))
 
 # Example Data

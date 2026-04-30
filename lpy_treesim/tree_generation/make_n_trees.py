@@ -20,7 +20,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate and save multiple L-Py trees.")
     parser.add_argument("--num-trees", type=int, default=1, help="Number of trees to generate")
     parser.add_argument("--stage-dir", type=Path, default=Path("/home/cindy/isaacsim/World"), help="Directory for top of Stage USD files")
-    parser.add_argument("--output-dir", type=Path, default=Path("dataset/"), help="Directory for regular mesh outputs")
+    parser.add_argument("--output-dir", type=Path, default=Path("/home/cindy/VSCode/data/lpy_trees/"), help="Directory for regular mesh outputs")
     parser.add_argument("--tree-name", type=str, default="envy", help="Tree family to generate (UFO/Envy/etc.)")
     parser.add_argument("--verbose", action="store_true", help="Print progress details")
     parser.add_argument(
@@ -60,6 +60,9 @@ def main():
 
         check_texture(stage_context)
 
+    # Seeds
+    # 292206 - no branches
+    # 458657 - two branches, one empty
     # Generate trees
     tree_rng: np.random.Generator = np.random.default_rng(seed=args.dataset_seed)
     for index in range(args.num_trees):

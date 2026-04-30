@@ -37,7 +37,7 @@ class Branch(TreeBranch):
 
     def create_branch(self):
         if self.rng.random() > 0.8:
-            new_ob = NonTrunk(copy_from=self.prototype_dict["nontrunk"])
+            new_ob = TertiaryBranch(copy_from=self.prototype_dict["tertiarybranch"])
         else:
             new_ob = Spur(copy_from=self.prototype_dict["spur"])
         return new_ob
@@ -75,7 +75,7 @@ class Trunk(TreeBranch):
         return None
 
 
-class NonTrunk(TreeBranch):
+class TertiaryBranch(TreeBranch):
     def __init__(self, config=None, copy_from=None, prototype_dict: dict = {}):
         super().__init__(config, copy_from, prototype_dict)
 
@@ -154,7 +154,7 @@ def build_basicwood_prototypes(rng: np.random.Generator):
         rng=rng
     )
 
-    nontrunk_config = BasicWoodConfig(
+    tertiarybranch_config = BasicWoodConfig(
         max_buds_segment=5,
         tie_axis=None,
         max_length=0.3,
@@ -175,5 +175,5 @@ def build_basicwood_prototypes(rng: np.random.Generator):
     basicwood_prototypes["spur"] = Spur(config=spur_config, prototype_dict=basicwood_prototypes)
     basicwood_prototypes["branch"] = Branch(config=branch_config, prototype_dict=basicwood_prototypes)
     basicwood_prototypes["trunk"] = Trunk(config=trunk_config, prototype_dict=basicwood_prototypes)
-    basicwood_prototypes["nontrunk"] = NonTrunk(config=nontrunk_config, prototype_dict=basicwood_prototypes)
+    basicwood_prototypes["tertiarybranch"] = TertiaryBranch(config=tertiarybranch_config, prototype_dict=basicwood_prototypes)
     return basicwood_prototypes

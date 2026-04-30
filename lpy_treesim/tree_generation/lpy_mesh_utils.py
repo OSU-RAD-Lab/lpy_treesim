@@ -15,7 +15,6 @@ def plant_gl_scene_to_vertices_and_faces(scene) ->list:
     texture_coords = []
     faces = []  # list  of tuple (offset,index List)
 
-    counter = 0
     ret_list = []
     for item in scene:
         if not item.apply(d):
@@ -41,12 +40,12 @@ def plant_gl_scene_to_vertices_and_faces(scene) ->list:
                 mesh_component["colors"].append((r, g, b))
                 mesh_component["textures"].append((u, v))
             for j in face:
-                flatten_f = list(map(lambda x: x + counter, j))
+                flatten_f = list(map(lambda x: x, j))
                 mesh_component["faces"].append(flatten_f)
-        counter += n
         ret_list.append(mesh_component)
         if n != 16:
             print(f"Diff number of vs {n}")
+    print(f"Found {len(ret_list)} Cylinders")
     return ret_list
 
 
@@ -75,6 +74,9 @@ def stitch_cylinders(mesh_components:list, meta_data: dict)->dict:
             get_c = collect_components[part_name]
             get_c["mesh_cyl"].append(mc)
 
+    for key, item in collect_components.items():
+        if len(item["mesh_cyl"]) == 0:
+            print(f"Warning, part {key} empty")
     return collect_components
 
 
@@ -125,7 +127,6 @@ end_header""".format(
         f.write("\n")
 
     f.close()
-    return
 
 
 def convert_ply_to_ext(in_path, out_path):

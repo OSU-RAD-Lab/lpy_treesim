@@ -88,18 +88,19 @@ def main():
 
         mesh_components = lmu.plant_gl_scene_to_vertices_and_faces(scene)
         meta_data = lsb.get_metadata(mesh_components)
-        lsb.export_metadata(mesh_components, metadata_path=str(metadata_path))
         tree, mapping = lsb.create_tree_structure()
         meta_data["tree"] = tree
         meta_data["tree_mapping"] = mapping
 
-        mesh_components_ordered = lmu.stitch_cylinders(mesh_components, meta_data)
+        mesh_components_ordered, faces_colored = lmu.stitch_cylinders(mesh_components, meta_data)
+        meta_data["face_color_mapping"] = faces_colored
+        lsb.export_metadata(mesh_components, metadata_path=str(metadata_path))
         if stage_context is not []:
             # Where the usd files are stored
             create_mesh_usd(stage_context, naming._prefix(index), usd_path, mesh_components_ordered, meta_data)
 
         # Write the metadata/mesh to the output directory
-        lmu.write(str(mesh_path), mesh_components)
+        lmu.write(str(mesh_path), mesh_components_ordered)
 
         # Metadata
 

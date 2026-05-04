@@ -1,5 +1,6 @@
 from pxr import Usd, UsdGeom, Vt, Gf, UsdSemantics, Sdf, UsdShade, Ar
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
+from lpy_treesim.color_manager import ColorManager
 import ctypes
 
 
@@ -223,14 +224,16 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, mesh_compo
         # Set the mesh's color based on what part it is
         # 'constant' means one value is used for the entire primitive
         color_primvar = mesh.CreateDisplayColorPrimvar(interpolation=UsdGeom.Tokens.constant)
+        col = ColorManager.component_color(part_dict["type"])
+        col_vec = Gf.Vec3f(col[0] / 255.0, col[1] / 255.0, col[2] / 255.0)
         if part_dict["type"] == TreeNamingConvention._trunk_key():
-            color_primvar.Set([Gf.Vec3f(0.1, 0.4, 0.9)])
+            color_primvar.Set([col_vec])
             labels_api.CreateLabelsAttr().Set([TreeNamingConvention._trunk_key()])
         elif part_dict["type"] == TreeNamingConvention._branch_key():
-            color_primvar.Set([Gf.Vec3f(0.1, 0.9, 0.4)])            
+            color_primvar.Set([col_vec])
             labels_api.CreateLabelsAttr().Set([TreeNamingConvention._branch_key()])
         else:
-            color_primvar.Set([Gf.Vec3f(0.2, 0.2, 0.2)])
+            color_primvar.Set([col_vec])
 
         # Actually adds the vertices, faces, and texture map coords
         make_mesh_from_components(mesh, cyls)

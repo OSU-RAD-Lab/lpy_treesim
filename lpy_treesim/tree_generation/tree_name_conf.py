@@ -21,7 +21,7 @@ class TreeNamingConfig:
         return f"{self.namespace}_{self.tree_type}_{index:05d}"
 
     def mesh_filename(self, index: int) -> str:
-        return f"{self._prefix(index)}.ply"
+        return f"{self._prefix(index)}.obj"
 
     def usd_filename(self, index: int) -> str:
         return f"models/{self._prefix(index)}.usda"

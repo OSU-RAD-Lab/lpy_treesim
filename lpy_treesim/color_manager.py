@@ -11,6 +11,7 @@ import json
 
 class ColorManager:
     """Manages assignment of unique colors to named entities."""
+    _component_colors={"trunk":(50, 50, 255), "branch":((50, 255, 50), (30, 200, 30), (25, 155, 25)), "spur":(255, 50, 50)}
 
     def __init__(self):
         self.color_to_name = {}
@@ -18,6 +19,21 @@ class ColorManager:
         # Permute all possible colors to make a list
         self.all_colors = list(itertools.product(range(256), repeat=3))  # 0-255 inclusive
         self.color_pointer = 0
+
+    @staticmethod
+    def component_color(name):
+        if "trunk" in name:
+            return ColorManager._component_colors["trunk"]
+        elif "branch" in name:
+            if "L" in name:
+                indx = max(int(name[7]), 2)
+                return ColorManager._component_colors["branch"][indx]
+            else:
+                return ColorManager._component_colors["branch"][0]
+        elif "spur" in name:
+            return ColorManager._component_colors["spur"]
+        return (255, 255, 255)
+
 
     def get_unique_color(self, name, if_exists=True):
         """Get a unique RGB color tuple for the given name."""

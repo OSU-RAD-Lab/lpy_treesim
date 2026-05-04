@@ -1,9 +1,13 @@
 import openalea.plantgl as plantgl
 import openalea.plantgl.scenegraph as sg
 import openalea.plantgl.algo as alg
+from trimesh.visual import TextureVisuals
+
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
 from lpy_treesim.color_manager import ColorManager
-
+import numpy as np
+from trimesh import Trimesh
+from trimesh.visual import TextureVisuals
 
 # Convert the PlantGL to a list of vertices and faces
 def plant_gl_scene_to_vertices_and_faces(scene) ->list:
@@ -51,17 +55,19 @@ def plant_gl_scene_to_vertices_and_faces(scene) ->list:
 
 
 def stitch_cylinder(cyls: list, name_base: str, make_colors: ColorManager)->dict:
-    mesh_component = {"vertices":[], "colors":[], "faces":[], "textures":[], "face_colors":[]}
+    mesh_component = {"vertices":[], "vertex_colors":[], "faces":[], "textures":[], "face_colors":[]}
     offset = 0    
     v_delta = 1.0 / (len(cyls) - 1.0)
     v_coord = 0.0
     t_along = 0.5 * v_delta
+
+    color_component = ColorManager.component_color(name_base)
     for cyl in cyls:
         n_split = len(cyl["vertices"]) // 2
         s_div = 1.0 / (n_split - 1.0)
         for vi in range(0, n_split):
             mesh_component["vertices"].append(cyl["vertices"][2 * vi])
-            mesh_component["colors"].append(cyl["colors"][2 * vi])
+            mesh_component["vertex_colors"].append(color_component)
             mesh_component["textures"].append((vi * s_div, v_coord))
         v_coord += v_delta
         
@@ -82,14 +88,16 @@ def stitch_cylinder(cyls: list, name_base: str, make_colors: ColorManager)->dict
     
     cyl = cyls[-1]
     for vi in range(0, len(cyl["vertices"]) // 2):
+        n_split = len(cyl["vertices"]) // 2
+        s_div = 1.0 / (n_split - 1.0)
         mesh_component["vertices"].append(cyl["vertices"][2 * vi])
-        mesh_component["colors"].append(cyl["colors"][2 * vi])
+        mesh_component["vertex_colors"].append(cyl["colors"][2 * vi])
         mesh_component["textures"].append((vi * s_div, v_coord))
     print(f"n vertices {len(mesh_component["vertices"])}, offset {offset}, max f {mesh_component["faces"][-8:]}")
     return mesh_component
 
 
-def stitch_cylinders(mesh_components:list, meta_data: dict)->dict:
+def stitch_cylinders(mesh_components:list, meta_data: dict)->(dict, ColorManager):
     name_tree_mapping = meta_data["tree_mapping"]
     tree = meta_data["tree"]
     color_name_mapping = meta_data["color_mapping"]
@@ -136,6 +144,56 @@ def stitch_cylinders(mesh_components:list, meta_data: dict)->dict:
 
 
 # from https://pymeshlab.readthedocs.io/en/latest/tutorials/import_mesh_from_arrays.html
+def create_mesh(mesh_components: dict)->Trimesh:
+    import pymeshlab
+
+    vs = []
+    vs_tex = []
+    vs_col = []
+    faces = []
+    face_cols = []
+    v_offset = 0
+    for _, item in mesh_components.items():
+        if len(item["mesh_cyl"]) == 0:
+            print(f"Empty cylinder {item}")
+            continue
+        mc = item["mesh_cyl"][0]
+        for v in mc["vertices"]:
+            vs.append(v)
+        for t in mc["textures"]:
+            vs_tex.append(t)
+        for c in mc["vertex_colors"]:
+            # trimesh likes alpha
+            vs_col.append([c[0], c[1], c[2], 255])
+        for f, f_col in zip(mc["faces"], mc["face_colors"]):
+            face = []
+            for fid in f:
+                face.append(fid + v_offset)
+            face_cols.append([f_col[0], f_col[1], f_col[2], 255])
+            faces.append(face)
+            if len(face) == 4:
+                # trimesh will split faces on load
+                face_cols.append([f_col[0], f_col[1], f_col[2], 255])
+
+        v_offset += len(mc["vertices"])
+
+    vs_np = np.array(vs, dtype=np.float64)
+    vs_tex_np = np.array(vs_tex, dtype=np.float32)
+    vs_cols_np = np.array(vs_col, dtype=np.uint8)
+    fs_np = np.array(faces, dtype=np.int64)
+    fs_cols_np = np.array(face_cols, dtype=np.uint8)
+    print(f"N vertices {vs_np.shape[0]}")
+    print(f"N faces {fs_np.shape[0]} {fs_cols_np.shape}max {np.max(fs_np)}")
+
+    texs = TextureVisuals(uv=vs_tex_np)
+    mesh = Trimesh(vertices=vs_np, faces=fs_np, vertex_colors=vs_cols_np, face_colors=fs_cols_np, visual=texs, process=False)
+    # mesh_tex = trimesh.visual.texture.Tex
+    return mesh
+
+def write_mesh(fname: str, mesh_components: dict):
+
+    mesh = create_mesh(mesh_components=mesh_components)
+    mesh.export(fname)
 
 # PlantGL -> PLY
 def write(fname, mesh_components: list):

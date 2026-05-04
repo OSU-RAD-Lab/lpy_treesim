@@ -100,7 +100,7 @@ def main():
             create_mesh_usd(stage_context, naming._prefix(index), usd_path, mesh_components_ordered, meta_data)
 
         # Write the metadata/mesh to the output directory
-        lmu.write(str(mesh_path), mesh_components_ordered)
+        lmu.write_mesh(str(mesh_path), mesh_components_ordered)
 
         # Metadata
 

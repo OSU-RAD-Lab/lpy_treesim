@@ -121,6 +121,8 @@ class TreeBuilder:
                         mapping[child_key] = spur_dict
             elif "spur" in key:
                 pass
+            elif "root" in key:
+                pass
             else:
                 print(f"Unknown key {key}")
         return tree, mapping

@@ -67,13 +67,13 @@ def main():
     tree_rng: np.random.Generator = np.random.default_rng(seed=args.dataset_seed)
     for index in range(args.num_trees):
         tree_seed = tree_rng.integers(low=0, high=1_000_000)
+        tree_seed = 482612
         lsb = TreeBuilder(
             tree_name=args.tree_name,
             seed_value=tree_seed,
             semantic_label=args.semantic_label,
             instance_label=args.instance_label,
-            per_cylinder_label=True
-            #per_cylinder_label=args.per_cylinder_label,
+            per_cylinder_label=args.per_cylinder_label
         )
 
         if args.verbose:

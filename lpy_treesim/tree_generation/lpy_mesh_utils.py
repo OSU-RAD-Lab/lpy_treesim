@@ -29,6 +29,8 @@ def plant_gl_scene_to_vertices_and_faces(scene) ->list:
         if isinstance(p, plantgl.scenegraph._pglsg.PointSet):
             continue
 
+        name = item.getName()
+        id = item.getObjectId()
         mesh_component = {"vertices":[], "colors":[], "faces":[], "textures":[]}
         pts = p.pointList
         face = p.indexList

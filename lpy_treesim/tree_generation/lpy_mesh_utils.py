@@ -36,19 +36,23 @@ def plant_gl_scene_to_vertices_and_faces(scene) ->list:
         face = p.indexList
         n = len(p.pointList)
         n_around = n / 2
-        if n > 0:
-            color = item.appearance.diffuseColor()
-            r, g, b = color
-            mesh_component["unique_id"] = f"({r}, {g}, {b})"
-            for v_id, pt in enumerate(pts):
-                u = (v_id // 2) / (n_around - 1.0)
-                v = (v_id % 2)
-                mesh_component["vertices"].append(pt)
-                mesh_component["colors"].append((r, g, b))
-                mesh_component["textures"].append((u, v))
-            for j in face:
-                flatten_f = list(map(lambda x: x, j))
-                mesh_component["faces"].append(flatten_f)
+        if n == 0:
+            print(f"Empty cylinder")
+            continue
+
+        color = item.appearance.diffuseColor()
+        # print(f"Name {name} id {id} color {color}")
+        r, g, b = color
+        mesh_component["unique_id"] = f"({r}, {g}, {b})"
+        for v_id, pt in enumerate(pts):
+            u = (v_id // 2) / (n_around - 1.0)
+            v = (v_id % 2)
+            mesh_component["vertices"].append(pt)
+            mesh_component["colors"].append((r, g, b))
+            mesh_component["textures"].append((u, v))
+        for j in face:
+            flatten_f = list(map(lambda x: x, j))
+            mesh_component["faces"].append(flatten_f)
         ret_list.append(mesh_component)
         if n != 16:
             print(f"Diff number of vs {n}")
@@ -117,6 +121,8 @@ def stitch_cylinders(mesh_components:list, meta_data: dict)->(dict, ColorManager
 
         if tree_part_name["type"] == 'spur':
             parent_name = tree_part_name["parent_name"]
+            if not parent_name in collect_components:
+                continue
             get_c = collect_components[parent_name]
             get_c["spur"].append(mc)
         else:

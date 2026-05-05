@@ -190,6 +190,7 @@ grow_object(plant_segment, hierarchy):
     # Update internal state of the plant segment
     plant_segment.grow_one()
     #Update physical representation
+    r, g, b = plant_segment.info.color
     if enable_semantic_labeling:
       # Add color visualization if labeling is enabled -- Can this be moved to the start of building the segment?
       r, g, b = plant_segment.info.color
@@ -245,7 +246,7 @@ bud(bud_parameters, hierarchy) :
     if hasattr(new_branch, 'curve_x_range'):
       # Curved branches: set up custom growth guide curve
       curve = create_bezier_curve(x_range=new_branch.curve_x_range, y_range=new_branch.curve_y_range, z_range=new_branch.curve_z_range, rng=lpy_rng)
-      nproduceSetGuide(curve, new_branch.growth.max_length)
+      nproduce SetGuide(curve, new_branch.growth.max_length)
     # Produce new branch with random orientation and growth object
     nproduce @RGetPos(new_branch.location.start)WoodStart(ParameterSet(type = new_branch))/(lpy_rng.random()*360)&(lpy_rng.random()*360)grow_object(new_branch, hierarchy)GetPos(new_branch.location.end)
     if generalized_cylinder:

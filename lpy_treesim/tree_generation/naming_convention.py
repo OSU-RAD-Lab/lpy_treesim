@@ -270,7 +270,11 @@ class TreeNamingConvention:
             parent_dict = self.part_list[TreeNamingConvention._trunk_key()][trunk_name]
         else:
             branch_name = TreeNamingConvention._branch_name(branch_level=len(parent_and_branch_ids)-1, branch_id=parent_and_branch_ids[-1])
-            parent_dict = self.part_list[TreeNamingConvention._branch_key()][branch_name]
+            if branch_name in self.part_list[TreeNamingConvention._branch_key()]:
+                parent_dict = self.part_list[TreeNamingConvention._branch_key()][branch_name]
+            else:
+                parent_dict =  self.part_list[TreeNamingConvention._trunk_key()][trunk_name]
+                print(f"Bad computer branch_name")
 
         root_stock = TreeNamingConvention.get_root_stock_id(parent_dict)
         full_name = TreeNamingConvention.spur_full_name(root_stock=root_stock, trunk_id=trunk_id, branch_and_parent_ids=parent_and_branch_ids, spur_id=self.current_spur)

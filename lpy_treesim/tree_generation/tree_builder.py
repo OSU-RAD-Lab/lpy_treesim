@@ -55,12 +55,13 @@ class TreeBuilder:
     def lsystem(self) -> Lsystem:
         return self.__lsystem
 
-    def generate_tree(self, b_interactive=False):
+    def generate_tree(self, b_interactive=True):
         lstring = self.__lsystem.axiom
         if b_interactive:
             Viewer.start()
         for iteration in range(self.__lsystem.derivationLength):
             lstring = self.__lsystem.derive(lstring, iteration, 1)
+            self.__lsystem.plot(lstring)
             if b_interactive:
                 scene =  self.__lsystem.sceneInterpretation(lstring)
                 Viewer.display(scene)
@@ -68,6 +69,7 @@ class TreeBuilder:
 
         if b_interactive:
             Viewer.exit()
+        print(lstring)
         return lstring, self.__lsystem.sceneInterpretation(lstring)
     
     def export_hierarchy_dict(self) -> dict:

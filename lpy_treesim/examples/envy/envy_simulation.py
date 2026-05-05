@@ -9,7 +9,7 @@ class ENVYSimulationConfig(SimulationConfig):
 
     # Override base defaults for Envy-specific values
     num_iteration_tie: int = 5
-    num_iteration_prune: int = 1000
+    num_iteration_prune: int = 8
     pruning_age_threshold: int = 6
     derivation_length: int = 128
 

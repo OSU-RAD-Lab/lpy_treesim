@@ -26,9 +26,6 @@ class TreeBuilder:
         self,
         tree_name: str,
         seed_value: int,
-        semantic_label: bool = False,
-        instance_label: bool = False,
-        per_cylinder_label: bool = False,
     ):
         self.branch_hierarchy = {}
         self.color_manager = ColorManager()
@@ -41,9 +38,6 @@ class TreeBuilder:
             "axiom_pitch": 0.0,
             "axiom_yaw": 0.0,
             "branch_hierarchy": self.branch_hierarchy,
-            "semantic_label": semantic_label,
-            "instance_label": instance_label,
-            "per_cylinder_label": per_cylinder_label,
             "seed_value": seed_value,
         }
         # Enable batch mode before displaying anything
@@ -61,6 +55,7 @@ class TreeBuilder:
             Viewer.start()
         for iteration in range(self.__lsystem.derivationLength):
             lstring = self.__lsystem.derive(lstring, iteration, 1)
+            # DO NOT TAKE OUT THIS LINE - or everything will stop working
             self.__lsystem.plot(lstring)
             if b_interactive:
                 scene =  self.__lsystem.sceneInterpretation(lstring)
@@ -69,7 +64,6 @@ class TreeBuilder:
 
         if b_interactive:
             Viewer.exit()
-        print(lstring)
         return lstring, self.__lsystem.sceneInterpretation(lstring)
     
     def export_hierarchy_dict(self) -> dict:
@@ -85,48 +79,57 @@ class TreeBuilder:
         tree = TreeNamingConvention()
 
         mapping = {}
-        for key, branch in self.branch_hierarchy.items():
-            key = key.lower().strip()
-            if "trunk" in key:
-                trunk_dict = tree.new_trunk(root_stock=-1)
-                mapping[key] = trunk_dict
+        for key_orig, branch in self.branch_hierarchy.items():
+            key = key_orig.lower().strip()
+            if "root" in key:
+                root_dict = tree.new_root()
+                mapping[key_orig] = root_dict
+            elif "trunk" in key:
+                trunk_dict = tree.new_trunk()
+                mapping[key_orig] = trunk_dict
                 trunk_id = trunk_dict["id"]
                 for child in branch:
                     child_key = child.name.lower().strip()
                     if "branch" in child_key:
                         branch_dict = tree.new_branch(trunk_id=trunk_id, parent_ids=[])
-                        mapping[child_key] = branch_dict
+                        mapping[child.name] = branch_dict
                     elif "spur" in child_key:
                         spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=[])
-                        mapping[child_key] = spur_dict
+                        mapping[child.name] = spur_dict
                     else:
                         print(f"Unknown key {child_key}")
             elif "branch" in key:
-                if key not in mapping:
+                if key_orig not in mapping:
                     raise ValueError(f"Child {key} should already be in mapping dictionary")
 
-                branch_dict = mapping[key]
+                branch_dict = mapping[key_orig]
                 parent_ids = tree.get_parent_id_list(branch_dict)
                 parent_ids.append(branch_dict["id"])
                 trunk_id = tree.get_trunk_id(branch_dict)
 
                 for child in branch:
                     child_key = child.name.lower().strip()
-                    if child_key in mapping:
-                        raise ValueError(f"Child {key} is already in mapping dictionary, child of {key}")
+                    if child.name in mapping:
+                        raise ValueError(f"Child {child.name} is already in mapping dictionary, child of {key_orig}")
 
                     if "branch" in child_key:
                         branch_dict = tree.new_branch(trunk_id=trunk_id, parent_ids=parent_ids)
-                        mapping[child_key] = branch_dict
+                        mapping[child.name] = branch_dict
                     elif "spur" in child_key:
                         spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=parent_ids)
-                        mapping[child_key] = spur_dict
+                        mapping[child.name] = spur_dict
             elif "spur" in key:
-                pass
-            elif "root" in key:
                 pass
             else:
                 print(f"Unknown key {key}")
+
+        for key, branch in self.branch_hierarchy.items():
+            for child in branch:
+                child_name = child.name
+                part_dict = mapping[child_name]
+                part_dict["start_loc"] = self.convert_vec3_to_tuple(child.location.start)
+                part_dict["end_loc"] = self.convert_vec3_to_tuple(child.location.end)
+
         return tree, mapping
 
     @staticmethod
@@ -141,34 +144,22 @@ class TreeBuilder:
                 named_hierarchy[child_name] = {"start": self.convert_vec3_to_tuple(child.location.start), "end": self.convert_vec3_to_tuple(child.location.end)}
         return named_hierarchy
     
-    def get_metadata(self, part_dict: list) -> dict:
+    def get_metadata(self) -> dict:
         """Export metadata based on label settings. Includes hierarchy and L-Py vars."""
         export_dict = {
             "seed_value": int(self.extern_vars["seed_value"]),
-            "semantic_label": self.extern_vars["semantic_label"],
-            "instance_label": self.extern_vars["instance_label"],
-            "per_cylinder_label": self.extern_vars["per_cylinder_label"],
             "axiom_pitch": float(self.extern_vars["axiom_pitch"]),
             "axiom_yaw": float(self.extern_vars["axiom_yaw"]),
         }
         # Hierarchy
         export_dict["hierarchy"] = self.export_hierarchy_dict()
         export_dict["branch_locations"] = self.export_branch_location_dict()
-        color_data = self.color_manager.export_mapping_dict()
-        export_dict["color_mapping"] = color_data
-        # Label data
-        if self.extern_vars["semantic_label"]:
-            ...
-        if self.extern_vars["instance_label"]:
-            ...
-        if self.extern_vars["per_cylinder_label"]:
-            export_dict["cylinder_data"] = get_all_cylinder_params(part_dict, cylinder_metadata=color_data)
         return export_dict
 
-    def export_metadata(self, part_dict: list, metadata_path: str) -> dict:
+    def export_metadata(self, metadata_path: str) -> dict:
         """Export metadata based on label settings. Includes hierarchy and L-Py vars."""
         logger.info(f"Exporting metadata to {metadata_path}...")
-        export_dict = self.get_metadata(part_dict)
+        export_dict = self.get_metadata()
         with open(metadata_path, "w") as f:
             json.dump(export_dict, f, indent=4)
         return export_dict

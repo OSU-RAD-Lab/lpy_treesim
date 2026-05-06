@@ -5,7 +5,7 @@ from pathlib import Path
 import secrets
 import os as os
 
-
+from trimesh import Trimesh
 
 import logging
 import lpy_treesim.utils.logging_conf
@@ -27,9 +27,10 @@ def _parse_args() -> argparse.Namespace:
         "--dataset-seed", type=int, default=None, help="Optional deterministic seed for dataset generation"
     )
     parser.add_argument("--namespace", type=str, default="lpy", help="Prefix namespace for output filenames")
-    parser.add_argument("--semantic-label", action="store_true", help="Enable semantic labeling")
-    parser.add_argument("--instance-label", action="store_true", help="Enable instance labeling")
-    parser.add_argument("--per-cylinder-label", action="store_true", help="Enable per-cylinder labeling")
+    parser.add_argument("--ply", action="store_false", help="Write out ply file format")
+    parser.add_argument("--obj", action="store_false", help="Write out obj file format")
+    parser.add_argument("--meta-data", action="store_false", help="Write out meta data")
+    parser.add_argument("--usda", action="store_false", help="Write out universal scene descriptor format")
     args = parser.parse_args()
     if args.num_trees > (TreeNamingConfig.MAX_TREES + 1) or args.num_trees < 1:
         raise ValueError(f"num_trees={args.num_trees} is not in the range [1, {TreeNamingConfig.MAX_TREES + 1}].")
@@ -70,41 +71,56 @@ def main():
         tree_seed = 482612
         lsb = TreeBuilder(
             tree_name=args.tree_name,
-            seed_value=tree_seed,
-            semantic_label=args.semantic_label,
-            instance_label=args.instance_label,
-            per_cylinder_label=args.per_cylinder_label
+            seed_value=tree_seed
         )
 
         if args.verbose:
             print(f"INFO: Generating {args.tree_name} tree #{index:03d}")
         logging.info(f"Generating {args.tree_name} tree #{index:03d} with seed {tree_seed}")
 
+        # Generates the l-string that everything is built off of, then converts it to the "scene"
+        #   Also sets one color for each spur/branch/trunk instance
         lstring, scene = lsb.generate_tree(b_interactive=False)
-        # PLY
-        mesh_path = args.output_dir / naming.mesh_filename(index)
-        metadata_path = args.output_dir / naming.metadata_filename(index)
-        usd_path = args.stage_dir / naming.usd_filename(index)
 
-        mesh_components = lmu.plant_gl_scene_to_vertices_and_faces(scene)
-        meta_data = lsb.get_metadata(mesh_components)
+        # Converts the scene to our tree structure. Mapping maps the unique ids from the lstring into our tree structure
         tree, mapping = lsb.create_tree_structure()
-        meta_data["tree"] = tree
-        meta_data["tree_mapping"] = mapping
 
-        mesh_components_ordered, faces_colored = lmu.stitch_cylinders(mesh_components, meta_data)
-        meta_data["face_color_mapping"] = faces_colored
-        lsb.export_metadata(mesh_components, metadata_path=str(metadata_path))
-        if stage_context is not []:
+        # Adds to each tree component the mesh cylinders created by lpy
+        lmu.plant_gl_scene_to_vertices_and_faces(scene, tree=tree, tree_mapping=mapping, color_mapping=lsb.color_manager)
+
+        # Now stitch together all of the mesh components into tubes instead of discrete cylinders
+        # Also adds colors and texture coordinates
+        color_to_part, keys_to_remove = lmu.stitch_cylinders(tree=tree)
+
+        # Write out mesh file formats
+        if args.ply or args.obj:
+            mesh = lmu.create_mesh(tree)
+            if args.ply:
+                mesh_path = args.output_dir / naming.mesh_filename(index, "ply")
+                mesh.export(str(mesh_path))
+                logger.info(f"Wrote mesh to {mesh_path}")
+            if args.obj:
+                mesh_path = args.output_dir / naming.mesh_filename(index, "obj")
+                mesh.export(str(mesh_path))
+                logger.info(f"Wrote mesh to {mesh_path}")
+
+        if stage_context is not [] and args.usda:
             # Where the usd files are stored
-            create_mesh_usd(stage_context, naming._prefix(index), usd_path, mesh_components_ordered, meta_data)
+            usd_path = args.output_dir / naming.usd_filename(index)
+            create_mesh_usd(stage_context, naming._prefix(index), usd_path, tree)
+            logger.info(f"Wrote mesh to {usd_path}")
 
-        # Write the metadata/mesh to the output directory
-        lmu.write_mesh(str(mesh_path), mesh_components_ordered)
+        if args.meta_data:
+            import json
+            metadata_path = args.output_dir / naming.metadata_filename(index)
+            meta_data = lsb.get_metadata()
+            # meta_data["tree"] = tree  # Need to fix
+            # meta_data["tree_mapping"] = mapping
+            # meta_data["color_mapping"] = color_to_part
+            with open(metadata_path, "w") as f:
+                json.dump(meta_data, f, indent=4)
+            logger.info(f"Wrote meta data to {metadata_path}")
 
-        # Metadata
-
-        logger.info(f"Wrote mesh to {mesh_path} and metadata to {metadata_path}")
         del scene
         del lstring
         del lsb

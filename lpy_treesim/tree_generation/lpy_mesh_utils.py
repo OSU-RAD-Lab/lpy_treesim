@@ -1,7 +1,6 @@
 import openalea.plantgl as plantgl
 import openalea.plantgl.scenegraph as sg
 import openalea.plantgl.algo as alg
-from trimesh.visual import TextureVisuals
 
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
 from lpy_treesim.color_manager import ColorManager
@@ -9,15 +8,86 @@ import numpy as np
 from trimesh import Trimesh
 from trimesh.visual import TextureVisuals
 
+
+def stitch_cylinder(cyls: list, col_plant_type: tuple, col_instance: tuple) -> dict:
+    """Takes in a list of cylinders (should be in order along the trunk/branch) and makes a single mesh out of it
+    Merges the vertices from the previous row with the next to make the mesh seamless
+    Adds texture map coordinates
+    Applies the color for semantic labeling (eg branch, spur, trunk) to the vertex colors
+    Applies the color for instance labeling (eg branch 32) to the face colors
+    @param cyls - the list of cylinders with vertices, faces
+    @param col_plant_type - the semantic color of the plant, from TreeNamingConvention
+    @param col_instance - the semantic color for the instance, from TreeNamingConvention
+    @return the stitched together mesh as vertices and faces, texture coordinates, and vertex/face colors"""
+    mesh_component = {"vertices": [], "vertex_colors": [], "faces": [], "textures": [], "face_colors": []}
+    offset = 0
+    v_delta = 1.0 if len(cyls) == 1 else 1.0 / (len(cyls) - 1.0)
+    v_coord = 0.0
+    t_along = 0.5 * v_delta
+
+    for cyl in cyls:
+        n_split = len(cyl["vertices"]) // 2
+        s_div = 1.0 / (n_split - 1.0)
+        for vi in range(0, n_split):
+            mesh_component["vertices"].append(cyl["vertices"][2 * vi])
+            mesh_component["vertex_colors"].append(col_plant_type)
+            mesh_component["textures"].append((vi * s_div, v_coord))
+        v_coord += v_delta
+
+        for ind, fi in enumerate(cyl["faces"]):
+            face = []
+            for id in fi:
+                n_around = id // 2
+                which_side = id % 2
+                face.append(offset + which_side * n_split + n_around)
+
+            mesh_component["faces"].append(face)
+            mesh_component["face_colors"].append(col_instance)
+
+        offset += len(cyl["vertices"]) // 2
+        # print(f"v {cyl['vertices'][0]} {cyl['vertices'][1]}")
+
+    cyl = cyls[-1]
+    for vi in range(0, len(cyl["vertices"]) // 2):
+        n_split = len(cyl["vertices"]) // 2
+        s_div = 1.0 / (n_split - 1.0)
+        mesh_component["vertices"].append(cyl["vertices"][2 * vi])
+        mesh_component["vertex_colors"].append(col_plant_type)
+        mesh_component["textures"].append((vi * s_div, v_coord))
+    return mesh_component
+
+
+
+
+def stitch_cylinders(tree:TreeNamingConvention) -> (dict, list):
+    keys_to_remove = []
+
+    color_to_part = {"semantic":{}, "instance":{}}
+    for part_dict in tree.iterate_all_wood_parts():
+        if len(part_dict["mesh_cyl"]) > 0:
+            col_plant_type = TreeNamingConvention.semantic_color(part_dict["name"])
+            col_instance = tree.instance_color(part_dict["name"])
+            color_to_part["semantic"][col_plant_type] = part_dict["full_name"]
+            color_to_part["instance"][col_plant_type] = part_dict["full_name"]
+            part_dict["mesh"] = stitch_cylinder(part_dict["mesh_cyl"],
+                                                col_plant_type=col_plant_type,
+                                                col_instance=col_instance)
+        else:
+            if part_dict['type'] == TreeNamingConvention._root_key():
+                continue
+            keys_to_remove.append(part_dict["full_name"])
+            print(f"Part {part_dict['name']} has no mesh, removing")
+
+    return color_to_part, keys_to_remove
+
+
 # Convert the PlantGL to a list of vertices and faces
-def plant_gl_scene_to_vertices_and_faces(scene) ->list:
+def plant_gl_scene_to_vertices_and_faces(scene, tree: TreeNamingConvention, tree_mapping: dict, color_mapping:ColorManager) ->list:
     """ extract vertices and faces from a plantGL scene graph.
     helper function for creating ply and usd files"""
     d = alg.Discretizer()
 
     vertices = []  # List of point List
-    colors = []  # List of colors
-    texture_coords = []
     faces = []  # list  of tuple (offset,index List)
 
     ret_list = []
@@ -29,13 +99,9 @@ def plant_gl_scene_to_vertices_and_faces(scene) ->list:
         if isinstance(p, plantgl.scenegraph._pglsg.PointSet):
             continue
 
-        name = item.getName()
-        id = item.getObjectId()
-        mesh_component = {"vertices":[], "colors":[], "faces":[], "textures":[]}
         pts = p.pointList
         face = p.indexList
         n = len(p.pointList)
-        n_around = n / 2
         if n == 0:
             print(f"Empty cylinder")
             continue
@@ -43,67 +109,23 @@ def plant_gl_scene_to_vertices_and_faces(scene) ->list:
         color = item.appearance.diffuseColor()
         # print(f"Name {name} id {id} color {color}")
         r, g, b = color
-        mesh_component["unique_id"] = f"({r}, {g}, {b})"
+        unique_color = (r, g, b)
+        hierarchy_name = color_mapping.color_to_name[unique_color]
+        tree_part_dict = tree_mapping[hierarchy_name]
+        mesh_component = {"vertices":[], "faces":[]}
         for v_id, pt in enumerate(pts):
-            u = (v_id // 2) / (n_around - 1.0)
-            v = (v_id % 2)
             mesh_component["vertices"].append(pt)
-            mesh_component["colors"].append((r, g, b))
-            mesh_component["textures"].append((u, v))
         for j in face:
             flatten_f = list(map(lambda x: x, j))
             mesh_component["faces"].append(flatten_f)
-        ret_list.append(mesh_component)
+        tree_part_dict["mesh_cyl"].append(mesh_component)
         if n != 16:
             print(f"Diff number of vs {n}")
     print(f"Found {len(ret_list)} Cylinders")
     return ret_list
 
 
-def stitch_cylinder(cyls: list, name_base: str, make_colors: ColorManager)->dict:
-    mesh_component = {"vertices":[], "vertex_colors":[], "faces":[], "textures":[], "face_colors":[]}
-    offset = 0    
-    v_delta = 1.0 / (len(cyls) - 1.0)
-    v_coord = 0.0
-    t_along = 0.5 * v_delta
-
-    color_component = ColorManager.component_color(name_base)
-    for cyl in cyls:
-        n_split = len(cyl["vertices"]) // 2
-        s_div = 1.0 / (n_split - 1.0)
-        for vi in range(0, n_split):
-            mesh_component["vertices"].append(cyl["vertices"][2 * vi])
-            mesh_component["vertex_colors"].append(color_component)
-            mesh_component["textures"].append((vi * s_div, v_coord))
-        v_coord += v_delta
-        
-        for ind, fi in enumerate(cyl["faces"]):
-            face = []
-            for id in fi:
-                n_around = id // 2
-                which_side = id % 2
-                face.append(offset + which_side * n_split + n_around)
-
-            mesh_component["faces"].append(face)
-            name = f"{name_base}-{t_along:0.2}-{ind * s_div:0.2}"
-            col = make_colors.get_unique_color(name=name)
-            mesh_component["face_colors"].append(col)
-
-        offset += len(cyl["vertices"]) // 2
-        #print(f"v {cyl['vertices'][0]} {cyl['vertices'][1]}")
-    
-    cyl = cyls[-1]
-    for vi in range(0, len(cyl["vertices"]) // 2):
-        n_split = len(cyl["vertices"]) // 2
-        s_div = 1.0 / (n_split - 1.0)
-        mesh_component["vertices"].append(cyl["vertices"][2 * vi])
-        mesh_component["vertex_colors"].append(cyl["colors"][2 * vi])
-        mesh_component["textures"].append((vi * s_div, v_coord))
-    print(f"n vertices {len(mesh_component["vertices"])}, offset {offset}, max f {mesh_component["faces"][-8:]}")
-    return mesh_component
-
-
-def stitch_cylinders(mesh_components:list, meta_data: dict)->(dict, ColorManager):
+def stitch_cylinders_orig(mesh_components:list, meta_data: dict)->(dict, ColorManager):
     name_tree_mapping = meta_data["tree_mapping"]
     tree = meta_data["tree"]
     color_name_mapping = meta_data["color_mapping"]
@@ -152,20 +174,18 @@ def stitch_cylinders(mesh_components:list, meta_data: dict)->(dict, ColorManager
 
 
 # from https://pymeshlab.readthedocs.io/en/latest/tutorials/import_mesh_from_arrays.html
-def create_mesh(mesh_components: dict)->Trimesh:
-    import pymeshlab
-
+def create_mesh(tree: TreeNamingConvention)->Trimesh:
     vs = []
     vs_tex = []
     vs_col = []
     faces = []
     face_cols = []
     v_offset = 0
-    for _, item in mesh_components.items():
-        if len(item["mesh_cyl"]) == 0:
-            print(f"Empty cylinder {item}")
+    for part_dict in tree.iterate_all_wood_parts():
+        mc = part_dict["mesh"]
+        if mc == None:
             continue
-        mc = item["mesh_cyl"][0]
+
         for v in mc["vertices"]:
             vs.append(v)
         for t in mc["textures"]:
@@ -198,10 +218,11 @@ def create_mesh(mesh_components: dict)->Trimesh:
     # mesh_tex = trimesh.visual.texture.Tex
     return mesh
 
-def write_mesh(fname: str, mesh_components: dict):
 
-    mesh = create_mesh(mesh_components=mesh_components)
+def write_mesh(fname: str, tree: TreeNamingConvention):
+    mesh = create_mesh(tree)
     mesh.export(fname)
+
 
 # PlantGL -> PLY
 def write(fname, mesh_components: list):

@@ -43,6 +43,7 @@ def create_mesh(stage, path, points, face_vertex_counts, face_vertex_indices):
     mesh.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
     return mesh
 
+
 def check_texture(stage_context):
     with Ar.ResolverContextBinder(stage_context):
         # 1. Create a new USD stage
@@ -96,40 +97,38 @@ def check_texture(stage_context):
         stage.GetRootLayer().Export("tree_texture_check.usda")
 
 
-def make_mesh_from_components(mesh, cyls):
+def make_mesh_from_components(mesh_usd, mesh_parts):
     # Vertices, texture coords for vs, and faces
     vs = []
     vs_texs = []
+    # Not really sure we need to do this, but otherwise have trouble with the USD call
+    for pt, tex in zip(mesh_parts["vertices"], mesh_parts["textures"]):
+        # swap y and z to make z up
+        vs.append((pt[0], pt[2], pt[1]))
+        vs_texs.append((tex[0], tex[1]))
+
     face_counts = []
     face_indices = []
-    offset = 0
-    for cyl in cyls:
-        for pt, tex in zip(cyl["vertices"], cyl["textures"]):
-            # swap y and z to make z up
-            vs.append((pt[0], pt[2], pt[1]))
-            vs_texs.append((tex[0], tex[1]))
-        for face in cyl["faces"]:
-            face_counts.append(len(face))
-            face_vs = []
-            for idx in face:
-                v_id = idx + offset
-                face_vs.append(v_id)
-            face_indices.append(face_vs)
-        offset += len(cyl["vertices"])
+    for face in mesh_parts["faces"]:
+        face_counts.append(len(face))
+        face_vs = []
+        for idx in face:
+            face_vs.append(idx)
+        face_indices.append(face_vs)
 
     # I don't know if you need to do this, but it balks otherwise
     vs_ind_gen = [(pt[0], pt[2], pt[1]) for pt in vs]
-    mesh.CreatePointsAttr(vs_ind_gen)
-    mesh.CreateFaceVertexCountsAttr(face_counts)
+    mesh_usd.CreatePointsAttr(vs_ind_gen)
+    mesh_usd.CreateFaceVertexCountsAttr(face_counts)
 
     # Convert face_indices into a generator
     face_ind_gen = [idx for face in face_indices for idx in face]
-    mesh.CreateFaceVertexIndicesAttr(face_ind_gen)
+    mesh_usd.CreateFaceVertexIndicesAttr(face_ind_gen)
 
     # Add Texture Coordinates (UVs)
     # We use 'st' as the name.
     # 'interpolation' determines how UVs map to the geometry.
-    tex_coords = UsdGeom.PrimvarsAPI(mesh).CreatePrimvar(
+    tex_coords = UsdGeom.PrimvarsAPI(mesh_usd).CreatePrimvar(
         "st",
         Sdf.ValueTypeNames.TexCoord2fArray,
         UsdGeom.Tokens.varying
@@ -141,7 +140,7 @@ def make_mesh_from_components(mesh, cyls):
     tex_coords.Set(ts_ind_gen)
 
     # No subdivision, please
-    mesh.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
+    mesh_usd.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
 
 
 def setup_top_level_textures(stage):
@@ -175,7 +174,7 @@ def setup_top_level_textures(stage):
     return material
 
 
-def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, mesh_components:dict, meta_data:dict):
+def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeNamingConvention):
     # 1. Create a new USD stage
     # Set the up axis and units
     #stage = Usd.Stage.CreateNew("/World")
@@ -196,13 +195,14 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, mesh_compo
     material = setup_top_level_textures(stage)    
  
     # Loop through all of the (organized) mesh components, adding meshes for each
-    for key, item in mesh_components.items():
-        part_dict = item["part_dict"]
-        cyls = item["mesh_cyl"]
-        spurs = item["spur"]
+    for part_dict in tree.iterate_all_wood_parts():
+        mesh = part_dict["mesh"]
 
-        if len(cyls) == 0 and len(spurs) == 0:
-            print(f"Skipping {key}, no mesh parts")
+        if mesh is None:
+            continue
+
+        if len(mesh["vertices"]) == 0:
+            print(f"Skipping {part_dict["name"]}, no mesh parts")
             continue
 
         # 1 Define the Mesh primitive
@@ -224,37 +224,13 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, mesh_compo
         # Set the mesh's color based on what part it is
         # 'constant' means one value is used for the entire primitive
         color_primvar = mesh.CreateDisplayColorPrimvar(interpolation=UsdGeom.Tokens.constant)
-        col = ColorManager.component_color(part_dict["type"])
-        col_vec = Gf.Vec3f(col[0] / 255.0, col[1] / 255.0, col[2] / 255.0)
-        if part_dict["type"] == TreeNamingConvention._trunk_key():
-            color_primvar.Set([col_vec])
-            labels_api.CreateLabelsAttr().Set([TreeNamingConvention._trunk_key()])
-        elif part_dict["type"] == TreeNamingConvention._branch_key():
-            color_primvar.Set([col_vec])
-            labels_api.CreateLabelsAttr().Set([TreeNamingConvention._branch_key()])
-        else:
-            color_primvar.Set([col_vec])
+        col_semantic = tree.semantic_color(part_dict["name"])
+        col_vec = Gf.Vec3f(col_semantic[0] / 255.0, col_semantic[1] / 255.0, col_semantic[2] / 255.0)
+        color_primvar.Set([col_vec])
+        labels_api.CreateLabelsAttr().Set([part_dict["type"]])
 
         # Actually adds the vertices, faces, and texture map coords
-        make_mesh_from_components(mesh, cyls)
-
-        if len(spurs) == 0:
-            continue
-
-        # Repeat for any spurs attached to this part
-        mesh_spurs_name = f"/{tree_name}{usd_name}/spurs"
-        mesh_spurs = UsdGeom.Mesh.Define(stage, mesh_spurs_name)
-
-        # Add semantic label
-        labels_api = UsdSemantics.LabelsAPI.Apply(mesh_spurs.GetPrim(), "class")
-        labels_api.CreateLabelsAttr().Set([TreeNamingConvention._spur_key()])
-
-        # Make the spurs be red
-        color_primvar = mesh_spurs.CreateDisplayColorPrimvar(interpolation=UsdGeom.Tokens.constant)
-        color_primvar.Set([Gf.Vec3f(0.9, 0.1, 0.4)])
-
-        # Glom together all the vertices/faces of the spurs
-        make_mesh_from_components(mesh_spurs, spurs)
+        make_mesh_from_components(mesh, part_dict["mesh"])
 
     #  Save the stage
     print(f"Saving file to {str(path_tree_name)}")

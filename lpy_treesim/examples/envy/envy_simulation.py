@@ -11,7 +11,7 @@ class ENVYSimulationConfig(SimulationConfig):
     num_iteration_tie: int = 5
     num_iteration_prune: int = 8
     pruning_age_threshold: int = 6
-    derivation_length: int = 128
+    derivation_length: int = 64
 
     # Envy-specific Support Structure
     support_trunk_wire_point = None

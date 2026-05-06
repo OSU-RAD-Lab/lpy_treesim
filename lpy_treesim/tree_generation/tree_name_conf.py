@@ -20,8 +20,9 @@ class TreeNamingConfig:
             raise ValueError(f"Tree index {index} exceeds maximum supported value {TreeNamingConfig.MAX_TREES}.")
         return f"{self.namespace}_{self.tree_type}_{index:05d}"
 
-    def mesh_filename(self, index: int) -> str:
-        return f"{self._prefix(index)}.obj"
+    def mesh_filename(self, index: int, file_type:str) -> str:
+        """ File type is one of obj, ply, etc - something trimesh understands"""
+        return f"{self._prefix(index)}.{file_type}"
 
     def usd_filename(self, index: int) -> str:
         return f"models/{self._prefix(index)}.usda"

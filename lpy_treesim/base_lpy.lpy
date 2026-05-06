@@ -71,25 +71,6 @@ branch_hierarchy["root"] = [main_trunk]
 parent_map = {}  # Internal bookkeeping for efficient parent lookup
 branch_hierarchy[main_trunk.name] =[]
 
-# Use extern-provided labeling flags (set via command-line arguments in make_n_trees.py)
-enable_semantic_labeling = semantic_label if semantic_label is not None else False
-enable_instance_labeling = instance_label if instance_label is not None else False
-enable_per_cylinder_labeling = per_cylinder_label if per_cylinder_label is not None else False
-
-# Validate that at most one labeling option is enabled
-label_options = [enable_semantic_labeling, enable_instance_labeling, enable_per_cylinder_labeling]
-if sum(label_options) > 1:
-  raise ValueError(
-    "Only one of semantic_label, instance_label, or per_cylinder_label "
-    "can be True at a time."
-  )
-
-if (enable_instance_labeling or enable_per_cylinder_labeling) and color_manager is None:
-  raise ValueError(
-    "Instance labeling is enabled but no color_manager extern was provided."
-  )
-
-
 def _get_energy_mat(branches, arch, _config):
   return simulation.get_energy_mat(branches, arch)
 
@@ -189,26 +170,13 @@ grow_object(plant_segment, hierarchy):
       nproduce SetContour(plant_segment.contour)
     # Update internal state of the plant segment
     plant_segment.grow_one()
-    #Update physical representation
-    r, g, b = plant_segment.info.color
-    if enable_semantic_labeling:
-      # Add color visualization if labeling is enabled -- Can this be moved to the start of building the segment?
-      r, g, b = plant_segment.info.color
-      # Get the part type (e.g., "trunk", "branch")
-      plant_part = plant_segment.name.split("_")[0]
-      # Ensure part type has a color assigned
-      color_manager.set_unique_color((r,g,b), plant_part)
-      nproduce SetColor(r,g,b)
-    if enable_instance_labeling:
-      # Instance-level labeling, unique color per branch instance
-      r, g, b = color_manager.get_unique_color(plant_segment.name)
-      nproduce SetColor(r,g,b)
+    # Update physical representation
+    # Instance-level labeling, unique color per branch instance
+    r, g, b = color_manager.get_unique_color(plant_segment.name)
+    nproduce SetColor(r,g,b)
     # Produce internode segments (n cylinders per growth step)
     n_cylinders = int(plant_segment.growth.growth_length / plant_segment.growth.cylinder_length)
     for i in range(n_cylinders):
-      if enable_per_cylinder_labeling:
-        r, g, b = color_manager.get_unique_color(plant_segment.name, if_exists=False)
-        nproduce SetColor(r, g, b)
       nproduce I(plant_segment.growth.cylinder_length, plant_segment.growth.thickness, plant_segment)
     # Produce bud (after all cylinders in this growth step)
     if plant_segment.pre_bud_rule(plant_segment, simulation_config):

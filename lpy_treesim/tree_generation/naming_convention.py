@@ -271,6 +271,13 @@ class TreeNamingConvention:
         for _, spur_dict in self.part_list[TreeNamingConvention._spur_key()].items():
             yield spur_dict
 
+    def remove_key(self, key_name: str):
+        if TreeNamingConvention._trunk_key() in key_name:
+            print(f"Warning, removing trunk part {key_name}")
+            self.part_list[TreeNamingConvention._trunk_key()][key_name] = None
+        for part in self.iterate_all_wood_parts():
+
+
     def new_root(self):
         self.has_root_stock = True
 

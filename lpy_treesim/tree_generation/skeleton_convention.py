@@ -18,29 +18,107 @@ Data kept for the skeleton (if available)
 - mesh faces and vertices (or point cloud) that correspond to each segment
 
 """
+import numpy as np
+
+
+class JunctionComponent:
+    def __init__(self):
+        self.t_along = 0.0
+        self.theta_around = 0.0
+        self.pt_attach = (0, 0, 0)
+        self.ang_attach = (0, 0, 0)
+        self.child_name = ""
+
+    def create_json(self) ->dict:
+        ret_dict = {}
+        ret_dict["t_along"] = self.t_along
+        ret_dict["theta_around"] = self.theta_around
+        ret_dict["pt_attach"] = self.pt_attach
+        ret_dict["ang_attach"] = self.ang_attach
+        ret_dict["child_name"] = self.child_name
+        return ret_dict
+
+    def set_from_dict(self, in_dict: dict):
+        self.t_along = in_dict["t_along"]
+        self.theta_around = in_dict["theta_around"]
+        self.pt_attach = in_dict["pt_attach"]
+        self.ang_attach = in_dict["ang_attach"]
+        self.child_name = in_dict["child_name"]
+
 
 class SkeletonComponent:
-    def __init__(self):
-        self.centroid
+    def __init__(self, name:str):
+        self.name = str
+        # Computed as cylinders are processed
+        self.centroids = []
+        self.radii = []
+        # Set when parsing branch hierarchy
+        self.start_pt = (0, 0, 0)
+        self.end_pt = (0, 0, 0)
+        self.child_junctions = []
+        # Computed after cylinders are processed
+        self.t_values = []
+        self.length = 0.0
+
+    def add_cylinder(self, vs: list):
+        vs_as_np = np.array(vs)
+        centroid = np.mean(vs_as_np, axis=1)
+        self.centroids.append((centroid[0], centroid[1], centroid[2]))
+        mid = len(vs) // 2
+        radius = np.linalg.norm(vs_as_np[0, :] - vs_as_np[mid, :])
+        self.radii.append(radius)
+
+    def compute_t_values(self):
+        """ Call AFTER all cylinders have been added"""
+        centers_as_np = np.array(self.centroids)
+        start_pt = np.array(self.start_pt)
+        end_pt = centers_as_np[0, :]
+        dists = np.zeros(len(self.centroids) + 1)
+        for indx in range(0, len(self.centroids)):
+            dist = np.linalg.norm(end_pt - start_pt)
+            dists[indx] = dist
+            start_pt = centers_as_np[indx]
+            if indx == len(self.centroids) - 1:
+                end_pt = np.array(self.end_pt)
+            else:
+                end_pt = centers_as_np[indx+1]
+        dist = np.linalg.norm(end_pt - start_pt)
+        dists[-1] = dist
+        self.length = np.sum(dists)
+        if self.length > 0.0:
+            dists = dists / self.length
+        self.t_values = []
+        for indx in range(0, len(self.centroids)):
+            self.t_values.append(dists[indx])
 
 
-    def new_trunk_cylinder(self, trunk_id: int):
-        if trunk_id >= self.current_trunk_id:
-            raise ValueError("Trying to add a trunk cylinder w/o having created the trunk id {trunk_id}")
+    def add_junction(self, child_component: JunctionComponent):
+        self.child_junctions.append(child_component)
 
-        self.cyl_id += 1
-        cyl_unique_id = self.cyl_id
-        self.current_trunk_cyl_id[trunk_id] += 1
-        cyl_trunk_id = self.current_trunk_cyl_id[trunk_id]
-        trunk_name = TreeNamingConvention._trunk_name(self.current_trunk_id)
+    def create_json(self) ->dict:
+        ret_dict = {}
+        ret_dict["name"] = self.name
+        ret_dict["centroids"] = self.centroids
+        ret_dict["radii"] = self.radii
+        ret_dict["start_pt"] = self.start_pt
+        ret_dict["end_pt"] = self.end_pt
+        ret_dict["t_values"] = self.t_values
+        ret_dict["length"] = self.length
+        ret_dict["child_junctions"] = []
+        for child in self.child_junctions:
+            ret_dict["child_junctions"].append(child.create_json())
+        return ret_dict
 
-        # Add this cylinder id to the trunk dictionary list
-        trunk_dict = self.part_list[TreeNamingConvention.part_names[TreeNamingConvention.TRUNK]][trunk_name]
-        trunk_dict["components"].append[cyl_unique_id]
-        cyl_unique_name = f"{trunk_dict['full_name']}_{TreeNamingConvention._cyl_name{cyl_unique_id}
-        self.cyl_list[cyl_unique_id] = f"{trunk_dict['full_name']}_{cyl_unique_name}"
-    @staticmethod
-    def _cyl_name(cyl_id:int):
-        cyl_name = f"CId-{cyl_id}"
-        return cyl_name
-
+    def set_from_dict(self, in_dict: dict):
+        self.name = in_dict["name"]
+        self.centroids = in_dict["centroids"]
+        self.radii = in_dict["radii"]
+        self.start_pt = in_dict["start_pt"]
+        self.end_pt = in_dict["end_pt"]
+        self.t_values = in_dict["t_values"]
+        self.length = in_dict["length"]
+        self.child_junctions = []
+        for child_dict in in_dict["child_junctions"]:
+            child = JunctionComponent()
+            child.set_from_dict(child_dict)
+            self.child_junctions.append(child)

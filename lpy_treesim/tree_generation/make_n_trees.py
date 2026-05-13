@@ -22,6 +22,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--stage-dir", type=Path, default=Path("/home/cindy/isaacsim/World"), help="Directory for top of Stage USD files")
     parser.add_argument("--output-dir", type=Path, default=Path("/home/cindy/VSCode/data/lpy_trees/"), help="Directory for regular mesh outputs")
     parser.add_argument("--tree-name", type=str, default="envy", help="Tree family to generate (UFO/Envy/etc.)")
+    parser.add_argument("--texture-name", type=str, default="apple", help="Use/make all textures with this name")
     parser.add_argument("--verbose", action="store_true", help="Print progress details")
     parser.add_argument(
         "--dataset-seed", type=int, default=None, help="Optional deterministic seed for dataset generation"
@@ -31,6 +32,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--obj", action="store_false", help="Write out obj file format")
     parser.add_argument("--meta-data", action="store_false", help="Write out meta data")
     parser.add_argument("--usda", action="store_false", help="Write out universal scene descriptor format")
+    parser.add_argument("--make-textures", action="store_false", help="Create a new set of textures")
     args = parser.parse_args()
     if args.num_trees > (TreeNamingConfig.MAX_TREES + 1) or args.num_trees < 1:
         raise ValueError(f"num_trees={args.num_trees} is not in the range [1, {TreeNamingConfig.MAX_TREES + 1}].")
@@ -53,13 +55,15 @@ def main():
         loc_name = str(args.stage_dir)
         os.chdir(loc_name)
         print(f"Changing to {loc_name}")
-        search_paths = [str(args.stage_dir)]
         search_paths = [loc_name]
 
         # 2. Create a context with these paths
         stage_context = Ar.DefaultResolverContext(search_paths)
 
         check_texture(stage_context)
+
+        if args.make_textures:
+
 
     # Seeds
     # 292206 - no branches

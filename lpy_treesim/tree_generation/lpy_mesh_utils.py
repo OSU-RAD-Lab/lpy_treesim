@@ -78,6 +78,8 @@ def stitch_cylinders(tree:TreeNamingConvention) -> (dict, list):
             keys_to_remove.append(part_dict["full_name"])
             print(f"Part {part_dict['name']} has no mesh, removing")
 
+    for key in keys_to_remove:
+        tree.remove_key(key)
     return color_to_part, keys_to_remove
 
 

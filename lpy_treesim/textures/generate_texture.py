@@ -99,33 +99,53 @@ def generate_apple_bark(width=1024, height=1024, scale=100.0, overall=255) ->Ima
     return rgb_image
 
 
-def make_set(tree_type: str, dir_name: str):
+def make_uv_texture(fname: str):
+    img = np.zeros((1024, 512, 3))
+
+    # Bleepin' opencv has width and height backwards
+    vals_u = np.linspace(255.0, 0.0, img.shape[1])
+    vals_v = np.linspace(255.0, 0.0, img.shape[0])
+    for row in range(0, img.shape[0]):
+        # And blue green red
+        img[row, :, 2] = vals_u
+    for col in range(0, img.shape[1]):
+        # And blue green red
+        img[:, col, 1] = vals_v
+    cv2.imwrite(fname, img)
+
+
+def make_texture_set(tree_type: str, dir_name: str) ->(list, list):
     """ Make a nested set of texture images for trunk through small branches"""
+    pixs_per_meter = 256
+
     # in meters
-    pixs_per_cm = 256
-    max_radius = 0.2
     radii = [0.0025, 0.005, 0.01, 0.015, 0.02, 0.1, 0.2]
-    tex =   [64, 64, 84, 84, 100, 120, 128]
-    for radius, t in zip(radii, tex):
+    tex_scale = [60, 80, 100, 120, 140, 160, 180]
+    ret_name_radii_pair = []
+    im_size_exp = 3
+    for t_scl, radius in zip(tex_scale, radii):
         tex_name = f"{tree_type}_{radius}.png"
         # Our radius measurements are in meters
-        n_pixs_circum = 2.0 * np.pi * radius * pixs_per_cm
-        im_size_exp = 3
+        n_pixs_circum = 2.0 * np.pi * radius * pixs_per_meter
         im_size = 2 ** im_size_exp
         while im_size < n_pixs_circum:
             im_size_exp += 1
             im_size = 2 ** im_size_exp
         img2 = create_apple_bark(width=im_size, height=im_size*2)
-        img = generate_apple_bark(width=im_size, height=im_size*2, overall=t)
+        img = generate_apple_bark(width=im_size, height=im_size*2, overall=t_scl)
         full_path_name = f"{dir_name}/{tex_name}"
         img.save(full_path_name)
         full_path_name = f"{dir_name}/cv_{tex_name}"
         cv2.imwrite(full_path_name, img2)
+        ret_name_radii_pair.append(tex_name)
+
+    return radii, ret_name_radii_pair
 
 
 def main():
+    make_uv_texture("/Users/grimmc/PycharmProjects/data/lpy_trees/uv.png")
     # Generate and save
-    make_set("apple", "/Users/cindygrimm/PycharmProjects/data/textures")
+    make_texture_set("apple", "/Users/cindygrimm/PycharmProjects/data/textures")
 
 
 if __name__ == "__main__":

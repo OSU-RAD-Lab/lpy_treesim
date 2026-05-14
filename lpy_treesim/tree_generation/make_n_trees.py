@@ -5,13 +5,15 @@ from pathlib import Path
 import secrets
 import os as os
 
-from trimesh import Trimesh
-
 import logging
+
+from toolz.functoolz import return_none
+
 import lpy_treesim.utils.logging_conf
 from lpy_treesim.tree_generation.tree_builder import TreeBuilder
 from lpy_treesim.tree_generation.tree_name_conf import TreeNamingConfig
 from lpy_treesim.tree_generation.convert_ply_to_usd import create_mesh_usd, check_texture
+from lpy_treesim.textures.generate_texture import make_texture_set, make_uv_texture
 import lpy_mesh_utils as lmu
 
 logger = logging.getLogger(__name__)
@@ -32,7 +34,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--obj", action="store_false", help="Write out obj file format")
     parser.add_argument("--meta-data", action="store_false", help="Write out meta data")
     parser.add_argument("--usda", action="store_false", help="Write out universal scene descriptor format")
-    parser.add_argument("--make-textures", action="store_false", help="Create a new set of textures")
+    parser.add_argument("--make-textures", action="store_true", help="Create a new set of textures")
     args = parser.parse_args()
     if args.num_trees > (TreeNamingConfig.MAX_TREES + 1) or args.num_trees < 1:
         raise ValueError(f"num_trees={args.num_trees} is not in the range [1, {TreeNamingConfig.MAX_TREES + 1}].")
@@ -63,19 +65,18 @@ def main():
         check_texture(stage_context)
 
         if args.make_textures:
+            radii, name_radii = make_texture_set(args.tree_name, loc_name + "/textures")
+        else:
+            radii = [1]
+            name_radii = ["pine_bark_vmbibe2g_2k"]
 
-
-    # Seeds
-    # 292206 - no branches
-    # 458657 - two branches, one empty
     # Generate trees
     tree_rng: np.random.Generator = np.random.default_rng(seed=args.dataset_seed)
     for index in range(args.num_trees):
         tree_seed = tree_rng.integers(low=0, high=1_000_000)
-        tree_seed = 482612
         lsb = TreeBuilder(
             tree_name=args.tree_name,
-            seed_value=tree_seed
+            seed_value=int(tree_seed)
         )
 
         if args.verbose:
@@ -95,32 +96,30 @@ def main():
         # Now stitch together all of the mesh components into tubes instead of discrete cylinders
         # Also adds colors and texture coordinates
         color_to_part, keys_to_remove = lmu.stitch_cylinders(tree=tree)
+        for key in keys_to_remove:
+            tree.remove_key(key)
 
         # Write out mesh file formats
         if args.ply or args.obj:
-            mesh = lmu.create_mesh(tree)
-            if args.ply:
-                mesh_path = args.output_dir / naming.mesh_filename(index, "ply")
-                mesh.export(str(mesh_path))
-                logger.info(f"Wrote mesh to {mesh_path}")
-            if args.obj:
-                mesh_path = args.output_dir / naming.mesh_filename(index, "obj")
-                mesh.export(str(mesh_path))
-                logger.info(f"Wrote mesh to {mesh_path}")
+            mesh_path = args.output_dir / naming.mesh_filename(index, file_type="")
+            uv_name = str(mesh_path) + "_uv.png"
+            make_uv_texture(uv_name)
+            lmu.write_mesh(tree=tree, fname=mesh_path, image_name=uv_name)
 
         if stage_context is not [] and args.usda:
             # Where the usd files are stored
-            usd_path = args.output_dir / naming.usd_filename(index)
-            create_mesh_usd(stage_context, naming._prefix(index), usd_path, tree)
+            usd_path = args.stage_dir / naming.usd_filename(index)
+            create_mesh_usd(stage_context, naming._prefix(index), usd_path, tree, radii, name_radii)
             logger.info(f"Wrote mesh to {usd_path}")
 
         if args.meta_data:
             import json
             metadata_path = args.output_dir / naming.metadata_filename(index)
             meta_data = lsb.get_metadata()
+            meta_data["tree"] = tree.create_dict()
             # meta_data["tree"] = tree  # Need to fix
             # meta_data["tree_mapping"] = mapping
-            # meta_data["color_mapping"] = color_to_part
+            meta_data["color_mapping"] = color_to_part
             with open(metadata_path, "w") as f:
                 json.dump(meta_data, f, indent=4)
             logger.info(f"Wrote meta data to {metadata_path}")

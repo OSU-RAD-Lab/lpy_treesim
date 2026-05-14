@@ -143,38 +143,42 @@ def make_mesh_from_components(mesh_usd, mesh_parts):
     mesh_usd.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
 
 
-def setup_top_level_textures(stage):
-    # 1. Create the Material at the top level
-    material_path = Sdf.Path("/textures/pine_bark_vmbibe2g_2k")
-    material = UsdShade.Material.Define(stage, material_path)
+def setup_top_level_textures(stage, radii_name: list):
+    materials = []
+    for name in radii_name:
+        # 1. Create the Material at the top level
+        material_path = Sdf.Path(f"/textures/{name}")
+        material = UsdShade.Material.Define(stage, material_path)
 
-    # 2 Create the Shader (UsdPreviewSurface)
-    shader = UsdShade.Shader.Define(stage, material_path.AppendChild("PBRShader"))
-    shader.CreateIdAttr("UsdPreviewSurface")
-    shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
+        # 2 Create the Shader (UsdPreviewSurface)
+        shader = UsdShade.Shader.Define(stage, material_path.AppendChild("PBRShader"))
+        shader.CreateIdAttr("UsdPreviewSurface")
+        shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
 
-    # 3. Create the Texture Sampler (UsdUVTexture)
-    reader = UsdShade.Shader.Define(stage, material_path.AppendChild("TexSampler"))
-    reader.CreateIdAttr("UsdUVTexture")
-    reader.CreateInput("file", Sdf.ValueTypeNames.Asset).Set("../textures/Pine_Bark_vmbibe2g_2K_BaseColor.jpg")
-    
-    # 4 Connect texture output to shader's diffuseColor input
-    shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(
-        reader.CreateOutput("rgb", Sdf.ValueTypeNames.Color3f))
+        # 3. Create the Texture Sampler (UsdUVTexture)
+        reader = UsdShade.Shader.Define(stage, material_path.AppendChild("TexSampler"))
+        reader.CreateIdAttr("UsdUVTexture")
+        reader.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(f"/textures/{name}")
 
-    # 5 Create the Primvar Reader (To tell the texture to use 'st')
-    st_reader = UsdShade.Shader.Define(stage, material_path.AppendChild("STReader"))
-    st_reader.CreateIdAttr("UsdPrimvarReader_float2")
-    st_reader.CreateInput("varname", Sdf.ValueTypeNames.String).Set("st")
-    
-    # Connect reader output to texture sampler's st input
-    reader.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(
-        st_reader.CreateOutput("result", Sdf.ValueTypeNames.Float2))
+        # 4 Connect texture output to shader's diffuseColor input
+        shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(
+            reader.CreateOutput("rgb", Sdf.ValueTypeNames.Color3f))
 
-    return material
+        # 5 Create the Primvar Reader (To tell the texture to use 'st')
+        st_reader = UsdShade.Shader.Define(stage, material_path.AppendChild("STReader"))
+        st_reader.CreateIdAttr("UsdPrimvarReader_float2")
+        st_reader.CreateInput("varname", Sdf.ValueTypeNames.String).Set("st")
+
+        # Connect reader output to texture sampler's st input
+        reader.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(
+            st_reader.CreateOutput("result", Sdf.ValueTypeNames.Float2))
+
+        materials.append(material)
+    return materials
 
 
-def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeNamingConvention):
+def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeNamingConvention,
+                    radii: list, name_radii: list):
     # 1. Create a new USD stage
     # Set the up axis and units
     #stage = Usd.Stage.CreateNew("/World")
@@ -192,7 +196,7 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeN
     stage.SetDefaultPrim(root_xform.GetPrim())
 
     # Set up texture maps
-    material = setup_top_level_textures(stage)    
+    materials = setup_top_level_textures(stage, name_radii)
  
     # Loop through all of the (organized) mesh components, adding meshes for each
     for part_dict in tree.iterate_all_wood_parts():
@@ -215,7 +219,8 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeN
         # Mesh for the tree part
         mesh = UsdGeom.Mesh.Define(stage, mesh_name)
         #  Bind the Material to the Mesh
-        UsdShade.MaterialBindingAPI(branch_xform).Bind(material)
+        #  TOFIX: Find the best size texture
+        UsdShade.MaterialBindingAPI(branch_xform).Bind(materials[0])
 
         # Add semantic label
         labels_api = UsdSemantics.LabelsAPI.Apply(mesh.GetPrim(), "class")

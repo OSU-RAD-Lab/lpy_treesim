@@ -27,15 +27,15 @@ class JunctionComponent:
         self.theta_around = 0.0
         self.pt_attach = (0, 0, 0)
         self.ang_attach = (0, 0, 0)
+        self.parent_name = ""
         self.child_name = ""
 
-    def create_json(self) ->dict:
-        ret_dict = {}
-        ret_dict["t_along"] = self.t_along
-        ret_dict["theta_around"] = self.theta_around
-        ret_dict["pt_attach"] = self.pt_attach
-        ret_dict["ang_attach"] = self.ang_attach
-        ret_dict["child_name"] = self.child_name
+    def create_dict(self) ->dict:
+        ret_dict = {"t_along": self.t_along,
+                    "theta_around": self.theta_around,
+                    "pt_attach": self.pt_attach,
+                    "ang_attach": self.ang_attach,
+                    "child_name": self.child_name}
         return ret_dict
 
     def set_from_dict(self, in_dict: dict):
@@ -48,7 +48,7 @@ class JunctionComponent:
 
 class SkeletonComponent:
     def __init__(self, name:str):
-        self.name = str
+        self.name = name
         # Computed as cylinders are processed
         self.centroids = []
         self.radii = []
@@ -83,19 +83,21 @@ class SkeletonComponent:
             else:
                 end_pt = centers_as_np[indx+1]
         dist = np.linalg.norm(end_pt - start_pt)
-        dists[-1] = dist
+        # TODO Fix why end point is incorrect
+        dists[-1] = dists[-2]
         self.length = np.sum(dists)
         if self.length > 0.0:
             dists = dists / self.length
         self.t_values = []
-        for indx in range(0, len(self.centroids)):
-            self.t_values.append(dists[indx])
-
+        dist_sum = dists[0]
+        for dist in dists[1:]:
+            self.t_values.append(dist_sum)
+            dist_sum += dist
 
     def add_junction(self, child_component: JunctionComponent):
         self.child_junctions.append(child_component)
 
-    def create_json(self) ->dict:
+    def create_dict(self) ->dict:
         ret_dict = {}
         ret_dict["name"] = self.name
         ret_dict["centroids"] = self.centroids
@@ -106,7 +108,7 @@ class SkeletonComponent:
         ret_dict["length"] = self.length
         ret_dict["child_junctions"] = []
         for child in self.child_junctions:
-            ret_dict["child_junctions"].append(child.create_json())
+            ret_dict["child_junctions"].append(child.create_dict())
         return ret_dict
 
     def set_from_dict(self, in_dict: dict):

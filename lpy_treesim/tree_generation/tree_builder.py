@@ -6,7 +6,7 @@ from lpy_treesim import ColorManager
 import json
 from openalea.lpy import Lsystem
 from openalea.plantgl.all import *
-from lpy_treesim.tree_generation.mesh_to_cylinders import add_cylinder_params_to_json, get_all_cylinder_params
+from lpy_treesim.tree_generation.skeleton_convention import SkeletonComponent, JunctionComponent
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
 
 
@@ -89,13 +89,19 @@ class TreeBuilder:
                 mapping[key_orig] = trunk_dict
                 trunk_id = trunk_dict["id"]
                 for child in branch:
+                    junction = JunctionComponent()
+                    junction.parent_name = trunk_dict["name"]
+                    tree.trunk_junctions.append(junction)
+
                     child_key = child.name.lower().strip()
                     if "branch" in child_key:
                         branch_dict = tree.new_branch(trunk_id=trunk_id, parent_ids=[])
                         mapping[child.name] = branch_dict
+                        junction.child_name = branch_dict["name"]
                     elif "spur" in child_key:
                         spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=[])
                         mapping[child.name] = spur_dict
+                        junction.child_name = spur_dict["name"]
                     else:
                         print(f"Unknown key {child_key}")
             elif "branch" in key:
@@ -107,6 +113,10 @@ class TreeBuilder:
                 parent_ids.append(branch_dict["id"])
                 trunk_id = tree.get_trunk_id(branch_dict)
 
+                junction = JunctionComponent()
+                junction.parent_name = branch_dict["name"]
+                tree.branch_junctions.append(junction)
+
                 for child in branch:
                     child_key = child.name.lower().strip()
                     if child.name in mapping:
@@ -115,20 +125,33 @@ class TreeBuilder:
                     if "branch" in child_key:
                         branch_dict = tree.new_branch(trunk_id=trunk_id, parent_ids=parent_ids)
                         mapping[child.name] = branch_dict
+                        junction.child_name = branch_dict["name"]
                     elif "spur" in child_key:
                         spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=parent_ids)
                         mapping[child.name] = spur_dict
+                        junction.child_name = spur_dict["name"]
             elif "spur" in key:
                 pass
             else:
                 print(f"Unknown key {key}")
 
+        # TODO: Extract out angle and t for junction
         for key, branch in self.branch_hierarchy.items():
             for child in branch:
                 child_name = child.name
                 part_dict = mapping[child_name]
-                part_dict["start_loc"] = self.convert_vec3_to_tuple(child.location.start)
-                part_dict["end_loc"] = self.convert_vec3_to_tuple(child.location.end)
+                part_dict["skel"] = SkeletonComponent(part_dict["name"])
+                part_dict["skel"].start_pt = self.convert_vec3_to_tuple(child.location.start)
+                part_dict["skel"].end_pt = self.convert_vec3_to_tuple(child.location.end)
+
+        # Do this after the skeleton parts have been created
+        for junc in tree.trunk_junctions:
+            trunk_part = tree.part_list[TreeNamingConvention._trunk_key()][junc.parent_name]
+            trunk_part["skel"].add_junction(junc)
+
+        for junc in tree.branch_junctions:
+            branch_part = tree.part_list[TreeNamingConvention._branch_key()][junc.parent_name]
+            branch_part["skel"].add_junction(junc)
 
         return tree, mapping
 

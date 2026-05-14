@@ -22,7 +22,7 @@ class TreeNamingConfig:
 
     def mesh_filename(self, index: int, file_type:str) -> str:
         """ File type is one of obj, ply, etc - something trimesh understands"""
-        return f"{self._prefix(index)}.{file_type}"
+        return f"{self._prefix(index)}"
 
     def usd_filename(self, index: int) -> str:
         return f"models/{self._prefix(index)}.usda"

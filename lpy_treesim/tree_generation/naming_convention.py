@@ -63,6 +63,9 @@ class TreeNamingConvention:
         for name in TreeNamingConvention.part_names:
             self.part_list[name] = {}
 
+        self.trunk_junctions = []
+        self.branch_junctions = []
+
     @staticmethod
     def semantic_color(name):
         if "trunk" in name:
@@ -141,6 +144,9 @@ class TreeNamingConvention:
     @staticmethod
     def _part_dictionary(kind:str, id:int, full_name:str, part_name:str, usd_name:str)->dict:
         blank_dict = {}
+        blank_dict["parent_name"] = ""
+        blank_dict["parent_type"] = ""
+        blank_dict["parent_id"] = -1
         blank_dict["type"] = kind
         blank_dict["id"] = id
         blank_dict["full_name"] = full_name
@@ -272,11 +278,22 @@ class TreeNamingConvention:
             yield spur_dict
 
     def remove_key(self, key_name: str):
-        if TreeNamingConvention._trunk_key() in key_name:
+        if TreeNamingConvention._spur_key() in key_name:
+            if not key_name in self.part_list[TreeNamingConvention._spur_key()]:
+                print(f"Warning, trying to remove a key that doesn't exist {key_name}")
+            else:
+                del self.part_list[TreeNamingConvention._spur_key()][key_name]
+        elif TreeNamingConvention._branch_key() in key_name:
+            if not key_name in self.part_list[TreeNamingConvention._branch_key()]:
+                print(f"Warning, trying to remove a key that doesn't exist {key_name}")
+            else:
+                del self.part_list[TreeNamingConvention._branch_key()][key_name]
+        elif TreeNamingConvention._trunk_key() in key_name:
             print(f"Warning, removing trunk part {key_name}")
-            self.part_list[TreeNamingConvention._trunk_key()][key_name] = None
-        for part in self.iterate_all_wood_parts():
-
+            if not key_name in self.part_list[TreeNamingConvention._trunk_key()]:
+                print(f"Warning, trying to remove a key that doesn't exist {key_name}")
+            else:
+                del self.part_list[TreeNamingConvention._trunk_key()][key_name]
 
     def new_root(self):
         self.has_root_stock = True
@@ -394,3 +411,37 @@ class TreeNamingConvention:
 
         self.part_list[TreeNamingConvention._spur_key()][spur_name] = spur_dict
         return spur_dict
+
+    def _create_dict(self, part_dict):
+        ret_dict = {"parent_name": part_dict["parent_name"],
+                    "parent_type": part_dict["parent_type"],
+                    "parent_id": part_dict["parent_id"],
+                    "type": part_dict["type"],
+                    "id": part_dict["id"],
+                    "full_name": part_dict["full_name"],
+                    "name": part_dict["name"]
+                    }
+        return ret_dict
+
+    def create_dict(self) ->dict:
+        ret_dict = {"tree": {}, "skeleton": {}, "junctions": {}}
+        tree_dict = ret_dict["tree"]
+        skel_dict = ret_dict["skeleton"]
+        for part_name, part_dicts in self.part_list.items():
+            tree_dict[part_name] = {}
+            if "rootstock" in part_name:
+                tree_dict[part_name] = self._create_dict(part_dicts)
+            else:
+                for key, item in part_dicts.items():
+                    tree_dict[part_name][key] = self._create_dict(item)
+                    if "skel" in item:
+                        skel_dict[key] = item["skel"].create_dict()
+        junc_dict = ret_dict["junctions"]
+        junc_dict["trunk"] = []
+        junc_dict["branch"] = []
+        for junc in self.trunk_junctions:
+            junc_dict["trunk"].append(junc.create_dict())
+        for junc in self.branch_junctions:
+            junc_dict["branch"].append(junc.create_dict())
+
+        return ret_dict

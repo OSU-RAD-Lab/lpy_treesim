@@ -104,7 +104,7 @@ def make_mesh_from_components(mesh_usd, mesh_parts):
     # Not really sure we need to do this, but otherwise have trouble with the USD call
     for pt, tex in zip(mesh_parts["vertices"], mesh_parts["textures"]):
         # swap y and z to make z up
-        vs.append((pt[0], pt[2], pt[1]))
+        vs.append((pt[0], pt[1], pt[2]))
         vs_texs.append((tex[0], tex[1]))
 
     face_counts = []
@@ -117,7 +117,7 @@ def make_mesh_from_components(mesh_usd, mesh_parts):
         face_indices.append(face_vs)
 
     # I don't know if you need to do this, but it balks otherwise
-    vs_ind_gen = [(pt[0], pt[2], pt[1]) for pt in vs]
+    vs_ind_gen = [(pt[0], pt[1], pt[2]) for pt in vs]
     mesh_usd.CreatePointsAttr(vs_ind_gen)
     mesh_usd.CreateFaceVertexCountsAttr(face_counts)
 
@@ -177,6 +177,63 @@ def setup_top_level_textures(stage, radii_name: list):
     return materials
 
 
+def setup_pinebark(stage, file_dir="/home/cindy/isaacsim/World/textures/pine_bark_vmbibe2g_2k/"):
+    # 1. Create the Material at the top level
+    material_path = Sdf.Path(f"/Materials/Pinebark")
+    material = UsdShade.Material.Define(stage, material_path)
+
+    # 2 Create the Shader (UsdPreviewSurface)
+    shader = UsdShade.Shader.Define(stage, material_path.AppendChild("PBRShader"))
+    shader.CreateIdAttr("UsdPreviewSurface")
+    material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+
+    # 1. Create the ST Coordinates Reader (Primvar Reader)
+    coord_reader = UsdShade.Shader.Define(stage, material_path.AppendChild("StReader"))
+    coord_reader.CreateIdAttr("UsdPrimvarReader_float2")
+    coord_reader.CreateInput("varname", Sdf.ValueTypeNames.Token).Set("st")
+
+    # Helper to create texture nodes
+    def pinebark_add_texture(name, file_path, input_name, type_name):
+        tex = UsdShade.Shader.Define(stage, material_path.AppendChild(name))
+        tex.CreateIdAttr("UsdUVTexture")
+        
+        # Make wrap in s and tile in t
+        tex.CreateInput("wrapS", Sdf.ValueTypeNames.Token).Set("repeat")
+        tex.CreateInput("wrapT", Sdf.ValueTypeNames.Token).Set("repeat")
+
+        # Use st
+        tex.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(coord_reader.ConnectableAPI(), "result")
+
+        # Which file
+        tex.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(file_path)
+
+        # Connect texture output to shader input
+        if "Color" in input_name or "Normal" in input_name:
+            shader.CreateInput(input_name, type_name).ConnectToSource(tex.ConnectableAPI(), "rgb")
+        else:
+            shader.CreateInput(input_name, type_name).ConnectToSource(tex.ConnectableAPI(), "r")
+            
+        return tex
+
+    # 1. Color Mapping (Diffuse)
+    pinebark_add_texture("DiffuseTex", file_dir + "Pine_Bark_vmbibe2g_2K_BaseColor.jpg", "diffuseColor", Sdf.ValueTypeNames.Color3f)
+
+    # 2. Normal Mapping
+    pinebark_add_texture("NormalTex", file_dir + "Pine_Bark_vmbibe2g_2K_Normal.jpg", "normal", Sdf.ValueTypeNames.Normal3f)
+
+    # 3. Bump/Displacement Mapping
+    # In UsdPreviewSurface, bump is often driven by the displacement port
+    pinebark_add_texture("BumpTex", file_dir + "Pine_Bark_vmbibe2g_2K_Bump.jpg", "displacement", Sdf.ValueTypeNames.Float)
+
+    pinebark_add_texture("RoughnessTex", file_dir + "Pine_Bark_vmbibe2g_2K_Roughness.jpg", "roughness", Sdf.ValueTypeNames.Float)
+
+    # I am not sure what these should map to
+    pinebark_add_texture("CavityTex", file_dir + "Pine_Bark_vmbibe2g_2K_Cavity.jpg", "cavity", Sdf.ValueTypeNames.Float)
+    pinebark_add_texture("SpecularTex", file_dir + "Pine_Bark_vmbibe2g_2K_Specular.jpg", "specular", Sdf.ValueTypeNames.Float)
+    pinebark_add_texture("GlossTex", file_dir + "Pine_Bark_vmbibe2g_2K_Gloss.jpg", "gloss", Sdf.ValueTypeNames.Float)
+    return material
+
+
 def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeNamingConvention,
                     radii: list, name_radii: list):
     # 1. Create a new USD stage
@@ -196,7 +253,8 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeN
     stage.SetDefaultPrim(root_xform.GetPrim())
 
     # Set up texture maps
-    materials = setup_top_level_textures(stage, name_radii)
+    #materials = setup_top_level_textures(stage, name_radii)
+    pine_bark_material = setup_pinebark(stage)
  
     # Loop through all of the (organized) mesh components, adding meshes for each
     for part_dict in tree.iterate_all_wood_parts():
@@ -220,11 +278,10 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeN
         mesh = UsdGeom.Mesh.Define(stage, mesh_name)
         #  Bind the Material to the Mesh
         #  TOFIX: Find the best size texture
-        UsdShade.MaterialBindingAPI(branch_xform).Bind(materials[0])
+        UsdShade.MaterialBindingAPI(branch_xform).Bind(pine_bark_material)
 
         # Add semantic label
-        labels_api = UsdSemantics.LabelsAPI.Apply(mesh.GetPrim(), "class")
-        print(dir(labels_api))
+        labels_api = UsdSemantics.LabelsAPI.Apply(branch_xform.GetPrim(), "class")
         
         # Set the mesh's color based on what part it is
         # 'constant' means one value is used for the entire primitive
@@ -232,6 +289,7 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeN
         col_semantic = tree.semantic_color(part_dict["name"])
         col_vec = Gf.Vec3f(col_semantic[0] / 255.0, col_semantic[1] / 255.0, col_semantic[2] / 255.0)
         color_primvar.Set([col_vec])
+        color_primvar.SetInterpolation("constant")
         labels_api.CreateLabelsAttr().Set([part_dict["type"]])
 
         # Actually adds the vertices, faces, and texture map coords

@@ -72,11 +72,10 @@ def stitch_cylinder(skel: SkeletonComponent, cyls: list, col_plant_type: tuple, 
     skel.compute_t_values()   # Calculate the length and t values based on each cylinder
     radii = 0.5 * (skel.radii[0] + skel.radii[-1])  # Average radius
     circum = 2.0 * np.pi * radii
-    n_tiles_of_texture = skel.length / (2.0 * circum)   # Texture is twice as tall as wide
-    tex_vs = np.linspace(0.0, n_tiles_of_texture, len(cyls) + 1)
+    scl_t_values = skel.length / (2.0 * circum)   # Texture is twice as tall as wide
     tex_offset = np.random.uniform(0.0, 1.0)
-    for n_rings, t_val in enumerate(tex_vs):
-        tex_v_value = t_val + tex_offset
+    for n_rings, t_val in enumerate(skel.t_values):
+        tex_v_value = tex_offset + t_val * scl_t_values
         for indx in range(0, n_split):
             tex_coord = mesh_component["textures"][n_rings * n_split + indx]
             mesh_component["textures"][n_rings * n_split + indx] = (tex_coord[0], tex_v_value)
@@ -140,7 +139,8 @@ def plant_gl_scene_to_vertices_and_faces(scene, tree: TreeNamingConvention, tree
         tree_part_dict = tree_mapping[hierarchy_name]
         mesh_component = {"vertices":[], "faces":[]}
         for v_id, pt in enumerate(pts):
-            mesh_component["vertices"].append(pt)
+            pt_swap_y_z = [pt[0], pt[2], pt[1]]
+            mesh_component["vertices"].append(pt_swap_y_z)
         for j in face:
             flatten_f = list(map(lambda x: x, j))
             mesh_component["faces"].append(flatten_f)

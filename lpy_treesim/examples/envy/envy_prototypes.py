@@ -123,7 +123,7 @@ def build_basicwood_prototypes(rng: np.random.Generator):
     branch_config = BasicWoodConfig(
         max_buds_segment=2,
         tie_axis=(1, 0, 0),
-        max_length=1.0,
+        max_length=2.0,
         thickness=0.01,
         growth_length=0.1,
         cylinder_length=0.05,

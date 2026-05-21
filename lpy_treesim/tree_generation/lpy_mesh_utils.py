@@ -139,8 +139,8 @@ def plant_gl_scene_to_vertices_and_faces(scene, tree: TreeNamingConvention, tree
         tree_part_dict = tree_mapping[hierarchy_name]
         mesh_component = {"vertices":[], "faces":[]}
         for v_id, pt in enumerate(pts):
-            pt_swap_y_z = [pt[0], pt[2], pt[1]]
-            mesh_component["vertices"].append(pt_swap_y_z)
+            # pt_swap_y_z = [pt[0], pt[2], pt[1]]
+            mesh_component["vertices"].append(pt)
         for j in face:
             flatten_f = list(map(lambda x: x, j))
             mesh_component["faces"].append(flatten_f)

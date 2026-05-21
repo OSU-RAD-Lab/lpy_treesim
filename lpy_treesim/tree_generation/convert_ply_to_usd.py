@@ -50,7 +50,7 @@ def check_texture(stage_context):
         # Set the up axis and units
         stage = Usd.Stage.CreateInMemory()
         #stage = Usd.Stage.CreateNew("test_texture.usda")
-        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
+        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
         UsdGeom.SetStageMetersPerUnit(stage, 1.0)
 
         # 2. Define the Mesh primitive
@@ -183,7 +183,7 @@ def setup_pinebark(stage_context, path_world_name, file_dir="../textures/pine_ba
         stage_pinebark = Usd.Stage.CreateInMemory()
 
     # 1. Create the Material at the top level
-    material_path = Sdf.Path(f"/textures/PineBark")
+    material_path = Sdf.Path(f"/Materials/PineBark")
     material = UsdShade.Material.Define(stage_pinebark, material_path)
 
     # 2 Create the Shader (UsdPreviewSurface)
@@ -250,7 +250,7 @@ def create_mesh_usd(stage_context, world_path:str, tree_name:str,
     with Ar.ResolverContextBinder(stage_context):
         stage = Usd.Stage.CreateInMemory()
 
-    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
+    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
     UsdGeom.SetStageMetersPerUnit(stage, 1.0)
 
     # This acts as the "container" for your model
@@ -263,19 +263,20 @@ def create_mesh_usd(stage_context, world_path:str, tree_name:str,
     #materials = setup_top_level_textures(stage, name_radii)
     pine_bark_material = setup_pinebark(stage_context, world_path)
  
+    # TODO - make the following work so I don't keep copying materials
     # 3. Create a dedicated material scope to house incoming referenced assets
-    ref_materials_path = Sdf.Path("/World/textures")
-    ref_scope = UsdGeom.Scope.Define(stage, ref_materials_path)
+    #ref_materials_path = Sdf.Path("/World/textures")
+    #ref_scope = UsdGeom.Scope.Define(stage, ref_materials_path)
 
     # Relative file path pointing from "assets/layout.usda" out and into "materials/library.usda"
     # We pull specifically from the original </World/Looks> prim inside that file
-    relative_path_to_lib = "../textures/pine_bark.usda"
-    ref_scope.GetPrim().GetReferences().AddReference(relative_path_to_lib, Sdf.Path("/World/Looks"))
+    #relative_path_to_lib = "../textures/pine_bark.usda"
+    #ref_scope.GetPrim().GetReferences().AddReference(relative_path_to_lib, Sdf.Path("/Materials/PineBark"))
 
     # 5. Bind the Referenced Material to the Geometry
     # Because of our composition arc, GoldMaterial now safely resolves locally at this path:
-    target_material_path = Sdf.Path("/World/textures/PineBark")
-    target_material = UsdShade.Material.Get(stage, target_material_path)
+    #target_material_path = Sdf.Path("/Materials/PineBark")
+    #target_material = UsdShade.Material.Get(stage, target_material_path)
 
     # Loop through all of the (organized) mesh components, adding meshes for each
     for part_dict in tree.iterate_all_wood_parts():
@@ -299,7 +300,7 @@ def create_mesh_usd(stage_context, world_path:str, tree_name:str,
         mesh = UsdGeom.Mesh.Define(stage, mesh_name)
         #  Bind the Material to the Mesh
         #  TOFIX: Find the best size texture
-        UsdShade.MaterialBindingAPI(branch_xform).Bind(target_material)
+        UsdShade.MaterialBindingAPI(branch_xform).Bind(pine_bark_material)
 
         # Add semantic label
         labels_api = UsdSemantics.LabelsAPI.Apply(branch_xform.GetPrim(), "class")

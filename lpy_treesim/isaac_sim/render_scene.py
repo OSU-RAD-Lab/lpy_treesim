@@ -43,7 +43,10 @@ with rep.new_layer():
     camera_up = rep.create.camera(position=camera_up_pos[0], look_at=look_at_pos[0])
     render_product = rep.create.render_product(camera, (512, 512), name="primary")
     render_product_left = rep.create.render_product(camera_left, (512, 512), name="left")
-    render_product_up = rep.create.render_product(camera_up, (512, 512), name="right")
+    render_product_up = rep.create.render_product(camera_up, (512, 512), name="up")
+
+    uv_color = omni.replicator.core.create.material_omnipbr(diffuse=(0, 0, 0),
+                                                            diffuse_texture=stage_dir + "textures/uv.png")
 
     # 2. Define domain randomization
     with rep.trigger.on_frame(max_execs=10):

@@ -109,6 +109,8 @@ def main():
         if stage_context is not [] and args.usda:
             # Where the usd files are stored
             usd_path = args.stage_dir / naming.usd_filename(index)
+            uv_name = str(args.stage_dir ) + "/textures/mesh_uv.png"
+            make_uv_texture(uv_name)
             create_mesh_usd(stage_context, 
                             world_path=str(args.stage_dir), 
                             tree_name=naming._prefix(index), 

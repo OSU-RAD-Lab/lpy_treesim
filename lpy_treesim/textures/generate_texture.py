@@ -103,8 +103,8 @@ def make_uv_texture(fname: str):
     img = np.zeros((1024, 512, 3))
 
     # Bleepin' opencv has width and height backwards
-    vals_u = np.linspace(255.0, 0.0, img.shape[1])
-    vals_v = np.linspace(255.0, 0.0, img.shape[0])
+    vals_u = np.linspace(0.0, 255.0, img.shape[1])
+    vals_v = np.linspace(0.0, 255.0, img.shape[0])
     for row in range(0, img.shape[0]):
         # And blue green red
         img[row, :, 2] = vals_u

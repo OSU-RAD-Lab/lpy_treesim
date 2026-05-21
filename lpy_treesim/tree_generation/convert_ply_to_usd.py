@@ -236,8 +236,9 @@ def setup_pinebark(stage_context, path_world_name, file_dir="../textures/pine_ba
     pinebark_add_texture("SpecularTex", file_dir + "Pine_Bark_vmbibe2g_2K_Specular.jpg", "specular", Sdf.ValueTypeNames.Float)
     pinebark_add_texture("GlossTex", file_dir + "Pine_Bark_vmbibe2g_2K_Gloss.jpg", "gloss", Sdf.ValueTypeNames.Float)
 
-    stage_pinebark.GetRootLayer().Export(str(path_world_name) + "/textures/pine_bark.usda")
-    return material
+    pinebark_file = str(path_world_name) + "/textures/pine_bark.usda"
+    stage_pinebark.GetRootLayer().Export(pinebark_file)
+    return material, material_path, pinebark_file
 
 
 def create_mesh_usd(stage_context, world_path:str, tree_name:str, 
@@ -261,7 +262,7 @@ def create_mesh_usd(stage_context, world_path:str, tree_name:str,
 
     # Set up texture maps
     #materials = setup_top_level_textures(stage, name_radii)
-    pine_bark_material = setup_pinebark(stage_context, world_path)
+    pine_bark_material, pine_bark_material_path, pine_bark_file = setup_pinebark(stage_context, world_path)
  
     # TODO - make the following work so I don't keep copying materials
     # 3. Create a dedicated material scope to house incoming referenced assets
@@ -317,8 +318,13 @@ def create_mesh_usd(stage_context, world_path:str, tree_name:str,
         # Actually adds the vertices, faces, and texture map coords
         make_mesh_from_components(mesh, part_dict["mesh"])
 
+    root_layer = stage.GetRootLayer()
+    root_layer.subLayerPaths.append(pine_bark_file)
+    bound_material = UsdShade.Material(stage.GetPrimAtPath(pine_bark_material_path))
+    UsdShade.MaterialBindingAPI(root_xform).Bind(bound_material)
+        
     #  Save the stage
-    file_name = world_path + tree_name + ".usda"
+    file_name = world_path + "/models/" + tree_name + ".usda"
     print(f"Saving file to {file_name}")
     #print(stage.GetRootLayer().ExportToString())
     stage.GetRootLayer().Export(file_name)

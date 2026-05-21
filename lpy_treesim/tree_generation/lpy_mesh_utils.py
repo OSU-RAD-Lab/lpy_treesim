@@ -75,7 +75,10 @@ def stitch_cylinder(skel: SkeletonComponent, cyls: list, col_plant_type: tuple, 
     scl_t_values = skel.length / (2.0 * circum)   # Texture is twice as tall as wide
     tex_offset = np.random.uniform(0.0, 1.0)
     for n_rings, t_val in enumerate(skel.t_values):
-        tex_v_value = tex_offset + t_val * scl_t_values
+        # This does a random offset of the texture
+        # tex_v_value = tex_offset + t_val * scl_t_values
+        # This sets the t values to be 0 to 1 along the cylinder
+        tex_v_value = t_val 
         for indx in range(0, n_split):
             tex_coord = mesh_component["textures"][n_rings * n_split + indx]
             mesh_component["textures"][n_rings * n_split + indx] = (tex_coord[0], tex_v_value)

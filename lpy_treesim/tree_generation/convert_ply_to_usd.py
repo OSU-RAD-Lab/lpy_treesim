@@ -177,24 +177,28 @@ def setup_top_level_textures(stage, radii_name: list):
     return materials
 
 
-def setup_pinebark(stage, file_dir="/home/cindy/isaacsim/World/textures/pine_bark_vmbibe2g_2k/"):
+def setup_pinebark(stage_context, path_world_name, file_dir="../textures/pine_bark_vmbibe2g_2k/"):
+
+    with Ar.ResolverContextBinder(stage_context):
+        stage_pinebark = Usd.Stage.CreateInMemory()
+
     # 1. Create the Material at the top level
-    material_path = Sdf.Path(f"/Materials/Pinebark")
-    material = UsdShade.Material.Define(stage, material_path)
+    material_path = Sdf.Path(f"/textures/PineBark")
+    material = UsdShade.Material.Define(stage_pinebark, material_path)
 
     # 2 Create the Shader (UsdPreviewSurface)
-    shader = UsdShade.Shader.Define(stage, material_path.AppendChild("PBRShader"))
+    shader = UsdShade.Shader.Define(stage_pinebark, material_path.AppendChild("PBRShader"))
     shader.CreateIdAttr("UsdPreviewSurface")
     material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
 
     # 1. Create the ST Coordinates Reader (Primvar Reader)
-    coord_reader = UsdShade.Shader.Define(stage, material_path.AppendChild("StReader"))
+    coord_reader = UsdShade.Shader.Define(stage_pinebark, material_path.AppendChild("StReader"))
     coord_reader.CreateIdAttr("UsdPrimvarReader_float2")
     coord_reader.CreateInput("varname", Sdf.ValueTypeNames.Token).Set("st")
 
     # Helper to create texture nodes
     def pinebark_add_texture(name, file_path, input_name, type_name):
-        tex = UsdShade.Shader.Define(stage, material_path.AppendChild(name))
+        tex = UsdShade.Shader.Define(stage_pinebark, material_path.AppendChild(name))
         tex.CreateIdAttr("UsdUVTexture")
         
         # Make wrap in s and tile in t
@@ -231,10 +235,13 @@ def setup_pinebark(stage, file_dir="/home/cindy/isaacsim/World/textures/pine_bar
     pinebark_add_texture("CavityTex", file_dir + "Pine_Bark_vmbibe2g_2K_Cavity.jpg", "cavity", Sdf.ValueTypeNames.Float)
     pinebark_add_texture("SpecularTex", file_dir + "Pine_Bark_vmbibe2g_2K_Specular.jpg", "specular", Sdf.ValueTypeNames.Float)
     pinebark_add_texture("GlossTex", file_dir + "Pine_Bark_vmbibe2g_2K_Gloss.jpg", "gloss", Sdf.ValueTypeNames.Float)
+
+    stage_pinebark.GetRootLayer().Export(str(path_world_name) + "/textures/pine_bark.usda")
     return material
 
 
-def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeNamingConvention,
+def create_mesh_usd(stage_context, world_path:str, tree_name:str, 
+                    tree:TreeNamingConvention,
                     radii: list, name_radii: list):
     # 1. Create a new USD stage
     # Set the up axis and units
@@ -254,8 +261,22 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeN
 
     # Set up texture maps
     #materials = setup_top_level_textures(stage, name_radii)
-    pine_bark_material = setup_pinebark(stage)
+    pine_bark_material = setup_pinebark(stage_context, world_path)
  
+    # 3. Create a dedicated material scope to house incoming referenced assets
+    ref_materials_path = Sdf.Path("/World/textures")
+    ref_scope = UsdGeom.Scope.Define(stage, ref_materials_path)
+
+    # Relative file path pointing from "assets/layout.usda" out and into "materials/library.usda"
+    # We pull specifically from the original </World/Looks> prim inside that file
+    relative_path_to_lib = "../textures/pine_bark.usda"
+    ref_scope.GetPrim().GetReferences().AddReference(relative_path_to_lib, Sdf.Path("/World/Looks"))
+
+    # 5. Bind the Referenced Material to the Geometry
+    # Because of our composition arc, GoldMaterial now safely resolves locally at this path:
+    target_material_path = Sdf.Path("/World/textures/PineBark")
+    target_material = UsdShade.Material.Get(stage, target_material_path)
+
     # Loop through all of the (organized) mesh components, adding meshes for each
     for part_dict in tree.iterate_all_wood_parts():
         mesh = part_dict["mesh"]
@@ -278,7 +299,7 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeN
         mesh = UsdGeom.Mesh.Define(stage, mesh_name)
         #  Bind the Material to the Mesh
         #  TOFIX: Find the best size texture
-        UsdShade.MaterialBindingAPI(branch_xform).Bind(pine_bark_material)
+        UsdShade.MaterialBindingAPI(branch_xform).Bind(target_material)
 
         # Add semantic label
         labels_api = UsdSemantics.LabelsAPI.Apply(branch_xform.GetPrim(), "class")
@@ -296,9 +317,10 @@ def create_mesh_usd(stage_context, tree_name:str, path_tree_name:str, tree:TreeN
         make_mesh_from_components(mesh, part_dict["mesh"])
 
     #  Save the stage
-    print(f"Saving file to {str(path_tree_name)}")
+    file_name = world_path + tree_name + ".usda"
+    print(f"Saving file to {file_name}")
     #print(stage.GetRootLayer().ExportToString())
-    stage.GetRootLayer().Export(str(path_tree_name))
+    stage.GetRootLayer().Export(file_name)
 
 # Example Data
 # verts = [(0,0,0), (1,0,0), (1,1,0), (0,1,0)] # 4 vertices

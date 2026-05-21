@@ -109,7 +109,11 @@ def main():
         if stage_context is not [] and args.usda:
             # Where the usd files are stored
             usd_path = args.stage_dir / naming.usd_filename(index)
-            create_mesh_usd(stage_context, naming._prefix(index), usd_path, tree, radii, name_radii)
+            create_mesh_usd(stage_context, 
+                            world_path=str(args.stage_dir), 
+                            tree_name=naming._prefix(index), 
+                            tree=tree, 
+                            radii=radii, name_radii=name_radii)
             logger.info(f"Wrote mesh to {usd_path}")
 
         if args.meta_data:

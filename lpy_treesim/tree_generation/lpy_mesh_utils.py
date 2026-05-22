@@ -26,7 +26,7 @@ def stitch_cylinder(skel: SkeletonComponent, cyls: list, col_plant_type: tuple, 
     #   cylinder to mesh is stitched together
     # Vertex colors are set by plont part type, face colors by a unique color for each instance
     # In the first draft, the u coordinates of the texture are set correctly but the v (vertical) are not
-    mesh_component = {"vertices": [], "vertex_colors": [], "faces": [], "textures": [], "face_colors": [], "scale_texture":1.0}
+    mesh_component = {"vertices": [], "vertex_colors": [], "faces": [], "textures": [], "uv_textures": [], "face_colors": [], "scale_texture":1.0}
     offset = 0
     v_delta = 1.0 if len(cyls) == 1 else 1.0 / (len(cyls) - 1.0)
     v_coord = 0.0
@@ -40,6 +40,7 @@ def stitch_cylinder(skel: SkeletonComponent, cyls: list, col_plant_type: tuple, 
             mesh_component["vertices"].append(cyl["vertices"][2 * vi])
             mesh_component["vertex_colors"].append(col_plant_type)
             mesh_component["textures"].append((vi * s_div, v_coord))
+            mesh_component["uv_textures"].append((vi * s_div, v_coord))
         v_coord += v_delta
 
         skel.add_cylinder(cyl["vertices"])
@@ -67,6 +68,7 @@ def stitch_cylinder(skel: SkeletonComponent, cyls: list, col_plant_type: tuple, 
         mesh_component["vertices"].append(cyl["vertices"][2 * vi])
         mesh_component["vertex_colors"].append(col_plant_type)
         mesh_component["textures"].append((vi * s_div, v_coord))
+        mesh_component["uv_textures"].append((vi * s_div, v_coord))
 
     # Now fix the t texture values so they are roughly spaced based on the length
     skel.compute_t_values()   # Calculate the length and t values based on each cylinder
@@ -76,12 +78,11 @@ def stitch_cylinder(skel: SkeletonComponent, cyls: list, col_plant_type: tuple, 
     tex_offset = np.random.uniform(0.0, 1.0)
     for n_rings, t_val in enumerate(skel.t_values):
         # This does a random offset of the texture
-        # tex_v_value = tex_offset + t_val * scl_t_values
-        # This sets the t values to be 0 to 1 along the cylinder
-        tex_v_value = t_val 
+        tex_v_value = tex_offset + t_val * scl_t_values
         for indx in range(0, n_split):
             tex_coord = mesh_component["textures"][n_rings * n_split + indx]
             mesh_component["textures"][n_rings * n_split + indx] = (tex_coord[0], tex_v_value)
+            mesh_component["uv_textures"][n_rings * n_split + indx] = (tex_coord[0], t_val)
 
     return mesh_component
 

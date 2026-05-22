@@ -111,11 +111,13 @@ def main():
             usd_path = args.stage_dir / naming.usd_filename(index)
             uv_name = str(args.stage_dir ) + "/textures/mesh_uv.png"
             make_uv_texture(uv_name)
-            create_mesh_usd(stage_context, 
-                            world_path=str(args.stage_dir), 
-                            tree_name=naming._prefix(index), 
-                            tree=tree, 
-                            radii=radii, name_radii=name_radii)
+            for b_use_uv in [True, False]:
+                create_mesh_usd(stage_context, 
+                                world_path=str(args.stage_dir), 
+                                tree_name=naming._prefix(index), 
+                                tree=tree, 
+                                radii=radii, name_radii=name_radii,
+                                b_use_uv=b_use_uv)
             logger.info(f"Wrote mesh to {usd_path}")
 
         if args.meta_data:

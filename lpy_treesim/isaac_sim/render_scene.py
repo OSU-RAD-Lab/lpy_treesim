@@ -1,12 +1,33 @@
 import omni.replicator.core as rep
 import omni.usd
 import carb.settings
-from pxr import Usd, UsdGeom, Vt, Gf, UsdSemantics, Sdf, UsdShade, Ar
+from pxr import UsdLux, Usd, UsdGeom, Vt, Gf, UsdSemantics, Sdf, UsdShade, Ar
 from numpy import random
 
 
-# Set DLSS execution mode to 2 (Quality) or 3 (Auto)
-carb.settings.get_settings().set("/rtx/post/dlss/execMode", 2)
+b_uv_render = True
+
+if b_uv_render:
+    """
+    # Set DLSS execution mode to 2 (Quality) or 3 (Auto)
+    carb.settings.get_settings().set("/rtx/rendermode", "rtx")
+    omni.kit.commands.execute("ChangeViewportRenderMOdeCommand",
+                              render_mode="Texture Diffuse",
+                              viewport_name="Viewport") 
+    # Don't pause to collect frames
+    carb.settings.get_settings().set("/omni/replicator/RTSubFrames", 1)
+    # No antialiasing
+    carb.settings.get_settings().set("/rtx/post/aa/op", 0)
+    # Disable motion blur (pre and post)
+    carb.settings.get_settings().set("/omni/replicator/captureMotionBlur", False)
+    carb.settings.get_settings().set("/rtx/post/motionBlur/scale", 0.0)
+    # and reflections
+    carb.settings.get_settings().set("/rtx/reflections/maxBounces", 0)
+    """
+    carb.settings.get_settings().set("/rtx/post/dlss/execMode", 2)
+        
+else:
+    carb.settings.get_settings().set("/rtx/post/dlss/execMode", 2)
         
 # 1. Define the scene and assets
 # Note: replace the USD paths below with your own 3D assets
@@ -31,18 +52,22 @@ def RightAngleCameras():
     return camera_pos, camera_left_pos, camera_up_pos, look_at_pos
 
 search_paths = [stage_dir]
+stage = omni.usd.get_context().get_stage()
 
 # 2. Create a context with these paths
 stage_context = Ar.DefaultResolverContext(search_paths)
-stage = Usd.Stage.CreateInMemory()
-root_layer = stage.GetRootLayer()
-root_layer.subLayerPaths.append("./models/lpy_envy_00000.usda")
-root_layer.subLayerPaths.append("./texture/pine_bark.usda")
-stage.Export("./models/compiled_scene.usda")
 
-material_list = [
-    "/Materials/PineBark",
-]
+"""
+# My nth attempt at reading in the material texture from the file so it will be found in tree. Pretty much failing
+# read in the pinebark tetxure
+# Spawn the object to be detected
+material_prim_path = "/Materials/PineBark"
+override_prim = stage.OverridePrim(material_prim_path)
+with Ar.ResolverContextBinder(stage_context):
+    override_prim.GetReferences().AddReference(assetPath="./textures/pine_bark.usda",
+                                               primPath=material_prim_path)
+    #pinebark = stage.create.from_usd("./textures/pine_bark.usda")
+"""
 
 
 with rep.new_layer():
@@ -50,24 +75,54 @@ with rep.new_layer():
     rep.create.plane(scale=10, visible=True)
     
     # Spawn the object to be detected
-    tree = rep.create.from_usd("./models/lpy_envy_00000.usda", name="tree")
+    with Ar.ResolverContextBinder(stage_context):
+        #pinebark = rep.create.from_usd("./textures/pine_bark.usda")
+        if b_uv_render:
+            tree = rep.create.from_usd("./models/lpy_envy_00000_uv.usda", name="tree")
+        else:
+            tree = rep.create.from_usd("./models/lpy_envy_00000.usda", name="tree")
 
     #pinebark = rep.create.from_usd("./textures/pine_bark.usda")
     #all = rep.create.from_dir(stage_dir, True)
     
-    b_flat_light = False
-    if b_flat_light:
+    if b_uv_render:
         #rep.settings.carb_settings("/rtx/sceneDb/ambientLightIntensity", 0.0)
-        rep.settings.carb_settings("/rtx/sceneDb/ambientLightColor", (0.0, 0.0, 0.0))
         #rep.settings.set_stage_lights(False)
+        default_light_path = "/Environment/defaultLight"
+        if stage.GetPrimAtPath(default_light_path):
+            prim = stage.GetPrimAtPath(default_light_path)
+            print(f"default light {prim.GetTypeName()}")
+            geom_schema = UsdGeom.Imageable(prim)
+            #geom_schema.MakeInvisible()
+            
+        """ THis doesn't work because there are no lights so all_lights is an empty replicator
+        all_lights = rep.get.prims(path_pattern="**",
+                                   prim_types=["DistantLight", "RectLight", "SphereLight", "CylinderLight", "DiskLight"])
+
+        # Turn off default light, if there is one
+        if len(all_lights) > 0:
+            with all_lights:
+                rep.modify.visibility(False)
+        """
         
+        light = rep.create.light(rotation=(0,0,0), 
+                                 color=(1.0, 1.0, 1.0),
+                                 #exposure=10.0,
+                                 texture=None,
+                                 name="UniformWhiteDome",
+                                 #intensity=1000, 
+                                 light_type="Dome")
+        settings = carb.settings.get_settings()
+        settings.set("rtx/shadows/enabled", False)
+        settings.set("rtx/post/ambientocclusion/enabled", False)
+        settings.set("rtx/pathtracing/cachedShadows/enabled", False)
         # 2. Create the ambient light source
         # A Dome Light provides uniform 360-degree environment lighting
-        light = rep.create.light(
-            light_type="Dome",
-            intensity=1000,
-            color=(1.0, 1.0, 1.0) # Pure white
-            )    
+        #black_light = rep.create.light(
+        #    light_type="distance",
+        #    intensity=0 # minimal mode uses at least one light; this turnis it off
+        #    )    
+        
     else:
         # Add Default Light
         light = rep.create.light(rotation=(0,0,0), intensity=3000, light_type="distant")
@@ -87,12 +142,20 @@ with rep.new_layer():
         render_product = rep.create.render_product(camera, (512, 512), name="solo")
         
     uv_color = omni.replicator.core.create.material_omnipbr(diffuse=(0, 0, 0),
+                                                            roughness = 0.0,
                                                             diffuse_texture=stage_dir + "/textures/mesh_uv.png")
     #UsdShade.MaterialBindingAPI(tree).Bind(uv_color)
 
     #rep.settings.set_render_rtx_realtime(antialiasing="Off")
 
+    # Get all the materials on all the primitives
+    #target_materials = rep.get.material(path_pattern="*Looks*")
+    if b_uv_render:
+        with rep.get.prims():
+            rep.modify.material(uv_color)
+    
     # 2. Define domain randomization
+    texture_filename_list = [stage_dir + "/textures/mesh_uv.png"]
     with rep.trigger.on_frame(max_execs=10):
         # Randomize the cube's position and rotation
         with tree:
@@ -100,10 +163,9 @@ with rep.new_layer():
                 position=rep.distribution.uniform((-0.1, -0.2, -0.25), (0.1, 0.2, 0.25)),
                 rotation=rep.distribution.uniform((-5, -15, 0), (5, 15, 0))
             )
-            rep.modify.material(uv_color)
 
         # Randomize the camera placement
-        cam_seed = 500
+        cam_seed = random.randint(10, 10000)
         if b_right_angle:
             with camera:
                 rep.modify.pose(

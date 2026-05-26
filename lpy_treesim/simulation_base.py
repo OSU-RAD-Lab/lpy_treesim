@@ -23,9 +23,6 @@ class SimulationConfig(ABC):
     Architecture-specific configs should inherit from this and add their own parameters.
     Common parameters across all architectures are defined here.
 
-    Note: Labeling options (semantic_label, instance_label, per_cylinder_label) are
-    configured via command-line arguments in make_n_trees.py and passed as extern
-    variables to the L-system.
     """
 
     # Tying and Pruning Intervals

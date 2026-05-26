@@ -68,6 +68,8 @@ main_trunk.tying.guide_target = trellis_support.trunk_wire
 branch_hierarchy["root"] = [main_trunk]
 # branch_hierarchy: dict[str, list] maps parent name to list of child branch objects
 # parent_map: dict[str, str] maps child name to parent name for O(1) parent lookup during pruning
+# The branch_hierarchy dictionary is also parsed in tree_builder.export_hierarchy_dict to create the
+#   skeleton and branch id names
 parent_map = {}  # Internal bookkeeping for efficient parent lookup
 branch_hierarchy[main_trunk.name] =[]
 

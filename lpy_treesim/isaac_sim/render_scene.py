@@ -8,12 +8,21 @@ from numpy import random
 b_uv_render = True
 
 if b_uv_render:
-    """
-    # Set DLSS execution mode to 2 (Quality) or 3 (Auto)
-    carb.settings.get_settings().set("/rtx/rendermode", "rtx")
-    omni.kit.commands.execute("ChangeViewportRenderMOdeCommand",
-                              render_mode="Texture Diffuse",
-                              viewport_name="Viewport") 
+    carb_settings = carb.settings.get_settings()
+    # All of this was suppose to help, but... it did nothing
+    #carb_settings.set("/rtx/rendermode", "RayTracedLighting")
+    #carb_settings.set("/rtx/minimal/mode", 1)
+    
+    #omni.kit.commands.execute("ChangeViewportRenderModeCommand",
+    #                          render_mode="Texture Diffuse",
+    #                          viewport_name="Viewport") 
+    carb_settings.set("/rtx/sceneDb/ambientLightColor", (1, 1, 1))
+    carb_settings.set("/rtx/sceneDb/ambientLightIntensity", 1.0)
+    carb_settings.set("rtx/directLighting/enabled", False)
+    carb_settings.set("rtx/indirectLighting/enabled", False)
+    carb_settings.set("rtx/shadows/enabled", False)
+    carb_settings.set("rtx/post/ambientocclusion/enabled", False)
+    carb_settings.set("rtx/pathtracing/cachedShadows/enabled", False)
     # Don't pause to collect frames
     carb.settings.get_settings().set("/omni/replicator/RTSubFrames", 1)
     # No antialiasing
@@ -23,7 +32,6 @@ if b_uv_render:
     carb.settings.get_settings().set("/rtx/post/motionBlur/scale", 0.0)
     # and reflections
     carb.settings.get_settings().set("/rtx/reflections/maxBounces", 0)
-    """
     carb.settings.get_settings().set("/rtx/post/dlss/execMode", 2)
         
 else:
@@ -85,6 +93,24 @@ with rep.new_layer():
     #pinebark = rep.create.from_usd("./textures/pine_bark.usda")
     #all = rep.create.from_dir(stage_dir, True)
     
+    # Spawn the camera and attach to a render product
+    b_right_angle = False
+    camera_pos, camera_left_pos, camera_up_pos, look_at_pos = RightAngleCameras()
+    if b_right_angle:
+        camera = rep.create.camera(position=camera_pos[0], look_at=look_at_pos[0])
+        camera_left = rep.create.camera(position=camera_left_pos[0], look_at=look_at_pos[0])
+        camera_up = rep.create.camera(position=camera_up_pos[0], look_at=look_at_pos[0])
+        render_product = rep.create.render_product(camera, (512, 512), name="primary")
+        render_product_left = rep.create.render_product(camera_left, (512, 512), name="left")
+        render_product_up = rep.create.render_product(camera_up, (512, 512), name="up")
+    else:
+        camera = rep.create.camera(position=camera_pos[0], look_at=look_at_pos[0])
+        render_product = rep.create.render_product(camera, (512, 512), name="solo")
+        
+    uv_color = omni.replicator.core.create.material_omnipbr(diffuse=(0.0, 0.0, 0.0),
+                                                            roughness = 0.0,
+                                                            diffuse_texture=stage_dir + "/textures/mesh_uv.png")
+
     if b_uv_render:
         #rep.settings.carb_settings("/rtx/sceneDb/ambientLightIntensity", 0.0)
         #rep.settings.set_stage_lights(False)
@@ -104,18 +130,19 @@ with rep.new_layer():
             with all_lights:
                 rep.modify.visibility(False)
         """
-        
-        light = rep.create.light(rotation=(0,0,0), 
+        """
+        light_pos = (camera_pos[0][0] * 100, camera_pos[0][1] * 100, camera_pos[0][2] * 100)
+        print(f"{light_pos} and {look_at_pos[0]}")
+        light = rep.create.light(position=light_pos,
+                                 look_at = look_at_pos[0],
                                  color=(1.0, 1.0, 1.0),
                                  #exposure=10.0,
                                  texture=None,
-                                 name="UniformWhiteDome",
-                                 #intensity=1000, 
-                                 light_type="Dome")
-        settings = carb.settings.get_settings()
-        settings.set("rtx/shadows/enabled", False)
-        settings.set("rtx/post/ambientocclusion/enabled", False)
-        settings.set("rtx/pathtracing/cachedShadows/enabled", False)
+                                 name="DistantLight",
+                                 intensity=1000, 
+                                 light_type="DistantLight")
+        """
+        
         # 2. Create the ambient light source
         # A Dome Light provides uniform 360-degree environment lighting
         #black_light = rep.create.light(
@@ -127,23 +154,6 @@ with rep.new_layer():
         # Add Default Light
         light = rep.create.light(rotation=(0,0,0), intensity=3000, light_type="distant")
 
-    # Spawn the camera and attach to a render product
-    b_right_angle = False
-    camera_pos, camera_left_pos, camera_up_pos, look_at_pos = RightAngleCameras()
-    if b_right_angle:
-        camera = rep.create.camera(position=camera_pos[0], look_at=look_at_pos[0])
-        camera_left = rep.create.camera(position=camera_left_pos[0], look_at=look_at_pos[0])
-        camera_up = rep.create.camera(position=camera_up_pos[0], look_at=look_at_pos[0])
-        render_product = rep.create.render_product(camera, (512, 512), name="primary")
-        render_product_left = rep.create.render_product(camera_left, (512, 512), name="left")
-        render_product_up = rep.create.render_product(camera_up, (512, 512), name="up")
-    else:
-        camera = rep.create.camera(position=camera_pos[0], look_at=look_at_pos[0])
-        render_product = rep.create.render_product(camera, (512, 512), name="solo")
-        
-    uv_color = omni.replicator.core.create.material_omnipbr(diffuse=(0, 0, 0),
-                                                            roughness = 0.0,
-                                                            diffuse_texture=stage_dir + "/textures/mesh_uv.png")
     #UsdShade.MaterialBindingAPI(tree).Bind(uv_color)
 
     #rep.settings.set_render_rtx_realtime(antialiasing="Off")

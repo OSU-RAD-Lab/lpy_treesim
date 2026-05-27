@@ -3,7 +3,7 @@ import openalea.plantgl.scenegraph as sg
 import openalea.plantgl.algo as alg
 
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
-from lpy_treesim.color_manager import ColorManager
+from lpy_treesim.utils.color_manager import ColorManager
 from lpy_treesim.tree_generation.skeleton_convention import SkeletonComponent
 import numpy as np
 from trimesh import Trimesh

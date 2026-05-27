@@ -1,7 +1,5 @@
-from pxr import Usd, UsdGeom, Vt, Gf, UsdSemantics, Sdf, UsdShade, Ar
+from pxr import Usd, UsdGeom, Gf, UsdSemantics, Sdf, UsdShade, Ar
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
-from lpy_treesim.color_manager import ColorManager
-import ctypes
 
 
 def create_labeled_asset(file_path):

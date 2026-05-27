@@ -4,12 +4,8 @@ import numpy as np
 from pathlib import Path
 import secrets
 import os as os
-
 import logging
 
-from toolz.functoolz import return_none
-
-import lpy_treesim.utils.logging_conf
 from lpy_treesim.tree_generation.tree_builder import TreeBuilder
 from lpy_treesim.tree_generation.tree_name_conf import TreeNamingConfig
 from lpy_treesim.tree_generation.convert_ply_to_usd import create_mesh_usd, check_texture

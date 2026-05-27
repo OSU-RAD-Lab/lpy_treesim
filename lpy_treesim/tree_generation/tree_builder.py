@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from dataclasses import dataclass
 import sys
 from pathlib import Path
 from lpy_treesim import ColorManager
@@ -8,32 +7,29 @@ from openalea.lpy import Lsystem
 from openalea.plantgl.all import *
 from lpy_treesim.tree_generation.skeleton_convention import SkeletonComponent, JunctionComponent
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
-
-
 import logging
-import lpy_treesim.utils.logging_conf
-
-logger = logging.getLogger(__name__)
-
-BASE_LPY_PATH = Path(__file__).resolve().parents[1] / "base_lpy.lpy"
-
-# Ensure repository root is discoverable for prototype imports
-sys.path.insert(0, str(BASE_LPY_PATH.parents[0]))
 
 
 class TreeBuilder:
+    logger = logging.getLogger(__name__)
+
+    BASE_LPY_PATH = Path(__file__).resolve().parents[1] / "tree_models" / "base_tree" / "base_lpy.lpy"
+
     def __init__(
         self,
         tree_name: str,
         seed_value: int,
     ):
+        # Ensure repository root is discoverable for prototype imports
+        sys.path.insert(0, str(TreeBuilder.BASE_LPY_PATH.parents[0]))
+
         self.branch_hierarchy = {}
         self.color_manager = ColorManager()
         self.extern_vars = {
-            "prototype_builder_path": f"lpy_treesim.examples.{tree_name}.{tree_name}_prototypes.build_basicwood_prototypes",
-            "trunk_class_path": f"lpy_treesim.examples.{tree_name}.{tree_name}_prototypes.Trunk",
-            "simulation_config_class_path": f"lpy_treesim.examples.{tree_name}.{tree_name}_simulation.{tree_name.upper()}SimulationConfig",
-            "simulation_class_path": f"lpy_treesim.examples.{tree_name}.{tree_name}_simulation.{tree_name.upper()}Simulation",
+            "prototype_builder_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_prototypes.build_basicwood_prototypes",
+            "trunk_class_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_prototypes.Trunk",
+            "simulation_config_class_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_simulation.{tree_name.upper()}SimulationConfig",
+            "simulation_class_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_simulation.{tree_name.upper()}Simulation",
             "color_manager": self.color_manager,
             "axiom_pitch": 0.0,
             "axiom_yaw": 0.0,
@@ -42,9 +38,7 @@ class TreeBuilder:
         }
         # Enable batch mode before displaying anything
 
-        self.__lsystem = Lsystem(str(BASE_LPY_PATH), self.extern_vars)
-        
-        return
+        self.__lsystem = Lsystem(str(TreeBuilder.BASE_LPY_PATH), self.extern_vars)
 
     def lsystem(self) -> Lsystem:
         return self.__lsystem
@@ -181,7 +175,7 @@ class TreeBuilder:
 
     def export_metadata(self, metadata_path: str) -> dict:
         """Export metadata based on label settings. Includes hierarchy and L-Py vars."""
-        logger.info(f"Exporting metadata to {metadata_path}...")
+        TreeBuilder.logger.info(f"Exporting metadata to {metadata_path}...")
         export_dict = self.get_metadata()
         with open(metadata_path, "w") as f:
             json.dump(export_dict, f, indent=4)

@@ -13,7 +13,7 @@ and implement architecture-specific methods like point generation.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import numpy as np
-from lpy_treesim.helper import cut_from
+from lpy_treesim.tree_models.base_tree.lpy_helper_functions import cut_from
 
 
 @dataclass
@@ -42,7 +42,7 @@ class SimulationConfig(ABC):
     pruning_age_threshold: int = 6  # Age threshold for pruning untied branches
 
     # L-System Parameters
-    derivation_length: int = 256  # Number of derivation steps
+    derivation_length: int = 1024  # Number of derivation steps
     use_generalized_cylinder: bool = False  # Whether to wrap new branches in @Gc/@Ge blocks
 
     # Growth Parameters

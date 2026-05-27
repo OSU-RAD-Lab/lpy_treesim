@@ -7,7 +7,7 @@ from lpy_treesim.tree_generation.lpy_mesh_utils import convert_ply_to_ext
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir", type=str, default="dataset/")
-    parser.add_argument("--input_dir", type=str, default="examples/UFO_tie_prune_label.lpy")
+    parser.add_argument("--input_dir", type=str, default="tree_models/UFO_tie_prune_label.lpy")
     parser.add_argument("--verbose", action="store_true", default=False)
     parser.add_argument("--ext", type=str, default="obj")
     args = parser.parse_args()

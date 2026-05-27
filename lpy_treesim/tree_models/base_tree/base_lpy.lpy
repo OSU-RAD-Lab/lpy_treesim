@@ -4,8 +4,6 @@ Configure via extern variables passed to Lsystem(..., variables).
 """
 import os
 import sys
-import time
-import numpy as np
 
 
 # Ensure repository root is importable regardless of working directory
@@ -13,9 +11,8 @@ CURRENT_DIR = os.path.dirname(__file__)
 if CURRENT_DIR not in sys.path:
     sys.path.append(CURRENT_DIR)
 
-from stochastic_tree import Support, BasicWood, TreeBranch, BasicWoodConfig
-from helper import *
-from dataclasses import dataclass
+from tree_wood_prototypes import Support, BasicWood, TreeBranch, BasicWoodConfig
+from lpy_helper_functions import *
 
 # -----------------------------------------------------------------------------
 # EXTERNALLY CONFIGURABLE PATHS
@@ -24,10 +21,10 @@ from dataclasses import dataclass
 # architecture without editing this shared file.
 extern(
   color_manager = None,
-  prototype_builder_path = "examples.Envy.Envy_prototypes.build_basicwood_prototypes",
-  trunk_class_path = "examples.Envy.Envy_prototypes.Trunk",
-  simulation_config_class_path = "examples.Envy.Envy_simulation.EnvySimulationConfig",
-  simulation_class_path = "examples.Envy.Envy_simulation.EnvySimulation",
+  prototype_builder_path = "tree_models.Envy.Envy_prototypes.build_basicwood_prototypes",
+  trunk_class_path = "tree_models.Envy.Envy_prototypes.Trunk",
+  simulation_config_class_path = "tree_models.Envy.Envy_simulation.EnvySimulationConfig",
+  simulation_class_path = "tree_models.Envy.Envy_simulation.EnvySimulation",
   axiom_pitch = 0.0,
   axiom_yaw = 0.0,
   branch_hierarchy = {},
@@ -231,6 +228,10 @@ trunk(hierarchy):
 # -----------------------------------------------------------------------------
 # GEOMETRIC INTERPRETATION (HOMOMORPHISM)
 # -----------------------------------------------------------------------------
+
+I(s,r,o) --> I(s,r+o.growth.thickness_increment,o)
+_(r) --> _(r+o.thickness_increment)
+
 # Map abstract L-System modules to concrete 3D geometry for rendering.
 # These rules define how the symbolic representation becomes visual.
 homomorphism:

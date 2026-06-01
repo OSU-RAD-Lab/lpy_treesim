@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
-from lpy_treesim.simulation_base import SimulationConfig, TreeSimulationBase
+from lpy_treesim.tie_prune.tie_prune_base import SimulationConfig, TreeSimulationBase
 
 
 @dataclass

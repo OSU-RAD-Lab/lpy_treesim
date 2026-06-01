@@ -2,7 +2,7 @@ import os
 
 import argparse
 import glob
-from lpy_treesim.tree_generation.lpy_mesh_utils import convert_ply_to_ext
+from lpy_treesim.tree_generation.lpy_scene_to_mesh import convert_ply_to_ext
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

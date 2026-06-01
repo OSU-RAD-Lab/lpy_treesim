@@ -26,6 +26,8 @@ class LocationState:
             self.start = Vector3(0, 0, 0)
         if self.end is None:
             self.end = Vector3(0, 0, 0)
+        else:
+            print(f"End points {self.end}")
         if self.last_tie_location is None:
             self.last_tie_location = Vector3(0, 0, 0)
 

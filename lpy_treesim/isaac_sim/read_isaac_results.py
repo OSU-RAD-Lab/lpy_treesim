@@ -1,4 +1,4 @@
-# Swiped from isaac sim examples
+# Swiped from isaac sim tree_models
 
 import asyncio
 from dis import dis

@@ -6,7 +6,7 @@ import pytest
 
 from lpy_treesim.tree_generation.tree_builder import TreeBuilder
 from lpy_treesim.tree_generation.tree_builder import TreeNamingConfig
-import lpy_treesim.tree_generation.lpy_mesh_utils as lmu
+import lpy_treesim.tree_generation.lpy_scene_to_mesh as lmu
 
 import logging
 logger = logging.getLogger(__name__)

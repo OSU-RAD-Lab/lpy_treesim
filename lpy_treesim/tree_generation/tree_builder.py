@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from dataclasses import dataclass
 import sys
 from pathlib import Path
 from lpy_treesim import ColorManager
@@ -8,54 +7,65 @@ from openalea.lpy import Lsystem
 from openalea.plantgl.all import *
 from lpy_treesim.tree_generation.skeleton_convention import SkeletonComponent, JunctionComponent
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
-
-
 import logging
-import lpy_treesim.utils.logging_conf
-
-logger = logging.getLogger(__name__)
-
-BASE_LPY_PATH = Path(__file__).resolve().parents[1] / "base_lpy.lpy"
-
-# Ensure repository root is discoverable for prototype imports
-sys.path.insert(0, str(BASE_LPY_PATH.parents[0]))
 
 
 class TreeBuilder:
-    def __init__(
-        self,
-        tree_name: str,
-        seed_value: int,
-    ):
+    logger = logging.getLogger(__name__)
+    b_init = False
+
+    BASE_LPY_PATH = Path(__file__).resolve().parents[1] / "tree_models" / "base_tree" / "base_lpy.lpy"
+
+    def __init__(self,
+                 tree_name: str,
+                 seed_value: int):
+
+        if not  TreeBuilder.b_init:
+            # Ensure repository root is discoverable for prototype imports
+            sys.path.insert(0, str(TreeBuilder.BASE_LPY_PATH.parents[0]))
+            TreeBuilder.b_init = True
+
+        # Store the branches as they're created
         self.branch_hierarchy = {}
+
+        # For unique labeling of branch cylinders
         self.color_manager = ColorManager()
+
+        # Where to find the source code and start values for the trunk
         self.extern_vars = {
-            "prototype_builder_path": f"lpy_treesim.examples.{tree_name}.{tree_name}_prototypes.build_basicwood_prototypes",
-            "trunk_class_path": f"lpy_treesim.examples.{tree_name}.{tree_name}_prototypes.Trunk",
-            "simulation_config_class_path": f"lpy_treesim.examples.{tree_name}.{tree_name}_simulation.{tree_name.upper()}SimulationConfig",
-            "simulation_class_path": f"lpy_treesim.examples.{tree_name}.{tree_name}_simulation.{tree_name.upper()}Simulation",
+            "prototype_builder_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_prototypes.build_basicwood_prototypes",
+            "trunk_class_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_prototypes.Trunk",
+            "simulation_config_class_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_simulation.{tree_name.upper()}SimulationConfig",
+            "simulation_class_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_simulation.{tree_name.upper()}Simulation",
+            "branch_hierarchy": self.branch_hierarchy,
             "color_manager": self.color_manager,
             "axiom_pitch": 0.0,
             "axiom_yaw": 0.0,
-            "branch_hierarchy": self.branch_hierarchy,
             "seed_value": seed_value,
         }
         # Enable batch mode before displaying anything
-
-        self.__lsystem = Lsystem(str(BASE_LPY_PATH), self.extern_vars)
-        
-        return
+        self.__lsystem = Lsystem(str(TreeBuilder.BASE_LPY_PATH), self.extern_vars)
 
     def lsystem(self) -> Lsystem:
         return self.__lsystem
 
+    @staticmethod
+    def convert_vec3_to_tuple(vec3) -> tuple:
+        return (float(vec3.x), float(vec3.y), float(vec3.z))
+
     def generate_tree(self, b_interactive=True):
+        """ Actually build the lpy string
+        @param b_interactive - do you want to have to hit a key every iteration?"""
+
         lstring = self.__lsystem.axiom
         if b_interactive:
             Viewer.start()
         for iteration in range(self.__lsystem.derivationLength):
+            # One iteration - replace symbols
             lstring = self.__lsystem.derive(lstring, iteration, 1)
+
             # DO NOT TAKE OUT THIS LINE - or everything will stop working
+            #   This does the actual pruning/tying
             self.__lsystem.plot(lstring)
             if b_interactive:
                 scene =  self.__lsystem.sceneInterpretation(lstring)
@@ -64,17 +74,11 @@ class TreeBuilder:
 
         if b_interactive:
             Viewer.exit()
+
+        print(lstring)
+        # String and scene (which has geometry)
         return lstring, self.__lsystem.sceneInterpretation(lstring)
     
-    def export_hierarchy_dict(self) -> dict:
-        named_hierarchy = {}
-        for key, branch in self.branch_hierarchy.items():
-            key = key.lower().strip()
-            named_hierarchy[key] = []
-            for child in branch:
-                named_hierarchy[key].append(child.name.lower().strip())
-        return named_hierarchy
-
     def create_tree_structure(self) -> (TreeNamingConvention, dict):
         tree = TreeNamingConvention()
 
@@ -155,10 +159,15 @@ class TreeBuilder:
 
         return tree, mapping
 
-    @staticmethod
-    def convert_vec3_to_tuple(vec3) -> tuple:
-        return (float(vec3.x), float(vec3.y), float(vec3.z))
-    
+    def export_hierarchy_dict(self) -> dict:
+        named_hierarchy = {}
+        for key, branch in self.branch_hierarchy.items():
+            key = key.lower().strip()
+            named_hierarchy[key] = []
+            for child in branch:
+                named_hierarchy[key].append(child.name.lower().strip())
+        return named_hierarchy
+
     def export_branch_location_dict(self) -> dict:
         named_hierarchy = {}
         for key, branch in self.branch_hierarchy.items():
@@ -181,7 +190,7 @@ class TreeBuilder:
 
     def export_metadata(self, metadata_path: str) -> dict:
         """Export metadata based on label settings. Includes hierarchy and L-Py vars."""
-        logger.info(f"Exporting metadata to {metadata_path}...")
+        TreeBuilder.logger.info(f"Exporting metadata to {metadata_path}...")
         export_dict = self.get_metadata()
         with open(metadata_path, "w") as f:
             json.dump(export_dict, f, indent=4)

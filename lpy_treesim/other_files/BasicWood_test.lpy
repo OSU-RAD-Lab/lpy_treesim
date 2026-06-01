@@ -3,7 +3,7 @@ This file is a demonstration/testing BasicWood class
 """
 import sys
 sys.path.append('../')
-from stochastic_tree import BasicWood
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 import random as rd
 
 class Trunk(BasicWood):

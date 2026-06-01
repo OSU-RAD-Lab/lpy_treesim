@@ -4,17 +4,13 @@ import numpy as np
 from pathlib import Path
 import secrets
 import os as os
-
 import logging
 
-from toolz.functoolz import return_none
-
-import lpy_treesim.utils.logging_conf
 from lpy_treesim.tree_generation.tree_builder import TreeBuilder
 from lpy_treesim.tree_generation.tree_name_conf import TreeNamingConfig
 from lpy_treesim.tree_generation.convert_ply_to_usd import create_mesh_usd, check_texture
 from lpy_treesim.textures.generate_texture import make_texture_set, make_uv_texture
-import lpy_mesh_utils as lmu
+from lpy_scene_to_mesh import plant_gl_scene_to_vertices_and_faces, stitch_cylinders, create_skeleton_junctions, write_mesh
 
 logger = logging.getLogger(__name__)
 
@@ -70,41 +66,49 @@ def main():
             radii = [1]
             name_radii = ["pine_bark_vmbibe2g_2k"]
 
-    # Generate trees
+    # Generate trees - use unique seeds
     tree_rng: np.random.Generator = np.random.default_rng(seed=args.dataset_seed)
     for index in range(args.num_trees):
+        # Seed
         tree_seed = tree_rng.integers(low=0, high=1_000_000)
-        lsb = TreeBuilder(
-            tree_name=args.tree_name,
-            seed_value=int(tree_seed)
-        )
+
+        # Initialize the class
+        lsb = TreeBuilder(tree_name=args.tree_name, seed_value=int(tree_seed))
 
         if args.verbose:
             print(f"INFO: Generating {args.tree_name} tree #{index:03d}")
         logging.info(f"Generating {args.tree_name} tree #{index:03d} with seed {tree_seed}")
 
         # Generates the l-string that everything is built off of, then converts it to the "scene"
-        #   Also sets one color for each spur/branch/trunk instance
+        #   Also sets one color for each spur/branch/trunk instance (stored in branch_hierarchy)
         lstring, scene = lsb.generate_tree(b_interactive=False)
 
-        # Converts the scene to our tree structure. Mapping maps the unique ids from the lstring into our tree structure
-        tree, mapping = lsb.create_tree_structure()
+        # Converts the scene to our tree structure.
+        #   Mapping maps the unique ids from the lstring into our tree structure
+        #   This ensures the branches etc are numbered sequentially
+        tree, tree_mapping = lsb.create_tree_structure()
 
         # Adds to each tree component the mesh cylinders created by lpy
-        lmu.plant_gl_scene_to_vertices_and_faces(scene, tree=tree, tree_mapping=mapping, color_mapping=lsb.color_manager)
+        plant_gl_scene_to_vertices_and_faces(scene,
+                                             tree_mapping=tree_mapping,
+                                             color_mapping=lsb.color_manager)
 
         # Now stitch together all of the mesh components into tubes instead of discrete cylinders
         # Also adds colors and texture coordinates
-        color_to_part, keys_to_remove = lmu.stitch_cylinders(tree=tree)
+        color_to_part, keys_to_remove = stitch_cylinders(tree=tree)
+        # Some newly created branch parts do not have any meshes associated with them
         for key in keys_to_remove:
             tree.remove_key(key)
+
+        # Now that the cylinders/skeleton have been processed, build the junctions
+        create_skeleton_junctions(tree=tree)
 
         # Write out mesh file formats
         if args.ply or args.obj:
             mesh_path = args.output_dir / naming.mesh_filename(index, file_type="")
             uv_name = str(mesh_path) + "_uv.png"
             make_uv_texture(uv_name)
-            lmu.write_mesh(tree=tree, fname=mesh_path, image_name=uv_name)
+            write_mesh(tree=tree, fname=mesh_path, image_name=uv_name)
 
         if stage_context is not [] and args.usda:
             # Where the usd files are stored

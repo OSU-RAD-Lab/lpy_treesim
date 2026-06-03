@@ -4,8 +4,8 @@ import os
 import plyfile
 import pytest
 
-from lpy_treesim.tree_generation.tree_builder import TreeBuilder
-from lpy_treesim.tree_generation.tree_builder import TreeNamingConfig
+from lpy_treesim.tree_generation.tree_builder_lpy import TreeBuilder
+from lpy_treesim.tree_generation.tree_builder_lpy import TreeNamingConfig
 import lpy_treesim.tree_generation.lpy_scene_to_mesh as lmu
 
 import logging

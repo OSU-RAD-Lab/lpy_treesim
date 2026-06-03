@@ -6,12 +6,12 @@ import secrets
 import os as os
 import logging
 
-from lpy_treesim.tree_generation.tree_builder import TreeBuilder
-from lpy_treesim.tree_generation.tree_name_conf import TreeNamingConfig
-from lpy_treesim.tree_generation.convert_ply_to_usd import create_mesh_usd, check_texture
+from lpy_treesim.tree_generation.tree_builder_lpy import TreeBuilder
+from lpy_treesim.tree_generation.file_naming_config import FileNamingConfig
+from lpy_treesim.tree_generation.tree_to_usd import create_mesh_usd, check_texture
 from lpy_treesim.textures.generate_texture import make_texture_set, make_uv_texture
 from lpy_treesim.tree_generation.lpy_scene_to_mesh import plant_gl_scene_to_vertices_and_faces, stitch_cylinders, write_mesh
-from lpy_treesim.tree_generation.skeleton_convention import calculate_skeleton_junctions
+from lpy_treesim.tree_generation.skeleton_components import calculate_skeleton_junctions
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +33,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--usda", action="store_false", help="Write out universal scene descriptor format")
     parser.add_argument("--make-textures", action="store_true", help="Create a new set of textures")
     args = parser.parse_args()
-    if args.num_trees > (TreeNamingConfig.MAX_TREES + 1) or args.num_trees < 1:
-        raise ValueError(f"num_trees={args.num_trees} is not in the range [1, {TreeNamingConfig.MAX_TREES + 1}].")
+    if args.num_trees > (FileNamingConfig.MAX_TREES + 1) or args.num_trees < 1:
+        raise ValueError(f"num_trees={args.num_trees} is not in the range [1, {FileNamingConfig.MAX_TREES + 1}].")
     if args.dataset_seed is None:
         args.dataset_seed = secrets.randbits(32)
     return args
@@ -44,7 +44,7 @@ def main():
     logger.info("Starting tree generation...")
     args = _parse_args()
 
-    naming = TreeNamingConfig(namespace=args.namespace, tree_type=args.tree_name)
+    naming = FileNamingConfig(namespace=args.namespace, tree_type=args.tree_name)
     # ensure_output_dir(args.output_dir)
 
     stage_context = []

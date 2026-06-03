@@ -2,9 +2,9 @@ import openalea.plantgl as plantgl
 import openalea.plantgl.scenegraph as sg
 import openalea.plantgl.algo as alg
 
-from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
+from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvention
 from lpy_treesim.utils.color_manager import ColorManager
-from lpy_treesim.tree_generation.skeleton_convention import SkeletonComponent
+from lpy_treesim.tree_generation.skeleton_components import SkeletonComponent
 import numpy as np
 from trimesh import Trimesh
 from trimesh.visual import TextureVisuals

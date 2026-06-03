@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class TreeNamingConfig:
+class FileNamingConfig:
     MAX_TREES = 99_999
 
     def __init__(self, namespace: str, tree_type: str):
@@ -15,9 +15,9 @@ class TreeNamingConfig:
         return
 
     def _prefix(self, index: int) -> str:
-        if index > TreeNamingConfig.MAX_TREES:
-            logging.error(f"Tree index {index} exceeds maximum supported value {TreeNamingConfig.MAX_TREES}.")
-            raise ValueError(f"Tree index {index} exceeds maximum supported value {TreeNamingConfig.MAX_TREES}.")
+        if index > FileNamingConfig.MAX_TREES:
+            logging.error(f"Tree index {index} exceeds maximum supported value {FileNamingConfig.MAX_TREES}.")
+            raise ValueError(f"Tree index {index} exceeds maximum supported value {FileNamingConfig.MAX_TREES}.")
         return f"{self.namespace}_{self.tree_type}_{index:05d}"
 
     def mesh_filename(self, index: int, file_type:str) -> str:

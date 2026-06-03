@@ -30,7 +30,7 @@ and vertex ids to mesh components
 
 import itertools
 import json
-from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
+from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvention
 
 
 class TreeStructure:

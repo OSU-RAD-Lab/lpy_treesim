@@ -1,5 +1,5 @@
 from pxr import Usd, UsdGeom, Gf, UsdSemantics, Sdf, UsdShade, Ar
-from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
+from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvention
 from lpy_treesim.tree_generation.tree_structure import TreeStructure
 
 

@@ -21,6 +21,7 @@ Data kept for the skeleton (if available)
 import numpy as np
 import shapely as shapely
 from openalea.phenomenal.calibration.transformations import vector_product
+from lpy_treesim.tree_generation.tree_structure import TreeStructure
 
 
 class JunctionComponent:
@@ -29,53 +30,86 @@ class JunctionComponent:
         self.theta_around = 0.0
         self.pt_attach = (0, 0, 0)
         self.vec_attach = (0, 0, 0)
-        self.ang_attach = 0.0   # Dot product at attach point
+        self.ang_attach = 0.0   # Angle from dot product at attach point
+        self.radius = 0.0
         self.parent_name = ""
         self.child_name = ""
 
-    def set_attach(self, parent: SkeletonComponent, parent_tree: dict, child: SkeletonComponent):
+    def set_attach(self, parent, parent_tree_part: dict, child):
         """ Set the closest attachment point and the angle of the attachment"""
         # Writing this rather pedantically - project the point onto the line segment and find the closest
         centers_as_np = np.array(parent.centroids)
-        line_in_shapely = shapely.linestrings(x=centers_as_np[:, 0], y=centers_as_np[:, 1], z=centers_as_np[:, 2])
-        pt_project_in_shapely = shapely.Point(child.start_pt[0], child.start_pt[1], child.start_pt[2])
-        n_pts_t = line_in_shapely.project(pt_project_in_shapely)
-        # Convert from index to 0, 1
-        self.t_along = n_pts_t / len(parent.centroids)
-        pt_on_skeleton = line_in_shapely.interpolate(n_pts_t)
-        self.pt_attach = (pt_on_skeleton[0], pt_on_skeleton[1], pt_on_skeleton[2])
+        pt_start = np.array(child.start_pt)
+        vec_start = np.array(child.start_vec)
 
-        # This shouldn't be the case, but...
-        indx = np.floor(n_pts_t)
-        if indx > centers_as_np.shape[0] - 1:
-            indx -= 1
-        vec_parent = centers_as_np[indx + 1, :] - centers_as_np[indx, :]
-        len_vec = np.linalg.norm(vec_parent)
-        if not np.isclose(len_vec, 0.0):
-            vec_parent = vec_parent / len_vec
-        # Angle between trunk and branch (or branch and spur)
-        self.ang_attach = np.dot(vec_parent, child.start_vec)
+        t_best = 0.0
+        d_best = 1e30
+        pt_best = child.start_pt
+        ang_attach = 0.0
+        indx_best = 0
+        radius_best = 0.0
+        for indx in range(0, centers_as_np.shape[0] - 1):
+            vec_v = centers_as_np[indx+1, :] - centers_as_np[indx, :]
+            vec_v_len = np.linalg.norm(vec_v)
+            if np.isclose(vec_v_len, 0.0):
+                continue
+            vec_w = pt_start - centers_as_np[indx, :]
+            # Calculate the t along the line, clamped between 0 and 1
+            t = np.dot(vec_w, vec_v) / np.dot(vec_v, vec_v)
+            t = np.clip(t, 0.0, 1.0)
 
+            pt_reconstruct = centers_as_np[indx, :] + vec_v * t
+    
+            dist = np.linalg.norm(pt_start - pt_reconstruct)
+            if dist < d_best:
+                indx_best = indx
+                d_best = dist
+                t_best = parent.t_values[indx] + t * (parent.t_values[indx+1] - parent.t_values[indx])
+                pt_best = (pt_reconstruct[0], pt_reconstruct[1], pt_reconstruct[2])
+                ang_attach = np.dot(vec_v / vec_v_len, vec_start)
+                radius_best = (1 - t) * parent.radii[indx] + t * parent.radii[indx+1]
+
+        self.t_along = float(t_best)
+        self.pt_attach = (float(pt_best[0]), float(pt_best[1]), float(pt_best[2]))   
+        self.ang_attach = float(360.0 * np.acos(ang_attach) / (2.0 * np.pi))
+        self.radius = float(radius_best)  
+        
         # Now do theta
-        n_around = len(parent["vertices"]) / centers_as_np.shape[0]
+        n_around = len(parent_tree_part["vertices"]) / centers_as_np.shape[0]
+        n_around = int(n_around)
         # Just the vertices as indx
-        mesh_vs_as_np = np.array(parent_tree["vertices"][indx * n_around:(indx+1) * n_around])
+        mesh_vs_as_np = np.zeros((n_around+1, 3))
+        mesh_vs_as_np[0:-1, :] = np.array(parent_tree_part["vertices"][indx_best * n_around:(indx_best+1) * n_around])
+        mesh_vs_as_np[-1, :] = mesh_vs_as_np[0, :]
         # Project onto this ring
-        pt_project_ring_in_shapely = shapely.linearrings(mesh_vs_as_np[:, 0], mesh_vs_as_np[:, 1], mesh_vs_as_np[:, 2])
-        pt_on_ring = np.zeros((1, 3))
-        radii = parent.radii[indx]
-        for icoord in range(0, 3):
-            pt_on_ring[icoord] = pt_on_skeleton[icoord] + child.start_vec[icoord] * radii
-        n_ring_t = pt_project_ring_in_shapely.project(pt_on_ring)
+        theta_best = 0.0
+        d_best = 1e30
+        for indx in range(0, mesh_vs_as_np.shape[0] - 1):
+            vec_v = mesh_vs_as_np[indx+1, :] - mesh_vs_as_np[indx, :]
+            vec_v = vec_v / np.linalg.norm(vec_v)
+            vec_w = pt_start - mesh_vs_as_np[indx, :]
+            # Calculate the t along the line, clamped between 0 and 1
+            t = np.dot(vec_w, vec_v)
+            t = np.clip(t, 0.0, 1.0)
+
+            pt_reconstruct = mesh_vs_as_np[indx, :] + vec_v * t
+    
+            dist = np.linalg.norm(pt_start - pt_reconstruct)
+            if dist < d_best:
+                d_best = dist
+                theta_best = indx * (360.0 / n_around) + t
+    
         # Convert to theta
-        self.theta_around = 360.0 * n_ring_t / n_around
+        self.theta_around = float(theta_best)
 
     def create_dict(self) ->dict:
         ret_dict = {"t_along": self.t_along,
                     "theta_around": self.theta_around,
                     "pt_attach": self.pt_attach,
-                    "vec_attach": self.pt_attach,
+                    "vec_attach": self.vec_attach,
                     "ang_attach": self.ang_attach,
+                    "radius": self.radius,
+                    "parent_name": self.parent_name,
                     "child_name": self.child_name}
         return ret_dict
 
@@ -84,8 +118,10 @@ class JunctionComponent:
         self.theta_around = in_dict["theta_around"]
         self.pt_attach = in_dict["pt_attach"]
         self.vec_attach = in_dict["vec_attach"]
-        self.vec_attach = in_dict["ang_attach"]
+        self.ang_attach = in_dict["ang_attach"]
+        self.radius = in_dict["radius"]
         self.child_name = in_dict["child_name"]
+        self.parent_name = in_dict["parent_name"]
 
 
 class SkeletonComponent:
@@ -104,40 +140,43 @@ class SkeletonComponent:
         self.length = 0.0
 
     def add_cylinder(self, vs: list):
+        
         vs_as_np = np.array(vs)
-        centroid = np.mean(vs_as_np, axis=1)
-        self.centroids.append((centroid[0], centroid[1], centroid[2]))
-        mid = len(vs) // 2
-        radius = np.linalg.norm(vs_as_np[0, :] - vs_as_np[mid, :])
+        centroid = np.mean(vs_as_np, axis=0)
+        # Really annoying to cast to float, but otherwise json doesn't work
+        self.centroids.append((float(centroid[0]), float(centroid[1]), float(centroid[2])))
+        radius = float(np.linalg.norm(vs_as_np[0, :] - centroid[:]))
         self.radii.append(radius)
 
     def compute_t_values(self):
         """ Call AFTER all cylinders have been added"""
+        # Really annoying to cast to float, but otherwise json doesn't work
         centers_as_np = np.array(self.centroids)
-        self.start_pt = (centers_as_np[0, 0], centers_as_np[0, 1], centers_as_np[0, 2])
-        self.end_pt = (centers_as_np[-1, 0], centers_as_np[-1, 1], centers_as_np[-1, 2])
+        self.start_pt = (float(centers_as_np[0, 0]), float(centers_as_np[0, 1]), float(centers_as_np[0, 2]))
+        self.end_pt = (float(centers_as_np[-1, 0]), float(centers_as_np[-1, 1]), float(centers_as_np[-1, 2]))
 
         vec_to_first_pt = centers_as_np[1, :] - centers_as_np[0, :]
         len_vec = np.linalg.norm(vec_to_first_pt)
         if not np.isclose(len_vec, 0.0):
-            self.start_vec = vec_to_first_pt / len_vec
+            vec_to_first_pt = vec_to_first_pt / len_vec
+            self.start_vec = (float(vec_to_first_pt[0]), float(vec_to_first_pt[1]), float(vec_to_first_pt[2]))
         else:
             print(f"Warning, zero length vec {self.name}")
 
-        dists = np.zeros(len(self.centroids) - 1)
+        dists = np.zeros(len(self.centroids))
         for indx in range(0, len(self.centroids) - 1):
             start_pt = centers_as_np[indx, :]
             end_pt = centers_as_np[indx + 1, :]
             dist = np.linalg.norm(end_pt - start_pt)
             dists[indx+1] = dist
 
-        self.length = np.sum(dists)
+        self.length = float(np.sum(dists))
         if self.length > 0.0:
             dists = dists / self.length
         self.t_values = []
         dist_sum = dists[0]
         for dist in dists[1:]:
-            self.t_values.append(dist_sum)
+            self.t_values.append(float(dist_sum))
             dist_sum += dist
 
     def add_junction(self, child_component: JunctionComponent):
@@ -172,3 +211,12 @@ class SkeletonComponent:
             child = JunctionComponent()
             child.set_from_dict(child_dict)
             self.child_junctions.append(child)
+
+
+def calculate_skeleton_junctions(tree: TreeStructure):
+    """ Once the cylinders have been stitched together, create the junctions from them"""
+    for junction_lists in (tree.trunk_junctions, tree.branch_junctions):
+        for junction in junction_lists:
+            parent_dict = tree.map_full_name_to_part[junction.parent_name]            
+            child_dict = tree.map_full_name_to_part[junction.child_name]
+            junction.set_attach(parent_dict["skel"], parent_dict["mesh"], child_dict["skel"])

@@ -7,6 +7,7 @@ from openalea.lpy import Lsystem
 from openalea.plantgl.all import *
 from lpy_treesim.tree_generation.skeleton_convention import SkeletonComponent, JunctionComponent
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
+from lpy_treesim.tree_generation.tree_structure import TreeStructure
 import logging
 
 
@@ -75,12 +76,11 @@ class TreeBuilder:
         if b_interactive:
             Viewer.exit()
 
-        print(lstring)
         # String and scene (which has geometry)
         return lstring, self.__lsystem.sceneInterpretation(lstring)
     
-    def create_tree_structure(self) -> (TreeNamingConvention, dict):
-        tree = TreeNamingConvention()
+    def create_tree_structure(self) -> tuple[TreeStructure, dict]:
+        tree = TreeStructure()
 
         mapping = {}
         for key_orig, branch in self.branch_hierarchy.items():
@@ -115,13 +115,13 @@ class TreeBuilder:
                 branch_dict = mapping[key_orig]
                 parent_ids = tree.get_parent_id_list(branch_dict)
                 parent_ids.append(branch_dict["id"])
-                trunk_id = tree.get_trunk_id(branch_dict)
-
-                junction = JunctionComponent()
-                junction.parent_name = branch_dict["name"]
-                tree.branch_junctions.append(junction)
+                trunk_id = TreeNamingConvention.get_trunk_id(branch_dict)
 
                 for child in branch:
+                    junction = JunctionComponent()
+                    junction.parent_name = branch_dict["name"]
+                    tree.branch_junctions.append(junction)
+
                     child_key = child.name.lower().strip()
                     if child.name in mapping:
                         raise ValueError(f"Child {child.name} is already in mapping dictionary, child of {key_orig}")
@@ -134,6 +134,8 @@ class TreeBuilder:
                         spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=parent_ids)
                         mapping[child.name] = spur_dict
                         junction.child_name = spur_dict["name"]
+                    else:
+                        print(f"Unknown key {child_key}")
             elif "spur" in key:
                 pass
             else:

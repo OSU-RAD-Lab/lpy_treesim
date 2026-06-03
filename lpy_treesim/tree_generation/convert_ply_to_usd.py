@@ -1,8 +1,10 @@
 from pxr import Usd, UsdGeom, Gf, UsdSemantics, Sdf, UsdShade, Ar
 from lpy_treesim.tree_generation.naming_convention import TreeNamingConvention
+from lpy_treesim.tree_generation.tree_structure import TreeStructure
 
 
 def create_labeled_asset(file_path):
+    # NOT USED - EXAMPLE CODE FOR SEMANTIC LABELING
     # 1. Create a new Stage
     stage = Usd.Stage.CreateNew(file_path)
     UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
@@ -30,19 +32,10 @@ def create_labeled_asset(file_path):
     print(f"Asset created at: {file_path}")
 
 
-def create_mesh(stage, path, points, face_vertex_counts, face_vertex_indices):
-    """
-    Helper function to create a USD mesh.
-    """
-    mesh = UsdGeom.Mesh.Define(stage, path)
-    mesh.CreatePointsAttr(points)
-    mesh.CreateFaceVertexCountsAttr(face_vertex_counts)
-    mesh.CreateFaceVertexIndicesAttr(face_vertex_indices)
-    mesh.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
-    return mesh
-
-
 def check_texture(stage_context):
+    # TESTING CODE FOR TEXTURE - This is mostly to check that
+    #   the stage_context is set up correctly and can access the texture files
+    # Also has examples of setting material properties
     with Ar.ResolverContextBinder(stage_context):
         # 1. Create a new USD stage
         # Set the up axis and units
@@ -95,7 +88,9 @@ def check_texture(stage_context):
         stage.GetRootLayer().Export("tree_texture_check.usda")
 
 
-def make_mesh_from_components(mesh_usd, mesh_parts, b_use_uv=False):
+def make_mesh_from_components(mesh_usd, tree_parts : dict, b_use_uv=False):
+    """ Sets up the vertices, texture coordinates, faces"""
+    mesh_parts = tree_parts["mesh"]
     # Vertices, texture coords for vs, and faces
     vs = []
     vs_texs = []
@@ -105,7 +100,7 @@ def make_mesh_from_components(mesh_usd, mesh_parts, b_use_uv=False):
     else:
         use_texs = mesh_parts["uv_textures"]
     for pt, tex in zip(mesh_parts["vertices"], use_texs):
-        # swap y and z to make z up
+        # Fill in vertex/texture lists
         vs.append((pt[0], pt[1], pt[2]))
         vs_texs.append((tex[0], tex[1]))
 
@@ -128,8 +123,9 @@ def make_mesh_from_components(mesh_usd, mesh_parts, b_use_uv=False):
     mesh_usd.CreateFaceVertexIndicesAttr(face_ind_gen)
 
     # Add Texture Coordinates (UVs)
-    # We use 'st' as the name.
-    # 'interpolation' determines how UVs map to the geometry.
+    # 'st' is now the standard name to use for storing texture coordinates
+    #   Isaac sim is suppose to allow other names, but it doesn't
+    # 'interpolation' determines how UVs map to the geometry - we want a wrap
     tex_coords = UsdGeom.PrimvarsAPI(mesh_usd).CreatePrimvar(
         "st",
         Sdf.ValueTypeNames.TexCoord2fArray,
@@ -137,66 +133,34 @@ def make_mesh_from_components(mesh_usd, mesh_parts, b_use_uv=False):
     )
     # Set the UV values that tile along the mesh
     # These correspond to the points defined above: (u, v)
-    # ts = [(t[0], t[1]) for t in mesh_component["textures"]]
     ts_ind_gen = [(pt[0], pt[1]) for pt in vs_texs]
     tex_coords.Set(ts_ind_gen)
 
     # No subdivision, please
     mesh_usd.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
-    # TODO use catmul clark on big radii branches
-    #mesh_usd.CreateSubdivisionSchemeAttr().Set("catmulClark")
+
+    if "skel" in tree_parts:
+        skel = tree_parts["skel"]
+        if skel.radii[0] > 0.2:
+            # Use catmul clark on big radii branches
+            mesh_usd.CreateSubdivisionSchemeAttr().Set("catmulClark")
 
 
-def setup_top_level_textures(stage, radii_name: list):
-    materials = []
-    for name in radii_name:
-        # 1. Create the Material at the top level
-        material_path = Sdf.Path(f"/textures/{name}")
-        material = UsdShade.Material.Define(stage, material_path)
-
-        # 2 Create the Shader (UsdPreviewSurface)
-        shader = UsdShade.Shader.Define(stage, material_path.AppendChild("PBRShader"))
-        shader.CreateIdAttr("UsdPreviewSurface")
-        shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
-
-        # 3. Create the Texture Sampler (UsdUVTexture)
-        reader = UsdShade.Shader.Define(stage, material_path.AppendChild("TexSampler"))
-        reader.CreateIdAttr("UsdUVTexture")
-        reader.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(f"/textures/{name}")
-
-        # 4 Connect texture output to shader's diffuseColor input
-        shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(
-            reader.CreateOutput("rgb", Sdf.ValueTypeNames.Color3f))
-
-        # 5 Create the Primvar Reader (To tell the texture to use 'st')
-        st_reader = UsdShade.Shader.Define(stage, material_path.AppendChild("STReader"))
-        st_reader.CreateIdAttr("UsdPrimvarReader_float2")
-        st_reader.CreateInput("varname", Sdf.ValueTypeNames.String).Set("st")
-
-        # Connect reader output to texture sampler's st input
-        reader.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(
-            st_reader.CreateOutput("result", Sdf.ValueTypeNames.Float2))
-
-        materials.append(material)
-    return materials
-
-
-def create_material_look(stage, material_path_name="/Looks/PineBark", file_dir="../textures/pine_bark_vmbibe2g_2k/"):
-    material_path = Sdf.Path(material_path_name)
+def create_material_look(stage, material_path, file_dir="../textures/pine_bark_vmbibe2g_2k/"):
     # Give the material a unique USD name
     material = UsdShade.Material.Define(stage, material_path)
 
-    # 2 Create the Shader (UsdPreviewSurface)
+    # Create the Shader (UsdPreviewSurface)
     shader = UsdShade.Shader.Define(stage, material_path.AppendChild("PBRShader"))
     shader.CreateIdAttr("UsdPreviewSurface")
     material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
 
-    # 1. Create the ST Coordinates Reader (Primvar Reader)
+    # Create the ST Coordinates Reader (Primvar Reader)
     coord_reader = UsdShade.Shader.Define(stage, material_path.AppendChild("StReader"))
     coord_reader.CreateIdAttr("UsdPrimvarReader_float2")
     coord_reader.CreateInput("varname", Sdf.ValueTypeNames.Token).Set("st")
 
-    # Helper to create texture nodes
+    # Helper function to add texture files to the appropriate shader attributes
     def add_texture_file(name, file_path, input_name, type_name):
         tex = UsdShade.Shader.Define(stage, material_path.AppendChild(name))
         tex.CreateIdAttr("UsdUVTexture")
@@ -219,19 +183,19 @@ def create_material_look(stage, material_path_name="/Looks/PineBark", file_dir="
             
         return tex
 
-    # 1. Color Mapping (Diffuse)
+    # Diffuse color
     add_texture_file("DiffuseTex", file_dir + "Pine_Bark_vmbibe2g_2K_BaseColor.jpg", "diffuseColor", Sdf.ValueTypeNames.Color3f)
 
-    # 2. Normal Mapping
+    # Normal Mapping
     add_texture_file("NormalTex", file_dir + "Pine_Bark_vmbibe2g_2K_Normal.jpg", "normal", Sdf.ValueTypeNames.Normal3f)
 
-    # 3. Bump/Displacement Mapping
-    # In UsdPreviewSurface, bump is often driven by the displacement port
+    # Bump/Displacement Mapping
     add_texture_file("BumpTex", file_dir + "Pine_Bark_vmbibe2g_2K_Bump.jpg", "displacement", Sdf.ValueTypeNames.Float)
 
+    # Roughness
     add_texture_file("RoughnessTex", file_dir + "Pine_Bark_vmbibe2g_2K_Roughness.jpg", "roughness", Sdf.ValueTypeNames.Float)
 
-    # I am not sure what these should map to
+    # I am not sure what these images in the pinebark texture should map to
     #add_texture_file("CavityTex", file_dir + "Pine_Bark_vmbibe2g_2K_Cavity.jpg", "cavity", Sdf.ValueTypeNames.Float)
     #add_texture_file("SpecularTex", file_dir + "Pine_Bark_vmbibe2g_2K_Specular.jpg", "specular", Sdf.ValueTypeNames.Float)
     #add_texture_file("GlossTex", file_dir + "Pine_Bark_vmbibe2g_2K_Gloss.jpg", "gloss", Sdf.ValueTypeNames.Float)
@@ -239,20 +203,102 @@ def create_material_look(stage, material_path_name="/Looks/PineBark", file_dir="
     return material
 
 
-def setup_pinebark(stage_context, path_world_name, file_dir="../textures/pine_bark_vmbibe2g_2k/"):
+def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
+    """ One sphere for each junction, one cylinder for each branch/part"""
+    skeleton_path = parent_path.AppendChild("skeleton")
+    skel_root_xform = UsdGeom.Xform.Define(stage, skeleton_path)
+    scl_factor = 1.1
+    
+    # TODO: Add these in levels and make them collision objects
+    col_tuple = TreeNamingConvention.semantic_color("trunk")
+    col = Gf.Vec3f(col_tuple[0] / 255.0, col_tuple[1] / 255.0, col_tuple[2] / 255.0)
 
-    with Ar.ResolverContextBinder(stage_context):
-        stage_pinebark = Usd.Stage.CreateInMemory()
+    junction_path = skeleton_path.AppendChild("junctions")
+    junction_xform = UsdGeom.Xform.Define(stage, junction_path)
+    semantic_label = "TrunkJunction"
+    for junction_list in (tree.trunk_junctions, tree.branch_junctions):
+        for junction in junction_list:
+            # USD paths can't have -, so replace - with _ and _ with __
+            name = f"{junction.parent_name}__{junction.child_name}".replace("-", "_")
 
-    material = create_material_look(stage_pinebark, material_path_name="/Material/PineBark", file_dir=file_dir)
+            sphere_path = junction_path.AppendChild(name)
+            sphere = UsdGeom.Sphere.Define(stage, sphere_path)            
+            sphere.CreateRadiusAttr(junction.radius * scl_factor)
+            xformable = UsdGeom.Xformable(sphere)
+            xformable.AddTranslateOp().Set(Gf.Vec3f(junction.pt_attach))
 
-    pinebark_file = str(path_world_name) + "/textures/pine_bark.usda"
-    stage_pinebark.GetRootLayer().Export(pinebark_file)
-    return material
+            # Add semantic label
+            labels_api = UsdSemantics.LabelsAPI.Apply(sphere.GetPrim(), "class")
+            labels_api.CreateLabelsAttr().Set([semantic_label])
+
+            #... and semantic color
+            color_attr = sphere.CreateDisplayColorAttr()
+            color_attr.Set([col])  # Semantic color
+        # Switch from trunk to branch color
+        col_tuple = TreeNamingConvention.semantic_color("branch")
+        col = Gf.Vec3f(col_tuple[0] / 255.0, col_tuple[1] / 255.0, col_tuple[2] / 255.0)
+        semantic_label = "BranchJunction"
+    
+    centerlines_path = skeleton_path.AppendChild("center_lines")
+    centerlines_xform = UsdGeom.Xform.Define(stage, centerlines_path)
+    for tree_part in tree.iterate_all_wood_parts():
+        if not "skel" in tree_part:
+            continue
+
+        part_name = tree_part["name"].replace("-", "_")
+        level = TreeNamingConvention.get_branch_level(tree_part["full_name"])
+
+        name = f"cyl_{part_name}"
+        if "spur" in part_name:
+            name = f"spur/{name}"
+        elif level != -1:
+            name = f"Level{level}/{name}"
+        else:
+            name = f"Trunk/{name}"
+
+        # Bundle these into one container that has the semantic color
+        cyls_path = centerlines_path.AppendPath(name)
+        cyls_container = UsdGeom.Xform.Define(stage, cyls_path)
+        col_tuple = TreeNamingConvention.semantic_color(tree_part["type"])
+        col = Gf.Vec3f(col_tuple[0] / 255.0, col_tuple[1] / 255.0, col_tuple[2] / 255.0)
 
 
-def create_uv_material(stage, material_path_name, file_name="../textures/mesh_uv.png"):
-    material_path = Sdf.Path(material_path_name)
+        # Now add in the cylinders
+        skel = tree_part["skel"]
+        for indx in range(0, len(skel.centroids)-1):
+            pt_start = Gf.Vec3d(skel.centroids[indx])
+            pt_end = Gf.Vec3d(skel.centroids[indx + 1])
+            vec_axis = pt_end - pt_start
+            height = vec_axis.GetLength()
+            midpoint = pt_start + vec_axis * 0.5
+
+            name = f"cyl_{indx}"
+            cyl = UsdGeom.Cylinder.Define(stage, cyls_path.AppendChild(name))            
+            cyl.CreateRadiusAttr(skel.radii[indx] * scl_factor)
+            cyl.CreateHeightAttr(height)
+            color_attr = cyl.CreateDisplayColorAttr()
+            color_attr.Set([col])  # Beautiful bright blue
+
+            # Align along z axis
+            cyl.CreateAxisAttr("Z")
+
+            # Rotation to align z axis with vec_axis
+
+            z_axis = Gf.Vec3d(0, 0, 1)
+            rotation = Gf.Rotation(z_axis, vec_axis)
+            quat = rotation.GetQuat()
+
+            # Make cylinder transformable
+            xformable = UsdGeom.Xformable(cyl)
+            
+            # rotate and translate to correct location
+            xformable.AddTranslateOp().Set(midpoint)
+            # I do not know why you have to cast to a float, but you do...
+            xformable.AddOrientOp().Set(Gf.Quatf(quat))
+
+
+def create_uv_material(stage, material_path, file_name="../textures/mesh_uv.png"):
+    """ For the UV textured mesh, set up the material"""
     # Give the material a unique USD name
     material = UsdShade.Material.Define(stage, material_path)
 
@@ -261,8 +307,7 @@ def create_uv_material(stage, material_path_name, file_name="../textures/mesh_uv
     shader.CreateIdAttr("UsdPreviewSurface")
     material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
 
-    # 1. Create the uv Coordinates Reader (Primvar Reader)
-    # NOTE: Attach this one to uv, the tiling one to st
+    # Set up the texture coordinates and material 
     coord_reader = UsdShade.Shader.Define(stage, material_path.AppendChild("StReader"))
     coord_reader.CreateIdAttr("UsdPrimvarReader_float2")
     coord_reader.CreateInput("varname", Sdf.ValueTypeNames.Token).Set("st")
@@ -285,92 +330,92 @@ def create_uv_material(stage, material_path_name, file_name="../textures/mesh_uv
     return material
 
 
-def create_mesh_usd(stage_context, world_path:str, tree_name:str, 
-                    tree:TreeNamingConvention,
+def create_mesh_usd(stage_context, world_path:str, in_tree_name:str, 
+                    tree: TreeStructure,
                     radii: list, name_radii: list,
                     b_use_uv=False):
-    # 1. Create a new USD stage
-    # Set the up axis and units
-    #stage = Usd.Stage.CreateNew("/World")
-    # 3. Create or open your stage using this context
+    
+    # Create a new USD stage in memory to hold the tree and it's parts
     with Ar.ResolverContextBinder(stage_context):
         stage = Usd.Stage.CreateInMemory()
 
+    # Set the up axis to be z and set the units to be in meters
     UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
     UsdGeom.SetStageMetersPerUnit(stage, 1.0)
 
-    # This acts as the "container" for your model
-    root_xform = UsdGeom.Xform.Define(stage, f'/{tree_name}')
+    # The tree's internal absolute path starts with the tree name;
+    #   The actual location of the resulting file will be in world_path
+    # Making the container for the model
+    tree_path = Sdf.Path(f'/{in_tree_name}')
+    root_xform = UsdGeom.Xform.Define(stage, tree_path)
 
-    # This fixes the "Cannot reference... has no default prim" error
+    # This fixes the "Cannot reference... has no default prim" error and makes it
+    #   so this asset can be included in other scenes/stages
     stage.SetDefaultPrim(root_xform.GetPrim())
 
-    # Set up texture maps
+    # Set up texture maps - either uv (if applying red/green color map so that
+    #  red wraps around each branch, green goes along it) or default bark textures
+    # This assumes the texture files will be available up one directory in a
+    #  directory named textures
+    # TODO: Create multiple texture maps at different scales based on actual apple
+    #   bark rather than pine
+    material_path = tree_path.AppendChild("Looks")
     if b_use_uv:
+        uv_path = material_path.AppendChild("UVColors")
         material = create_uv_material(stage, 
-                                      material_path_name=f"/{tree_name}/Looks/UVColors", 
+                                      material_path=uv_path, 
                                       file_name="../textures/mesh_uv.png")
         UsdShade.MaterialBindingAPI(root_xform).Bind(material)
     else:
-    #materials = setup_top_level_textures(stage, name_radii)
+        # TODO make this multiple textures, one for each radius size
+        pine_path = material_path.AppendChild("PineBark")
         material = create_material_look(stage=stage, 
-                                        material_path_name=f"/{tree_name}/Looks/PineBark", 
+                                        material_path=pine_path, 
                                         file_dir="../textures/pine_bark_vmbibe2g_2k/")
  
-    # TODO - make the following work so I don't keep copying materials
-    # 3. Create a dedicated material scope to house incoming referenced assets
-    #ref_materials_path = Sdf.Path("/World/textures")
-    #ref_scope = UsdGeom.Scope.Define(stage, ref_materials_path)
-
-    # Relative file path pointing from "assets/layout.usda" out and into "materials/library.usda"
-    # We pull specifically from the original </World/Looks> prim inside that file
-    #relative_path_to_lib = "../textures/pine_bark.usda"
-    #ref_scope.GetPrim().GetReferences().AddReference(relative_path_to_lib, Sdf.Path("/Materials/PineBark"))
-
-    # 5. Bind the Referenced Material to the Geometry
-    # Because of our composition arc, GoldMaterial now safely resolves locally at this path:
-    #target_material_path = Sdf.Path("/Materials/PineBark")
-    #target_material = UsdShade.Material.Get(stage, target_material_path)
-
     # Loop through all of the (organized) mesh components, adding meshes for each
     for part_dict in tree.iterate_all_wood_parts():
         mesh = part_dict["mesh"]
 
         if mesh is None:
+            # No mesh assigned to this part (probably root)
             continue
 
         if len(mesh["vertices"]) == 0:
-            print(f"Skipping {part_dict["name"]}, no mesh parts")
+            # This should not happen, because we took all of empty mesh parts out, but
+            #  still here as a safetly check
+            print(f"ERR: Skipping {part_dict["name"]}, no mesh parts")
             continue
 
-        # 1 Define the Mesh primitive
+        # Each mesh part will be labeled with full part name to enable instance
+        #  segmentation. All mesh parts are stored as an xform with a mesh inside
+        #  of it (hence the two names)
         usd_name = part_dict["usd_name"]
-        xform_name = f"/{tree_name}{usd_name}"
-        mesh_name = f"/{tree_name}{usd_name}/meshGeom"
+        xform_path = tree_path.AppendPath(usd_name)
+        mesh_path = xform_path.AppendPath("meshGeom")
 
         # Xform for the tree part
-        branch_xform = UsdGeom.Xform.Define(stage, xform_name)
+        branch_xform = UsdGeom.Xform.Define(stage, xform_path)
         # Mesh for the tree part
-        mesh = UsdGeom.Mesh.Define(stage, mesh_name)
+        mesh = UsdGeom.Mesh.Define(stage, mesh_path)
         #  Bind the Material to the Mesh
-        #  TOFIX: Find the best size texture
-        if not b_use_uv:
-            UsdShade.MaterialBindingAPI(branch_xform).Bind(material)
+        #  TODO: use the best size texture
+        UsdShade.MaterialBindingAPI(branch_xform).Bind(material)
 
         # Add semantic label
         labels_api = UsdSemantics.LabelsAPI.Apply(branch_xform.GetPrim(), "class")
+        labels_api.CreateLabelsAttr().Set([part_dict["type"]])
         
         # Set the mesh's color based on what part it is
         # 'constant' means one value is used for the entire primitive
         color_primvar = mesh.CreateDisplayColorPrimvar(interpolation=UsdGeom.Tokens.constant)
-        col_semantic = tree.semantic_color(part_dict["name"])
+        col_semantic = TreeNamingConvention.semantic_color(part_dict["name"])
         col_vec = Gf.Vec3f(col_semantic[0] / 255.0, col_semantic[1] / 255.0, col_semantic[2] / 255.0)
         color_primvar.Set([col_vec])
         color_primvar.SetInterpolation("constant")
-        labels_api.CreateLabelsAttr().Set([part_dict["type"]])
 
         # Actually adds the vertices, faces, and texture map coords
-        make_mesh_from_components(mesh, part_dict["mesh"])
+        make_mesh_from_components(mesh, part_dict, b_use_uv=b_use_uv)
 
     """
     # Maybe use later to create two possible texture bindings
@@ -380,23 +425,22 @@ def create_mesh_usd(stage_context, world_path:str, tree_name:str,
     UsdShade.MaterialBindingAPI(root_xform).Bind(bound_material)
     """
 
+    # Spheres for the joints, cylinders for the trunks/branches
+    # TODO Make it create collision geometry as well
+    create_skeleton_geometry(stage=stage, tree=tree, parent_path=tree_path)    
+
     #  Save the stage
     if b_use_uv:
-        file_name = world_path + "/models/" + tree_name + "_uv.usda"
+        file_name = world_path + "/models/" + in_tree_name + "_uv.usda"
     else:
-        file_name = world_path + "/models/" + tree_name + ".usda"
+        file_name = world_path + "/models/" + in_tree_name + ".usda"
     print(f"Saving file to {file_name}")
-    #print(stage.GetRootLayer().ExportToString())
+    # Actually write out the mesh
     stage.GetRootLayer().Export(file_name)
-
-# Example Data
-# verts = [(0,0,0), (1,0,0), (1,1,0), (0,1,0)] # 4 vertices
-# faces = [(0,1,2), (0,2,3)]                  # 2 triangles forming a square
-
-# create_mesh_usd("mesh_example.usda", verts, faces)
 
 
 def make_combined():
+    # NOT TESTED - Just saving this as example code for adding sub layers
     stage = Usd.Stage.CreateInMemory()
     root_layer = stage.GetRootLayer()
     root_layer.subLayerPaths.append("./models/lpy_envy_00000.usda")

@@ -10,7 +10,8 @@ from lpy_treesim.tree_generation.tree_builder import TreeBuilder
 from lpy_treesim.tree_generation.tree_name_conf import TreeNamingConfig
 from lpy_treesim.tree_generation.convert_ply_to_usd import create_mesh_usd, check_texture
 from lpy_treesim.textures.generate_texture import make_texture_set, make_uv_texture
-from lpy_scene_to_mesh import plant_gl_scene_to_vertices_and_faces, stitch_cylinders, create_skeleton_junctions, write_mesh
+from lpy_treesim.tree_generation.lpy_scene_to_mesh import plant_gl_scene_to_vertices_and_faces, stitch_cylinders, write_mesh
+from lpy_treesim.tree_generation.skeleton_convention import calculate_skeleton_junctions
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +87,11 @@ def main():
         # Converts the scene to our tree structure.
         #   Mapping maps the unique ids from the lstring into our tree structure
         #   This ensures the branches etc are numbered sequentially
-        tree, tree_mapping = lsb.create_tree_structure()
+        tree, lpy_to_tree_mapping = lsb.create_tree_structure()
 
         # Adds to each tree component the mesh cylinders created by lpy
         plant_gl_scene_to_vertices_and_faces(scene,
-                                             tree_mapping=tree_mapping,
+                                             tree_mapping=lpy_to_tree_mapping,
                                              color_mapping=lsb.color_manager)
 
         # Now stitch together all of the mesh components into tubes instead of discrete cylinders
@@ -101,7 +102,7 @@ def main():
             tree.remove_key(key)
 
         # Now that the cylinders/skeleton have been processed, build the junctions
-        create_skeleton_junctions(tree=tree)
+        calculate_skeleton_junctions(tree=tree)
 
         # Write out mesh file formats
         if args.ply or args.obj:
@@ -118,7 +119,7 @@ def main():
             for b_use_uv in [True, False]:
                 create_mesh_usd(stage_context, 
                                 world_path=str(args.stage_dir), 
-                                tree_name=naming._prefix(index), 
+                                in_tree_name=naming._prefix(index), 
                                 tree=tree, 
                                 radii=radii, name_radii=name_radii,
                                 b_use_uv=b_use_uv)

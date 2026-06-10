@@ -1,4 +1,4 @@
-from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import TreeBranch, BasicWoodConfig
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import TreeBranch, BasicWoodConfig, TyingState
 from lpy_treesim.tree_models.base_tree.lpy_helper_functions import *
 
 
@@ -117,7 +117,7 @@ def build_basicwood_prototypes(rng: np.random.Generator):
         thickness=0.003,
         growth_length=0.05,
         cylinder_length=0.01,
-        thickness_increment=0.0001,
+        thickness_increment=0.0005,
         color=(0, 255, 0),
         bud_spacing_age=1,  # Spurs bud every 1 age unit
         curve_x_range=(-0.2, 0.2),  # Tighter bounds for spur curves
@@ -129,10 +129,10 @@ def build_basicwood_prototypes(rng: np.random.Generator):
     side_branch_config = BasicWoodConfig(
         max_buds_segment=2,
         max_length=0.25,
-        thickness=0.003,
+        thickness=0.005,
         growth_length=0.05,
         cylinder_length=0.01,
-        thickness_increment=0.0001,
+        thickness_increment=0.0005,
         color=(0, 255, 0),
         bud_spacing_age=2,  # Tertiary branches bud every 3 age units
         curve_x_range=(-0.5, 0.5),  # Moderate bounds for tertiary branches
@@ -141,14 +141,15 @@ def build_basicwood_prototypes(rng: np.random.Generator):
         rng=rng
     )
 
+    # Tip the trunk over
     trunk_config = BasicWoodConfig(
         max_buds_segment=5,
-        tie_axis=(1, 0, 0),
+        tie_type=TyingState.TyingType.TIE_ALONG,
         max_length=3,
         thickness=0.02,
-        thickness_increment=0.0001,
+        thickness_increment=0.00001,
         growth_length=0.1,
-        cylinder_length=0.02,
+        cylinder_length=0.1,
         color=(255, 0, 0),
         bud_spacing_age=2,  # Trunk buds every 4 age units
         curve_x_range=(-0.3, 0.3),  # Conservative bounds for trunk
@@ -158,12 +159,13 @@ def build_basicwood_prototypes(rng: np.random.Generator):
         rng=rng
     )
 
+    # Vertical leaders
     branch_config = BasicWoodConfig(
         max_buds_segment=2,
-        tie_axis=(0, 0, 1),
+        tie_type=TyingState.TyingType.TIE_ACROSS,
         max_length=2.5,
         thickness=0.01,
-        thickness_increment=0.00001,
+        thickness_increment=0.001,
         growth_length=0.1,
         cylinder_length=0.02,
         color=(255, 150, 0),

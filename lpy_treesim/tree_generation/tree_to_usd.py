@@ -1,4 +1,4 @@
-from pxr import Usd, UsdGeom, Gf, UsdSemantics, Sdf, UsdShade, Ar
+from pxr import Usd, UsdGeom, Gf, UsdSemantics, Sdf, UsdShade, Ar, UsdPhysics
 from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvention
 from lpy_treesim.tree_generation.tree_structure import TreeStructure
 
@@ -207,9 +207,13 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
     """ One sphere for each junction, one cylinder for each branch/part"""
     skeleton_path = parent_path.AppendChild("skeleton")
     skel_root_xform = UsdGeom.Xform.Define(stage, skeleton_path)
+    # By default, hide this geometry
+    imageable = UsdGeom.Imageable(skel_root_xform.GetPrim())
+    imageable.GetVisibilityAttr().Set(UsdGeom.Tokens.invisible)
+
+    # How much "fatter" to make the cylinders/spheres
     scl_factor = 1.1
     
-    # TODO: Add these in levels and make them collision objects
     col_tuple = TreeNamingConvention.semantic_color("trunk")
     col = Gf.Vec3f(col_tuple[0] / 255.0, col_tuple[1] / 255.0, col_tuple[2] / 255.0)
 
@@ -226,6 +230,9 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
             sphere.CreateRadiusAttr(junction.radius * scl_factor)
             xformable = UsdGeom.Xformable(sphere)
             xformable.AddTranslateOp().Set(Gf.Vec3f(junction.pt_attach))
+
+            # Add collision physics
+            UsdPhysics.CollisionAPI.Apply(sphere.GetPrim())
 
             # Add semantic label
             labels_api = UsdSemantics.LabelsAPI.Apply(sphere.GetPrim(), "class")
@@ -262,7 +269,6 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
         col_tuple = TreeNamingConvention.semantic_color(tree_part["type"])
         col = Gf.Vec3f(col_tuple[0] / 255.0, col_tuple[1] / 255.0, col_tuple[2] / 255.0)
 
-
         # Now add in the cylinders
         skel = tree_part["skel"]
         for indx in range(0, len(skel.centroids)-1):
@@ -278,6 +284,9 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
             cyl.CreateHeightAttr(height)
             color_attr = cyl.CreateDisplayColorAttr()
             color_attr.Set([col])  # Beautiful bright blue
+
+            # Add collision physics
+            UsdPhysics.CollisionAPI.Apply(cyl.GetPrim())
 
             # Align along z axis
             cyl.CreateAxisAttr("Z")

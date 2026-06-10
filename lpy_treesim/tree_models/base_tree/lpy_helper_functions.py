@@ -29,75 +29,8 @@ from openalea.lpy import Lsystem, newmodule
 import numpy as np
 from typing import Callable, Dict, Iterable
 import importlib
-
-
-def cut_from(pruning_position, lstring, lsystem_path=None):
-    """
-    Mark a position in the L-System string for cutting/pruning.
-
-    Inserts a cut marker (%) after the specified pruning position in the
-    L-System string. This marks the location where a branch should be
-    removed during the pruning process.
-
-    Args:
-        pruning_position: Index in the L-System string where pruning should occur
-        lstring: The L-System string to modify
-        lsystem_path: Optional path to create a new L-System object (unused in current implementation)
-
-    Returns:
-        Modified L-System string with cut marker inserted
-    """
-    # Insert cut marker (%) after the pruning position
-    lstring.insertAt(pruning_position + 1, newmodule("%"))
-    return lstring
-
-
-def cut_using_string_manipulation(pruning_position, lstring, lsystem_path=None):
-    """
-    Remove a complete branch segment from the L-System string.
-
-    Cuts starting from the pruning position until the end of the branch segment,
-    which is signified by a closing bracket ']'. Uses bracket balancing to handle
-    nested branch structures correctly.
-
-    Args:
-        pruning_position: Starting index in the L-System string for the cut operation
-        lstring: The L-System string to modify
-        lsystem_path: Optional path to create a new L-System object with the modified string
-
-    Returns:
-        Modified L-System string with the branch segment removed, or a new L-System
-        object if lsystem_path is provided
-    """
-    bracket_balance = 0
-    current_position = pruning_position
-    # Skip the pruning position itself
-    current_position += 1
-    search_position = pruning_position + 1
-    total_length = len(lstring)
-
-    # Traverse the string until we find the matching closing bracket
-    while search_position < total_length:
-        if lstring[current_position].name == "[":
-            bracket_balance += 1
-        elif lstring[current_position].name == "]":
-            if bracket_balance == 0:
-                # Found the matching closing bracket, stop here
-                break
-            else:
-                bracket_balance -= 1
-
-        # Remove the current element
-        del lstring[current_position]
-        search_position += 1
-
-    # If a path is provided, create a new L-System object
-    if lsystem_path is not None:
-        new_lsystem = Lsystem(lsystem_path)
-        new_lsystem.axiom = lstring
-        return new_lsystem
-
-    return lstring
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import TreeBranch
+from lpy_treesim.tie_prune.tie_prune_simulation_base import TreeSimulationBase
 
 
 def angle_between(angle, min_angle, max_angle):
@@ -255,57 +188,63 @@ def should_bud(plant_segment, simulation_config):
     return np.isclose(plant_segment.info.age % plant_segment.bud_spacing_age, 0, atol=simulation_config.tolerance)
 
 
-def start_each_common(
-    lstring,
-    branch_hierarchy: Dict[str, Iterable],
-    trellis_support,
-    main_trunk,
+def start_each_common(lstring,
+                      branch_hierarchy: Dict[str, Iterable],
+                      tree_sim: TreeSimulationBase,
+                      main_trunk: TreeBranch,
 ):
-    """Shared pre-iteration tying preparation logic."""
-    del lstring  # unused in shared logic; kept for L-Py parity
+    """Shared pre-iteration tying preparation logic.
+    @param lstring - the actual lstring being generated
+    @param branch_hierarchy - the current branch hierarchy as a dictionary
+    @param trellis_support - the trellis support (which has the attractor grids)
+    @param main_trunk - the trunk, which inherits from TreeBranch """
 
-    if trellis_support.trunk_wire and not main_trunk.tying.tie_updated:
-        main_trunk.tie_update()
+    # del lstring  # unused in shared logic; kept for L-Py parity
+    # If we haven't added the attractor for the main trunk, do so
+    if not main_trunk.tying.wire_attach and len(tree_sim.trunk_attractor) > 0:
+        main_trunk.tying.wire_attach = tree_sim.trunk_attractor[0]
 
+    """
+    # First level branches
     for branch in branch_hierarchy[main_trunk.name]:
-        if not branch.tying.tie_updated:
-            branch.tie_update()
+        if not branch.tying.tie_needs_updating:
+            branch.set_tie_update()
+    """
+    return lstring
 
-
-def end_each_common(
-    lstring,
-    branch_hierarchy: Dict[str, Iterable],
-    trellis_support,
-    tying_interval_iterations: int,
-    pruning_interval_iterations: int,
-    simulation_config,
-    main_trunk,
-    get_iteration_number: Callable[[], int],
-    get_energy_matrix,
-    decide_guide_fn,
-    tie_fn,
-    prune_fn,
+def end_each_common(lstring,
+                    branch_hierarchy: Dict[str, Iterable],
+                    tree_sim: TreeSimulationBase,
+                    tying_interval_iterations: int,
+                    pruning_interval_iterations: int,
+                    simulation_config,
+                    main_trunk,
+                    get_iteration_number: Callable[[], int],
 ):
     """Shared post-iteration tying and pruning orchestration."""
     current_iteration = get_iteration_number() + 1
 
     if current_iteration % tying_interval_iterations == 0:
-        if trellis_support.trunk_wire:
-            main_trunk.update_guide(main_trunk.tying.guide_target)
+        if tree_sim.trunk_attractor:
+            main_trunk.update_guide()
 
         branches = branch_hierarchy[main_trunk.name]
-        energy_matrix = get_energy_matrix(branches, trellis_support, simulation_config)
+        # Estimate of cost to tie branches to open wire attachments
+        energy_matrix, open_branches = tree_sim.get_energy_matrix(branches)
 
-        decide_guide_fn(energy_matrix, branches, trellis_support, simulation_config)
+        # Actually tie some of the branches to the wires
+        tree_sim.decide_guide(energy_matrix, open_branches)
 
+        # Update guide curve
         for branch in branches:
-            branch.update_guide(branch.tying.guide_target)
+            branch.update_guide()
 
-        while tie_fn(lstring, simulation_config):
+        # This does the actual tying
+        while tree_sim.tie(lstring):
             pass
 
     if current_iteration % pruning_interval_iterations == 0:
-        while prune_fn(lstring, branch_hierarchy, simulation_config):
+        while tree_sim.prune(lstring, branch_hierarchy):
             pass
 
     return lstring

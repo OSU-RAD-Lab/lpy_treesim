@@ -1,6 +1,6 @@
-from lpy_treesim.tie_prune.tie_prune_base import SimulationConfig, TreeSimulationBase
+from lpy_treesim.tie_prune.tie_prune_simulation_base import SimulationConfig, TreeSimulationBase
 from dataclasses import dataclass
-import numpy as np
+from lpy_treesim.tie_prune.wire_support import Support, TyingState
 
 
 @dataclass
@@ -23,7 +23,7 @@ class ENVYSimulationConfig(SimulationConfig):
     trellis_z_end: float = 3.4
     trellis_z_spacing: float = 0.45
 
-    use_generalized_cylinders: bool = False
+    use_generalized_cylinders: bool = True
 
 
 class ENVYSimulation(TreeSimulationBase):
@@ -34,23 +34,18 @@ class ENVYSimulation(TreeSimulationBase):
     on both sides of the tree row.
     """
 
-    def generate_points(self):
+    def generate_attractor_grids(self):
         """
-        Generate 3D points for the V-trellis wire structure.
+        Generate 3D points for the UFO trellis wire structure.
 
-        Creates a linear array of wire attachment points along the x-axis at a fixed
-        height (z) and depth (y). The points are spaced evenly within the configured
-        z-range and used to construct the trellis support structure.
+        Trunk: Trunk is tied along the wires
+        Branches: first level support branches are tied along the wires at evenly spaced points
 
         Returns:
-            list: List of (x, y, z) tuples representing wire attachment points in V-trellis formation
+            The support class
         """
-        x = np.full((7,), self.config.trellis_x_value).astype(float)
-        y = np.full((7,), 0).astype(float)
-        z = np.arange(self.config.trellis_z_start, self.config.trellis_z_end, self.config.trellis_z_spacing)
+        # The trunk support
+        self.trunk_attractor = self.support.make_atractor_grid(tie_type=TyingState.TyingType.TIE_ACROSS, n_along_x=1)
+        self.branch_attractor = self.support.make_atractor_grid(tie_type=TyingState.TyingType.TIE_ALONG, n_along_x=3)
 
-        pts = []
-        for i in range(x.shape[0]):
-            pts.append((-x[i], y[i], z[i]))
-            pts.append((x[i], y[i], z[i]))
-        return pts
+        return self.support

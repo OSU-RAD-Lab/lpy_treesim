@@ -11,6 +11,28 @@ from lpy_treesim.tree_generation.tree_structure import TreeStructure
 import logging
 
 
+
+# 2. Define a Python Debugger listener to trap L-Py engine callbacks
+class PythonLsystemDebugger:
+    def __init__(self):
+        self.step_count = 0
+
+    def step_begin(self, current_string):
+        """Called at the start of a generation step."""
+        print(f"\n--- [Debugger] Starting Generation {self.step_count} ---")
+        print(f"Current full string: {current_string}")
+
+    def rule_applied(self, matching_module, replaced_by_string):
+        """Called every time a specific production rule matches a module."""
+        print(f"  [Match] Module '{matching_module.name}' matched a rule!")
+        print(f"  [Rewrite] '{matching_module}' ---> '{replaced_by_string}'")
+
+    def step_end(self, final_string):
+        """Called when all modules in the generation step are processed."""
+        print(f"Resulting full string: {final_string}")
+        self.step_count += 1
+
+
 class TreeBuilder:
     logger = logging.getLogger(__name__)
     b_init = False
@@ -59,17 +81,23 @@ class TreeBuilder:
         @param b_interactive - do you want to have to hit a key every iteration?"""
 
         lstring = self.__lsystem.axiom
+
         if b_interactive:
             Viewer.start()
+
         for iteration in range(self.__lsystem.derivationLength):
             # One iteration - replace symbols
             lstring = self.__lsystem.derive(lstring, iteration, 1)
 
+            string_readable = str(lstring).replace("]", "]\n")
+            print(f"{string_readable}\n\n")
+
             # DO NOT TAKE OUT THIS LINE - or everything will stop working
-            #   This does the actual pruning/tying
-            self.__lsystem.plot(lstring)
+            # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
+            interpreted_string = self.__lsystem.interpret(lstring)
+
             if b_interactive:
-                scene =  self.__lsystem.sceneInterpretation(lstring)
+                scene =  self.__lsystem.sceneInterpretation(interpreted_string)
                 Viewer.display(scene)
                 input("Press Enter to continue...")
 
@@ -148,6 +176,7 @@ class TreeBuilder:
                 part_dict = mapping[child_name]
                 part_dict["skel"] = SkeletonComponent(part_dict["name"])
                 part_dict["skel"].start_pt = self.convert_vec3_to_tuple(child.location.start)
+                part_dict["skel"].start_vec = self.convert_vec3_to_tuple(child.location.start_dir)
                 part_dict["skel"].end_pt = self.convert_vec3_to_tuple(child.location.end)
 
         # Do this after the skeleton parts have been created

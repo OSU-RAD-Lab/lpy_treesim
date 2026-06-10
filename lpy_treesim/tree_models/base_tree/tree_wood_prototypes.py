@@ -1,5 +1,5 @@
 """
-Defines the abstract class BasicWood, class Wire and class Support.
+Defines the abstract class BasicWood along with helper classes LocationState, GrowthState, InfoState and TyingState
 """
 
 from abc import ABC, abstractmethod
@@ -9,43 +9,29 @@ import numpy as np
 from openalea.plantgl.scenegraph.cspline import CSpline
 import collections
 from dataclasses import dataclass
-from typing import Tuple
+from lpy_treesim.tie_prune.tying import TyingState
+import logging
 
 
 @dataclass
 class LocationState:
-    """Location tracking for a wood object: start point, end point, and last tie location."""
+    """Location tracking for a wood object: start point & direction, end point, and last tie location."""
 
-    start: any = None  # Vector3
-    end: any = None  # Vector3
-    last_tie_location: any = None  # Vector3
+    start: any = None      # Vector3
+    start_dir: any = None  # Vector3
+    end: any = None        # Vector3
+    end_dir: any = None    # Vector3
 
     def __post_init__(self):
         """Initialize Vector3 points if not provided."""
         if self.start is None:
             self.start = Vector3(0, 0, 0)
+        if self.start_dir is None:
+            self.start_dir = Vector3(1.0, 0, 0)
         if self.end is None:
             self.end = Vector3(0, 0, 0)
-        else:
-            print(f"End points {self.end}")
-        if self.last_tie_location is None:
-            self.last_tie_location = Vector3(0, 0, 0)
-
-
-@dataclass
-class TyingState:
-    """Tying and guiding state for a wood object."""
-
-    has_tied: bool = False
-    guide_points: list = None  # List of (x,y,z) tuples for spline control points
-    guide_target: any = -1  # Wire object or -1 (no target)
-    tie_axis: tuple = None  # Direction vector for the wire axis
-    tie_updated: bool = False
-
-    def __post_init__(self):
-        """Initialize guide_points as empty list if not provided."""
-        if self.guide_points is None:
-            self.guide_points = []
+        if self.end_dir is None:
+            self.end_dir = Vector3(0, 0, 0)
 
 
 @dataclass
@@ -58,6 +44,11 @@ class GrowthState:
     growth_length: float = 1.0
     cylinder_length: float = 0.1
     max_length: float = 7.0
+
+    def get_thickness_increment(self):
+        # TODO: make this stochastic
+        thick_incr = np.random.normal(loc=self.thickness_increment, scale=0.1 * self.thickness_increment)
+        return thick_incr
 
 
 @dataclass
@@ -90,7 +81,7 @@ class BasicWoodConfig:
     growth_length: float = 1.0
     cylinder_length: float = 0.1  # Length of each individual cylinder
     max_length: float = 7.0
-    tie_axis: tuple = None
+    tie_type: TyingState.TyingType = TyingState.TyingType.NO_TIE
     order: int = 0
     color: tuple = (0, 0, 0)
     material: int = 0
@@ -98,6 +89,7 @@ class BasicWoodConfig:
     name: str = None
     bud_spacing_age: int = 2  # Age interval for bud creation
     rng: np.random.Generator = None
+    use_generalized_cylinder: bool = True
 
     # Curve parameters for L-System growth guides
     curve_x_range: tuple = (-0.5, 0.5)  # X bounds for Bezier curve control points
@@ -141,21 +133,19 @@ class BasicWood(ABC):
         self.rng = config.rng
 
         self.location = LocationState()
-        # Tying variables
-        self.tying = TyingState(tie_axis=config.tie_axis)
-        self.current_tied = False
+        # Tying status - contains what type of tying and current tie state and points to tie to
+        self.tying = TyingState(tie_type=config.tie_type)
+
         # Information Variables
         self.info = InfoState(order=config.order, color=config.color, material=config.material, prunable=config.prunable)
         self.__length = 0
         # Growth Variables
-        self.growth = GrowthState(
-            max_buds_segment = config.max_buds_segment,
-            thickness = config.thickness,
-            thickness_increment = config.thickness_increment,
-            growth_length = config.growth_length,
-            cylinder_length = config.cylinder_length,
-            max_length = config.max_length,
-        )
+        self.growth = GrowthState(max_buds_segment=config.max_buds_segment,
+                                  thickness=config.thickness,
+                                  thickness_increment=config.thickness_increment,
+                                  growth_length=config.growth_length,
+                                  cylinder_length=config.cylinder_length,
+                                  max_length=config.max_length)
         # Bud spacing for L-System rules
         self.bud_spacing_age = config.bud_spacing_age
 
@@ -163,6 +153,8 @@ class BasicWood(ABC):
         self.curve_x_range = config.curve_x_range
         self.curve_y_range = config.curve_y_range
         self.curve_z_range = config.curve_z_range
+
+        self.logger = logging.getLogger(__name__)
 
     def __copy_constructor__(self, copy_from):
         update_dict = copy.deepcopy(copy_from.__dict__)
@@ -206,8 +198,126 @@ class BasicWood(ABC):
 
     def grow_one(self):
         self.info.age += 1
+        # TODO make stochastic
         self.length += self.growth.growth_length
         self.grow()
+
+    def _find_next_wire_pt(self, end_pt: np.array, end_dir: np.array):
+        """ If the end of the branch has gone past the last tie point then find the next wire point
+        Also checks that the branch is currently growing in the direction of the wire..."""
+
+        # Vector from branch start to next wire point
+        v = np.zeros((1, 3))
+        wire_dir = self.tying.wire_attach.attractor_dir
+        if np.dot(wire_dir, end_dir) < 0.0:
+            # Oops, branch growing in the wrong direction - set to next wire point to enable reasonable
+            # bending at tie down
+            next_indx = self.tying.last_tie_index + 1
+            if next_indx >= self.tying.wire_attach.attractor_pts.shape[1] - 1:
+                # off the end - return -1
+                return -1
+            return next_indx
+
+        for indx in range(self.tying.last_tie_index + 1, self.tying.wire_attach.attractor_pts.shape[1]):
+            wire_point = self.tying.wire_attach.attractor_pts[indx, :]
+            v = wire_point - end_pt
+            if np.dot(v, wire_dir) >= 0.0:
+                return indx
+
+        # Off the end of the wire
+        return -1
+
+    def _get_x_wire_noise(self, pt_branch: np.array, tie_point: np.array):
+        # Maximum allowable slide
+        dx_max_deviation = self.tying.wire_attach.spacing * 0.2
+        x_noisy = pt_branch[0] + np.random.uniform(-dx_max_deviation, dx_max_deviation)
+        if x_noisy < tie_point[0] - dx_max_deviation:
+            x_noisy = tie_point[0] - dx_max_deviation
+        if x_noisy > tie_point[0] + dx_max_deviation:
+            x_noisy = tie_point[0] + dx_max_deviation
+        return x_noisy
+
+    def _start_guide_points(self):
+        """ Find the first tie point that is feasible to reach to and generate a set of guide points to that point
+        Use beam deflection to get the shape of the curve
+        If tying along then constrain all 3 axes
+        If tying across then only constrain y and z"""
+        indx_start = self._find_next_wire_pt(end_pt=np.array(self.location.end), end_dir=np.array(self.location.end_dir))
+        if indx_start == -1:
+            self.logger.info(f"Starting tie down; off end of wire {self.location.end} {self.tying.wire_attach.attractor_pts}")
+            indx_start = 0
+        self.tying.last_tie_index = indx_start
+
+        start_pt = np.array(self.location.start)
+        tie_point = self.tying.wire_attach.attractor_pts[indx_start]
+        if self.tying.tie_type == TyingState.TyingType.TIE_ACROSS:
+            # Generate a point that is on the wire, but slides a bit on x
+            tie_point[0] = self._get_x_wire_noise(pt_branch=start_pt, tie_point=tie_point)
+
+        # Set the guide points to be the deflected curve
+        self.tying.guide_points = self._generate_deflected_curve(start_pt, np.array(self.location.end), tie_point)
+
+    def _add_next_guide_points(self):
+        """If the end of the branch extends past the last tie point, add some more points to get to the next attractor point."""
+        end_dir = np.array(self.location.end_dir)
+        indx_start = self._find_next_wire_pt(end_pt=np.array(self.location.end), end_dir=end_dir)
+        if indx_start == -1:
+            self.logger.info(f"Continuing tie down; off end of wire {self.location.end} {self.tying.wire_attach.attractor_pts}")
+            self.tying.last_tie_index = self.tying.wire_attach.attractor_pts.shape[0]
+            return
+        self.tying.last_tie_index = indx_start
+
+        end_pt = np.array(self.location.end)
+        tie_point = self.tying.wire_attach.attractor_pts[indx_start]
+        dx = 0.0
+        dy = 0.0
+        # assuming bent mostly to wire - generate a wriggly curve - determine which side off
+        if self.tying.tie_type == TyingState.TyingType.TIE_ACROSS:
+            # Generate a point that is on the wire, but slides a bit on x
+            tie_point[0] = self._get_x_wire_noise(pt_branch=end_pt, tie_point=tie_point)
+            if end_dir[0] < 0.0:
+                dx = -np.abs(np.random.normal(loc=0.0, scale=0.5*self.tying.wire_attach.spacing))
+            else:
+                dx = np.abs(np.random.normal(loc=0.0, scale=0.5 * self.tying.wire_attach.spacing))
+        else:
+            if end_dir[1] < 0.0:
+                dy = -np.abs(np.random.normal(loc=0.0, scale=0.5*self.tying.wire_attach.spacing))
+            else:
+                dy = np.abs(np.random.normal(loc=0.0, scale=0.5 * self.tying.wire_attach.spacing))
+
+        dt = 1.0 / 4.0  # Add two points to the middle between last guide point and tie point
+        last_guide_point = np.array(self.tying.guide_points[-1])
+        for indx in range(1, 3):
+            t = dt * indx
+            interpolate_wire_pt = (1.0 - t) * last_guide_point + t * tie_point
+            interpolate_wire_pt[0] += dx
+            interpolate_wire_pt[1] += dy
+            self.tying.guide_points.append(tuple(interpolate_wire_pt))
+        self.tying.guide_points.append(tuple(tie_point))
+
+    @staticmethod
+    def _deflection_at_x(d, x, L):
+        """d is the max deflection, x is the current location we need deflection on and L is the total length"""
+        return (d / 2) * (x**2) / (L**3) * (3 * L - x)
+
+    def _generate_deflected_curve(self, start_pt: np.array, end_pt: np.array, tie_point: np.array):
+        control_points = []
+        deflection_vector = tie_point - end_pt
+        branch_length = np.linalg.norm(end_pt - start_pt)
+        if np.isclose(branch_length, 0.0):
+            branch_length = np.linalg.norm(tie_point - start_pt)
+        # Parametric position along branch segment [0.1, 0.2, ..., 1.0]
+        for t in np.arange(0.1, 1.1, 0.1):
+            # Base position: linear interpolation from start to current
+            base_position = start_pt + t * (end_pt - start_pt)
+
+            # Add beam deflection (cantilever formula)
+            deflection = self._deflection_at_x(deflection_vector, t * branch_length, branch_length)
+
+            # Combine base position and deflection
+            point = tuple(base_position + deflection)
+            control_points.append(point)
+        return control_points
 
     @abstractmethod
     def create_branch(self):
@@ -216,35 +326,48 @@ class BasicWood(ABC):
         # new_object = BasicWood.clone(self.branch_object)
         # return new_object
         # return BasicWood(self.num_buds_segment/2, self.bud_break_prob, self.thickness/2, self.thickness_increment/2, self.growth_length/2,\
-        # self.max_length/2, self.tie_axis, self.bud_break_max_length/2, self.order+1, self.bud_break_prob_func)
+        # self.max_length/2, self.tie_type, self.bud_break_max_length/2, self.order+1, self.bud_break_prob_func)
 
-    def update_guide(self, guide_target):
-        """Compute and append guide control points for this wood object.
-
-        Args:
-            guide_target: Wire object (with .point attribute) or None/-1 (no-op).
+    def update_guide(self):
+        """ If the branch/trunk has grown past the last tie point then append more guide points
+        Also updates the tying variables (last tie point, guide points, guide_length)
 
         Notes:
-            - If infeasible (tie point cannot be reached), silently returns.
-            - Appends control points incrementally to self.tying.guide_points.
-            - Uses self.location.start as base if not yet tied; self.location.last_tie_location otherwise.
+            - If out of tie points sets guide_length to be zero (no longer follow curve)
+            - Appends guide points incrementally to self.tying.guide_points
+            - Only generates a new set of guide points when the branch crosses a tying point
+            - Uses self.location.start as base if not yet tied; the last tie point in WireBranchAttach otherwise.
+            - Adds some stochasticity to the guide curve by 1) letting across tie points slide in x and 2) following the
+               direction of the branch growth (curve 'bows' out of guide)
         """
-        self.tying.guide_target = guide_target
-        if guide_target is None or guide_target == -1:
+        if not self.tying.is_tied:
+            return
+        # Ran out of tie points
+        if self.tying.last_tie_index >= self.tying.wire_attach.attractor_pts.shape[1]:
             return
 
-        # Select base point: use last tie location if already tied, otherwise start
-        base_point = self.location.last_tie_location if self.tying.has_tied else self.location.start
-
-        # Compute control points and tie point in one call
-        curve, tie_point = self.get_control_points(
-            guide_target.point, base_point, self.location.end, self.tying.tie_axis
-        )
-
-        # Append only if feasible (tie_point is not None)
-        if tie_point is not None and curve:
-            self.tying.guide_points.extend(curve)
-            # Note: last_tie_location updated at StartEach hook, not here
+        # Case 1: We haven't started tying yet, so create a guide curve that goes from the end point
+        #         to the first tie point
+        # Case 2: We are still growing along the guide curve, haven't reached the end
+        # Case 3: We have grown past the last tie point and need to add to the guide curve
+        # Sets self.tying.guide_points and self.tying.guide_length
+        self.tying.tie_needs_updating = False
+        if self.tying.last_tie_index == -1:
+            self._start_guide_points()
+            # Flag that we need to update the guide curve in the LString
+            self.tying.tie_needs_updating = True
+        else:
+            # check location of end point wrt last tie point
+            # The last guide point will have been set to the last tie point
+            end_pt = np.array(self.location.end)
+            last_tie_pt = self.tying.wire_attach.attractor_pts[self.tying.last_tie_index]
+            dir_along = end_pt - last_tie_pt
+            past = np.dot(dir_along, self.tying.wire_attach.attractor_dir)
+            if past > 0.0:
+                self._add_next_guide_points()
+                # Flag that we need to update the guide curve in the LString
+                self.tying.tie_needs_updating = True
+        # Note: actual guide curve will be updated at EndEach hook, not here
 
     def tie_lstring(self, lstring, index):
         """Insert a SetGuide(...) after position `index` in `lstring`.
@@ -253,9 +376,10 @@ class BasicWood(ABC):
         - Builds a CSpline from `self.tying.guide_points` and inserts the curve string and length.
         Returns (lstring, removed_count).
         """
-        # Nothing to do if we don't have guide points
-        if not self.tying.guide_points:
+        # Nothing to do if we don't have new guide points
+        if not self.tying.tie_needs_updating:
             return lstring, 0
+
         # Build spline and get curve representation (may raise)
         try:
             spline = CSpline(self.tying.guide_points)
@@ -277,26 +401,55 @@ class BasicWood(ABC):
             del lstring[insert_pos]
             removed_count += 1
 
-        # Mark tied (if not already)
-        if not self.tying.has_tied:
-            self.tying.has_tied = True
-
         # Insert the new SetGuide token at the computed insert position
-        lstring.insertAt(insert_pos, f"SetGuide({curve_repr}, {self.length})")
+        # Upper limit on following the guide curve is the number of wires currently crossed * spacing
+        # Once the turtle hits the set guide it will follow it for the length given; so give it the length
+        #   of the guide curve
+        tie_length = 1.1 * self.tying.last_tie_index * self.tying.wire_attach.spacing
+        lstring.insertAt(insert_pos, f"SetGuide({curve_repr}, {tie_length})")
+
+        # Flag that we've added the new guide curve
+        self.tying.tie_needs_updating = False
 
         return lstring, removed_count
 
-    def tie_update(self):
-        self.location.last_tie_location = copy.deepcopy(self.location.end)
-        self.tying.tie_updated = True
+    def _find_wire_pt(self, targets: list[tuple], start: tuple, current: tuple):
+        """ Convert to numpy and find the next wire point"""
+        start_arr = np.array([start[0], start[1], start[2]], dtype=float)
+        current_arr = np.array([current[0], current[1], current[2]], dtype=float)
+        wire_points = np.array(targets, dtype=float)
+        wire_axis = np.array(wire_points[-1, :] - wire_points[0, :])
+        len_wire_axis = np.linalg.norm(wire_axis)
+        if len_wire_axis > 0.0:
+            wire_axis = wire_axis / len_wire_axis
+        else:
+            # Shouldn't happen - but assume wire is in x direction
+            wire_axis = np.array([1, 0, 0])
 
-    def deflection_at_x(self, d, x, L):
-        """d is the max deflection, x is the current location we need deflection on and L is the total length"""
-        return (d / 2) * (x**2) / (L**3) * (3 * L - x)
+        # Vector from branch start to next wire point
+        v = np.zeros((1, 3))
+        wire_point = wire_points[0, :]
+        for try_point in range(0, wire_points.shape[0]):
+            wire_point = wire_points[try_point, :]
+            v = wire_point - start_arr
+            if np.dot(v, wire_axis) >= 0.0:
+                break
 
-    # return d*(1 - np.cos(*np.pi*x/(2*L))) #Axial loading
+        return start_arr, current_arr, wire_point, wire_axis, v
 
-    def get_control_points(self, target, start, current, tie_axis):
+    def _get_control_pts_along(self, targets: list[tuple], start: tuple, current: tuple):
+        """ just offset in the y direction"""
+        start_arr, current_arr, wire_point, wire_axis, _ = self._find_wire_pt(targets=targets, start=start, current=current)
+
+        control_points = []
+        est_length = np.linalg.norm(wire_point - start_arr)
+        for step in np.arange(-est_length, 0.1, 0.1):
+            pt_wire = wire_point + wire_axis * step
+            pt_wire[0] = start_arr[0]
+            control_points.append(tuple(pt_wire))
+        return control_points
+
+    def get_control_points(self, targets : list[tuple], start: tuple, current: tuple, tie_type: TyingState.TyingType):
         """
         Compute control points for a 3D curve from branch segment to tie point on wire.
 
@@ -304,10 +457,10 @@ class BasicWood(ABC):
         then generates a deflected curve using beam theory.
 
         Args:
-            target: Wire point (x, y, z) - a point on the wire
+            targets: Wire points list of (x, y, z) points on the wire
             start: Branch segment start point (x, y, z)
             current: Branch segment end point (x, y, z)
-            tie_axis: Unit direction vector of the wire (axis along which wire extends)
+            tie_type: Either along or across the wire
 
         Returns:
             tuple: (control_points, tie_point) where:
@@ -320,17 +473,11 @@ class BasicWood(ABC):
             - One leg = perpendicular_distance (shortest distance from start to wire)
             - Other leg = parallel_travel (distance to travel along wire to reach it)
         """
-        # Convert inputs to numpy arrays
-        start_arr = np.array([start[0], start[1], start[2]], dtype=float)
-        current_arr = np.array([current[0], current[1], current[2]], dtype=float)
-        wire_point = np.array([target[0], target[1], target[2]], dtype=float)
-        wire_axis = np.array(tie_axis, dtype=float)
+        if tie_type == TyingState.TyingType.TIE_ACROSS:
+            return self._get_control_pts_along(targets=targets, start=start, current=current)
 
-        # Normalize wire axis to unit vector
-        wire_axis_norm = np.linalg.norm(wire_axis)
-        if wire_axis_norm < BasicWood.eps:
-            return [], None
-        wire_axis_unit = wire_axis / wire_axis_norm
+        # Convert inputs to numpy arrays
+        start_arr, current_arr, wire_point, wire_axis, v = self._find_wire_pt(targets=targets, start=start, current=current)
 
         # Calculate branch segment length
         segment_vector = current_arr - start_arr
@@ -338,11 +485,12 @@ class BasicWood(ABC):
         if branch_length < BasicWood.eps:
             return [], None  # Degenerate segment
 
-        # Vector from branch start to wire point
-        v = wire_point - start_arr
+        if np.dot(v, wire_axis) < 0.0:
+            # No target wire point past the end of the branch - quit pinning
+            return [], None  # Degenerate segment
 
         # Decompose v into components parallel and perpendicular to wire axis
-        parallel_component, perpendicular_component = self._get_parallel_and_perpendicular_components(v, wire_axis_unit)
+        parallel_component, perpendicular_component = self._get_parallel_and_perpendicular_components(v, wire_axis)
         perpendicular_distance = np.linalg.norm(perpendicular_component)
 
         # Feasibility check: branch must be long enough to reach the wire
@@ -352,37 +500,20 @@ class BasicWood(ABC):
         # Calculate distance to travel along wire (Pythagorean theorem)
         # branch_length² = perpendicular_distance² + parallel_travel²
         parallel_travel_sq = branch_length**2 - perpendicular_distance**2
-        parallel_travel = np.sqrt(max(0.0, parallel_travel_sq))  # Clamp to avoid floating-point negatives
+        if parallel_travel_sq < 0.0:
+            parallel_travel_sq = 0.0
+        parallel_travel = np.sqrt(parallel_travel_sq)  # Clamp to avoid floating-point negatives
 
         # Compute tie point on wire
         # Start from perpendicular projection of start onto wire, then move parallel_travel along wire
         start_projection_on_wire = start_arr + perpendicular_component
-        direction_to_wire = np.sign(np.dot(wire_point, wire_axis_unit))
-        tie_point = start_projection_on_wire + parallel_travel * wire_axis_unit * direction_to_wire
+        direction_to_wire = np.sign(np.dot(wire_point, wire_axis))
+        tie_point = start_projection_on_wire + parallel_travel * wire_axis * direction_to_wire
 
         # Generate control points along deflected curve using beam deflection formula
         control_points = self._generate_deflected_curve(start_arr, current_arr, tie_point)
 
         return control_points, tuple(tie_point)
-
-    def _generate_deflected_curve(self, start, current, tie_point):
-        control_points = []
-        deflection_vector = np.array(tie_point) - np.array(current)
-        branch_length = np.linalg.norm(np.array(current) - np.array(start))
-        for step in np.arange(0.1, 1.1, 0.1):
-            # Parametric position along branch segment [0.1, 0.2, ..., 1.0]
-            t = step
-
-            # Base position: linear interpolation from start to current
-            base_position = start + t * (current - start)
-
-            # Add beam deflection (cantilever formula)
-            deflection = self.deflection_at_x(deflection_vector, t * branch_length, branch_length)
-
-            # Combine base position and deflection
-            point = tuple(base_position + deflection)
-            control_points.append(point)
-        return control_points
 
     def _get_parallel_and_perpendicular_components(self, vec_a, vec_b):
         # Project vec_a onto vec_b to get parallel and perpendicular components
@@ -397,13 +528,12 @@ class TreeBranch(BasicWood):
 
     count = 0    # Class variable for instance counting
 
-    def __init__(
-        self,
-        config=None,
-        copy_from=None,
-        prototype_dict: dict=None,
-        name: str = None,
-        contour_params: tuple = (1, 0.2, 30),
+    def __init__(self,
+                 config=None,
+                 copy_from=None,
+                 prototype_dict: dict=None,
+                 name: str = None,
+                 contour_params: tuple = (1, 0.2, 30),
     ):
         # Validate parameters
         if copy_from is None and config is None:
@@ -444,42 +574,3 @@ class TreeBranch(BasicWood):
     def grow(self):
         """Default empty implementation - subclasses can override if needed"""
         pass
-
-
-@dataclass
-class Wire:
-    # All wires are horizontal, tying axis depends on wood definition
-    id: int
-    point: Tuple[float, float, float]
-    num_branch: int = 0
-
-    def add_branch(self):
-        self.num_branch += 1
-
-
-class Support:
-    """All the details needed to figure out how the support is structured in the environment, it is a collection of wires"""
-
-    def __init__(
-        self,
-        points: list,
-        num_wires: int,
-        spacing_wires: int,
-        trunk_wire_pt: tuple[float, float, float],
-    ):
-
-        self.num_wires = num_wires
-        self.spacing_wires = spacing_wires
-        self.branch_supports = self.make_support(points)  # Dictionary id:points
-        self.trunk_wire = None
-        if trunk_wire_pt:
-            self.trunk_wire = Wire(id=-1, point=trunk_wire_pt)
-            points.append(trunk_wire_pt)
-
-        self.attractor_grid = Point3Grid((1, 1, 1), list(points))
-
-    def make_support(self, points):
-        supports = {}
-        for id, pt in enumerate(points):
-            supports[id] = Wire(id, pt)
-        return supports

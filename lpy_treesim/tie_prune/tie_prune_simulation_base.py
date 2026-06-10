@@ -13,7 +13,10 @@ and implement architecture-specific methods like point generation.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import numpy as np
-from lpy_treesim.tree_models.base_tree.lpy_helper_functions import cut_from
+from lpy_treesim.tie_prune.wire_support import Support
+from lpy_treesim.tie_prune.lpy_sring_prune_edit_fns import cut_from
+from lpy_treesim.tie_prune.tying import TyingState
+from scipy.optimize import linear_sum_assignment
 
 
 @dataclass
@@ -29,20 +32,23 @@ class SimulationConfig(ABC):
     num_iteration_tie: int = 5
     num_iteration_prune: int = 16
 
-    # Support Structure
-    support_num_wires: int = 14
-    support_spacing_wires: int = 1
-    support_trunk_wire_point: tuple = None
-
-    # Energy and Tying Parameters
+    # Energy Parameters
     energy_distance_weight: float = 0.5  # Weight for distance in energy calculation
     energy_threshold: float = 1.0  # Maximum energy threshold for tying
+
+    # Support parameters - override these to get support
+    start_height: float = 0.5
+    angle: float = 0.0
+    spacing_wires: float = 0.45
+    num_wires: int = 6
+    x_left: float = -1.0
+    x_right: float = 1.0
 
     # Pruning Parameters
     pruning_age_threshold: int = 6  # Age threshold for pruning untied branches
 
     # L-System Parameters
-    derivation_length: int = 256  # Number of derivation steps - somehwere between 100 and 1000
+    derivation_length: int = 256  # Number of derivation steps - somewhere between 100 and 1000
     use_generalized_cylinder: bool = False  # Whether to wrap new branches in @Gc/@Ge blocks
 
     # Growth Parameters
@@ -77,8 +83,22 @@ class TreeSimulationBase(ABC):
         """
         self.config = config
 
+        # Support Structure
+        self.support = Support(start_height=config.start_height,
+                               angle=config.angle,
+                               spacing_wires=config.spacing_wires,
+                               num_wires=config.num_wires,
+                               x_left=config.x_left,
+                               x_right=config.x_right)
+
+        # Attractor grids will be added in generate_points
+        self.trunk_attractor = None
+        self.branch_attractor = None
+
+        self.generate_attractor_grids()
+
     @abstractmethod
-    def generate_points(self):
+    def generate_attractor_grids(self):
         """
         Generate 3D points for the trellis wire structure.
 
@@ -90,7 +110,7 @@ class TreeSimulationBase(ABC):
         """
         pass
 
-    def get_energy_mat(self, branches, arch):
+    def get_energy_matrix(self, all_branches):
         """
         Calculate the energy matrix for optimal branch-to-wire assignment.
 
@@ -105,46 +125,63 @@ class TreeSimulationBase(ABC):
 
         Args:
             branches: List of branch objects to be assigned to wires
-            arch: Support architecture object containing wire information
 
         Returns:
             numpy.ndarray: Energy matrix of shape (num_branches, num_wires) where
                           matrix[i][j] is the energy cost of assigning branch i to wire j.
                           Untied branches and occupied wires have infinite energy (np.inf).
         """
+        branches = []
+        for branch in all_branches:
+            # Skip branches that are already tied
+            if not branch.tying.is_tied:
+                # And that haven't grown yet
+                if branch.length > 0.0:
+                    branches.append(branch)
         num_branches = len(branches)
-        num_wires = len(arch.branch_supports)
+        num_wires = len(self.branch_attractor)
 
         # Initialize energy matrix with infinite values (impossible assignments)
-        energy_matrix = np.full((num_branches, num_wires), np.inf)
+        energy_matrix = np.full((num_branches, num_wires), 10000.0)
 
         # Calculate energy costs for all valid branch-wire combinations
         for branch_idx, branch in enumerate(branches):
-            # Skip branches that are already tied
-            if branch.tying.has_tied:
+            if branch.tying.is_tied:
                 continue
 
-            for wire_id, wire in arch.branch_supports.items():
+            for wire_id, wire in enumerate(self.branch_attractor):
                 # Skip wires that already have a branch attached
-                if wire.num_branch >= 1:
+                if wire.branch_id != -1:
                     continue
 
                 # Calculate weighted distance energy for this branch-wire pair
                 # Energy considers distance from wire to both branch endpoints
-                wire_point = np.array(wire.point)
+                wire_points = np.array(wire.attractor_pts)
                 branch_start = np.array(branch.location.start)
                 branch_end = np.array(branch.location.end)
 
-                start_distance_energy = np.sum((wire_point - branch_start) ** 2)
-                end_distance_energy = np.sum((wire_point - branch_end) ** 2)
+                # Don't care about z just if it aligns (x) and is not too far from the wire (y)
+                end_indx = 2
+                if branch.tying.tie_type == TyingState.TyingType.TIE_ALONG:
+                    # Care about z
+                    end_indx = 3
+                start_distance_energy = 1e30
+                end_distance_energy = 1e30
+                for row in range(0, wire_points.shape[0]):
+                    start_energy = np.mean((wire_points[row, 0:end_indx] - branch_start[0:end_indx]) ** 2)
+                    end_energy = np.mean((wire_points[row, 0:end_indx] - branch_end[0:end_indx]) ** 2)
+                    if start_energy < start_distance_energy:
+                        start_distance_energy = start_energy
+                    if end_energy < end_distance_energy:
+                        end_distance_energy = end_energy
 
-                total_energy = (start_distance_energy + end_distance_energy) * self.config.energy_distance_weight
+                total_energy = (start_distance_energy + end_distance_energy) / 2.0
 
                 energy_matrix[branch_idx, wire_id] = total_energy
 
-        return energy_matrix
+        return energy_matrix, branches
 
-    def decide_guide(self, energy_matrix, branches, arch):
+    def decide_guide(self, energy_matrix, branches):
         """
         Perform greedy assignment of branches to wires based on energy matrix.
 
@@ -159,10 +196,9 @@ class TreeSimulationBase(ABC):
         Args:
             energy_matrix: numpy.ndarray of shape (num_branches, num_wires) with energy costs
             branches: List of branch objects to be assigned
-            arch: Support architecture containing wire information
 
         Returns:
-            None: Modifies branches and arch in-place with new assignments
+            None: Modifies branches and branch_attractors in-place with new assignments
         """
         num_branches, num_wires = energy_matrix.shape
 
@@ -170,45 +206,24 @@ class TreeSimulationBase(ABC):
         if num_branches == 0 or num_wires == 0:
             return
 
+        # Run the Hungarian algorithm
+        row_ind, col_ind = linear_sum_assignment(energy_matrix)
+
+        # Wires are organized from left to right (ufo) or up to down (envy);
         # Continue making assignments until no valid ones remain
-        while True:
-            # Find the minimum energy value and its position
-            min_energy_indices = np.argwhere(energy_matrix == np.min(energy_matrix))
+        for branch_indx, wire_indx in zip(row_ind, col_ind):
+            spacing = self.branch_attractor[wire_indx].spacing
+            if energy_matrix[branch_indx, wire_indx] < spacing:
+                # Get the branch and wire objects
+                branch = branches[branch_indx]
+                wire_attach = self.branch_attractor[wire_indx]
 
-            # If no valid indices found or matrix is empty, stop
-            if len(min_energy_indices) == 0:
-                break
+                # Perform the assignment
+                branch.tying.wire_attach = wire_attach
+                id = int(branch.name.split("_")[-1])
+                wire_attach.branch_id = id
 
-            # Get the first (and typically only) minimum energy position
-            branch_idx, wire_id = min_energy_indices[0]
-            min_energy = energy_matrix[branch_idx, wire_id]
-
-            # Stop if minimum energy is infinite (no valid assignments) or above threshold
-            if np.isinf(min_energy) or min_energy > self.config.energy_threshold:
-                break
-
-            # Get the branch and wire objects
-            branch = branches[branch_idx]
-            wire = arch.branch_supports[wire_id]
-
-            # Skip if branch is already tied (defensive check)
-            if branch.tying.has_tied:
-                # Mark this assignment as invalid and continue
-                energy_matrix[branch_idx, wire_id] = np.inf
-                continue
-
-            # Perform the assignment
-            branch.tying.guide_target = wire
-            wire.add_branch()
-
-            # Mark branch and wire as unavailable for future assignments
-            # Set entire row (branch) to infinity - this branch can't be assigned again
-            energy_matrix[branch_idx, :] = np.inf
-            # Set entire column (wire) to infinity - this wire can't accept more branches
-            energy_matrix[:, wire_id] = np.inf
-
-
-    def remove_children_from_hierarchy(self, branch_name, branch_hierarchy, color_manager, parent_map):
+    def remove_children_from_hierarchy(self, branch_name, branch_hierarchy, parent_map):
         """
         Remove all children of a given branch from the hierarchy and parent map.
 
@@ -219,7 +234,6 @@ class TreeSimulationBase(ABC):
         Args:
             branch_name: Name of the branch whose children are to be removed
             branch_hierarchy: Dictionary mapping parent branch names to lists of child branches
-            color_manager: ColorManager instance to remove color assignments
             parent_map: Dictionary mapping child branch names to their parent branch names
         Returns:
             None: Modifies branch_hierarchy and parent_map in-place
@@ -234,7 +248,7 @@ class TreeSimulationBase(ABC):
         # Recursively remove all children of the branch first
         if branch_name in branch_hierarchy:
             for child_branch in branch_hierarchy[branch_name]:
-                self.remove_children_from_hierarchy(child_branch.name, branch_hierarchy, color_manager, parent_map)
+                self.remove_children_from_hierarchy(child_branch.name, branch_hierarchy, parent_map)
             del branch_hierarchy[branch_name]
         
         # Remove branch and its children from parent_map
@@ -242,7 +256,7 @@ class TreeSimulationBase(ABC):
             del parent_map[branch_name]
 
     
-    def prune(self, lstring, branch_hierarchy, color_manager, parent_map=None):
+    def prune(self, lstring, branch_hierarchy, parent_map=None):
         """
         Prune old branches that exceed the age threshold and haven't been tied to wires.
 
@@ -284,7 +298,7 @@ class TreeSimulationBase(ABC):
 
                 # Check pruning criteria
                 age_exceeds_threshold = branch.info.age > self.config.pruning_age_threshold
-                not_tied_to_wire = not branch.tying.has_tied or branch.tying.guide_target is None
+                not_tied_to_wire = not branch.tying.is_tied
                 not_already_cut = not branch.info.cut
                 is_prunable = branch.info.prunable
 
@@ -299,7 +313,7 @@ class TreeSimulationBase(ABC):
                     
                     # Remove branch and its children from hierarchy and color manager
                     if parent_map is not None:
-                        self.remove_children_from_hierarchy(branch.name, branch_hierarchy, color_manager, parent_map)
+                        self.remove_children_from_hierarchy(branch.name, branch_hierarchy, parent_map)
 
                     return True
 
@@ -313,11 +327,11 @@ class TreeSimulationBase(ABC):
         represent branches ready for tying to trellis wires. It identifies branches that:
         1. Have tying properties (tying attribute exists)
         2. Have a defined tie axis (tie_axis is not None)
-        3. Have not been tied yet (tie_updated is False)
+        3. Have not been tied yet (tie_needs_updating is False)
         4. Have guide points available for wire attachment
 
         When an eligible branch is found, it performs the tying operation by:
-        - Marking the branch as tied (tie_updated = False)
+        - Marking the branch as tied (tie_needs_updating = False)
         - Adding the branch to the target wire
         - Calling the branch's tie_lstring method to modify the L-System string
 
@@ -332,28 +346,19 @@ class TreeSimulationBase(ABC):
             tying a single branch. It should be called repeatedly (e.g., in a while loop)
             until no more tying operations are possible.
         """
+        string_readable = str(lstring).replace("]", "]\n")
+        print(f"Tying:\n{string_readable}\n")
         for position, symbol in enumerate(lstring):
             # Check if this is a WoodStart module with tying capabilities
-            if (
-                symbol == "WoodStart"
-                and hasattr(symbol[0].type, "tying")
-                and getattr(symbol[0].type.tying, "tie_axis", None) is not None
-            ):
+            if symbol == "WoodStart":
 
                 branch = symbol[0].type
 
-                # Skip branches that have already been processed for tying
-                if not branch.tying.tie_updated:
-                    continue
-
-                # Check if branch has guide points for wire attachment
-                if branch.tying.guide_points:
-                    # Perform the tying operation
-                    branch.tying.tie_updated = False
-
-                    # Update the L-System string with tying modifications
-                    lstring, modifications_count = branch.tie_lstring(lstring, position)
-
+                # lstring is a pointer, so this modifies the original as well
+                lstring, modifications_count = branch.tie_lstring(lstring, position)
+                if modifications_count > 0:
+                    string_readable = str(lstring).replace("]", "]\n")
+                    print(f"Tied{string_readable}\n\n")
                     return True
 
         return False

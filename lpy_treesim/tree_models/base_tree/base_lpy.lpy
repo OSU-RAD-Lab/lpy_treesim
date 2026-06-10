@@ -11,7 +11,7 @@ CURRENT_DIR = os.path.dirname(__file__)
 if CURRENT_DIR not in sys.path:
     sys.path.append(CURRENT_DIR)
 
-from tree_wood_prototypes import Support, BasicWood, TreeBranch, BasicWoodConfig
+from tree_wood_prototypes import BasicWood, TreeBranch, BasicWoodConfig
 from lpy_helper_functions import *
 
 # -----------------------------------------------------------------------------
@@ -28,38 +28,35 @@ extern(
   axiom_pitch = 0.0,
   axiom_yaw = 0.0,
   branch_hierarchy = {},
-  semantic_label = None,
-  instance_label = None,
   per_cylinder_label = None,
   seed_value = None,
-)# Resolve extern-provided dotted paths so the rest of the script can operate on
+)
+
+# Resolve extern-provided dotted paths so the rest of the script can operate on
 # concrete classes/functions exactly like the Envy/UFO drivers do.
 
 # Generator
 lpy_rng = np.random.default_rng(seed=seed_value)
 
+# Wood and simulation classes
+#   Note that these will point to, eg, UFO or Envy, as specified in the extern paths
 prototype_builder_fn = resolve_attr(prototype_builder_path)
 basicwood_prototypes = prototype_builder_fn(rng=lpy_rng)
 Trunk = resolve_attr(trunk_class_path)
 SimulationConfigClass = resolve_attr(simulation_config_class_path)
 SimulationClass = resolve_attr(simulation_class_path)
 
+# Create instances of the simulation and trunk variables
 simulation_config = SimulationConfigClass()
-simulation = SimulationClass(simulation_config)
+tree_sim = SimulationClass(simulation_config)
 main_trunk = Trunk(copy_from = basicwood_prototypes['trunk'])
 
+# Build trellis geometry and attractor grids.
+trellis_support = tree_sim.support
 
-
-# Build trellis geometry and cadence numbers up front so callbacks stay simple.
-trellis_support = Support(
-  simulation.generate_points(),
-  simulation_config.support_num_wires,
-  simulation_config.support_spacing_wires,
-  simulation_config.support_trunk_wire_point,
-)
+# Grab how often to tie and how often to prune
 tying_interval_iterations = simulation_config.num_iteration_tie
 pruning_interval_iterations = simulation_config.num_iteration_prune
-main_trunk.tying.guide_target = trellis_support.trunk_wire
 
 # Track parent/child relationships for tying/pruning decisions.
 branch_hierarchy["root"] = [main_trunk]
@@ -70,25 +67,11 @@ branch_hierarchy["root"] = [main_trunk]
 parent_map = {}  # Internal bookkeeping for efficient parent lookup
 branch_hierarchy[main_trunk.name] =[]
 
-def _get_energy_mat(branches, arch, _config):
-  return simulation.get_energy_mat(branches, arch)
-
-
-def _decide_guide(energy_matrix, branches, arch, _config):
-  return simulation.decide_guide(energy_matrix, branches, arch)
-
-
-def _tie(lstring, _config):
-  return simulation.tie(lstring)
-
-
-def _prune(lstring, branch_hierarchy, _config):
-  return simulation.prune(lstring, branch_hierarchy, color_manager, parent_map)
 
 # L-Py callbacks delegate to the Python helpers so architectures share logic.
 def StartEach(lstring):
   """Proxy to shared tying preparation logic."""
-  start_each_common(lstring, branch_hierarchy, trellis_support, main_trunk)
+  start_each_common(lstring, branch_hierarchy, tree_sim, main_trunk)
 
 
 def EndEach(lstring):
@@ -96,18 +79,15 @@ def EndEach(lstring):
   return end_each_common(
     lstring,
     branch_hierarchy,
-    trellis_support,
+    tree_sim,
     tying_interval_iterations,
     pruning_interval_iterations,
     simulation_config,
     main_trunk,
     getIterationNb,
-    _get_energy_mat,
-    _decide_guide,
-    _tie,
-    _prune,
   )
-generalized_cylinder = getattr(simulation_config, "use_generalized_cylinder", False)
+#generalized_cylinder = getattr(simulation_config, "use_generalized_cylinder", True)
+generalized_cylinder = True
 # =============================================================================
 # L-SYSTEM GRAMMAR DEFINITION
 # =============================================================================
@@ -215,31 +195,29 @@ bud(bud_parameters, hierarchy) :
       curve = create_bezier_curve(x_range=new_branch.curve_x_range, y_range=new_branch.curve_y_range, z_range=new_branch.curve_z_range, rng=lpy_rng)
       nproduce SetGuide(curve, new_branch.growth.max_length)
     # Produce new branch with random orientation and growth object
-    nproduce @RGetPos(new_branch.location.start)WoodStart(ParameterSet(type = new_branch))/(lpy_rng.random()*360)&(lpy_rng.random()*360)grow_object(new_branch, hierarchy)GetPos(new_branch.location.end)
+    nproduce @RGetPos(new_branch.location.start)GetHead(new_branch.location.start_dir)WoodStart(ParameterSet(type = new_branch))/(lpy_rng.random()*360)&(lpy_rng.random()*360)grow_object(new_branch, hierarchy)GetPos(new_branch.location.end)GetHead(new_branch.location.end_dir)
     if generalized_cylinder:
       nproduce @Ge
     produce ]bud(bud_parameters, hierarchy)
 
 trunk(hierarchy):
+  print(f"In trunk {generalized_cylinder}")
   if generalized_cylinder:
-    produce [@GcGetPos(main_trunk.location.start)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)@Ge]
+    produce [@GcGetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)@Ge]
   else:
-    produce [GetPos(main_trunk.location.start)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)]
+    produce [GetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)]
+
 # -----------------------------------------------------------------------------
 # GEOMETRIC INTERPRETATION (HOMOMORPHISM)
 # -----------------------------------------------------------------------------
+interpretation:
+I(s,r,o):
+  new_radius = o.growth.get_thickness_increment()
+  produce I(s,r+new_radius,o) F(s, new_radius)
 
-I(s,r,o) --> I(s,r+o.growth.thickness_increment,o)
-_(r) --> _(r+o.thickness_increment)
-
-# Map abstract L-System modules to concrete 3D geometry for rendering.
-# These rules define how the symbolic representation becomes visual.
-homomorphism:
-
-# Internode segments become cylinders with length and radius
-I(a,r,o) --> F(a,r)
-# Branch segments also become cylinders
-S(a,r,o) --> F(a,r)
+S(a,r,o):
+  # Map abstract L-System modules to concrete 3D geometry for rendering.
+  produce F(a, r)
 
 # -----------------------------------------------------------------------------
 # ATTRACTOR VISUALIZATION
@@ -248,6 +226,7 @@ S(a,r,o) --> F(a,r)
 production:
 Attractors(trellis_support):
   # Display enabled attractor points as visual markers
+  trellis_support.check_valid()
   points_to_display = trellis_support.attractor_grid.get_enabled_points()
   if len(points_to_display) > 0:
     produce [,(3) @g(PointSet(points_to_display,width=simulation_config.attractor_point_width))]

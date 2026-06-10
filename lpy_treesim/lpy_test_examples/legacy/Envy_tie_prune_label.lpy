@@ -208,7 +208,7 @@ def get_energy_mat(branches, arch):
     energy_matrix = np.ones((num_branches, num_wires)) * np.inf  # Initialize the energy matrix with infinity
 
     for branch_id, branch in enumerate(branches):  # Loop through each branch
-        if branch.tying.has_tied or branch.info.cut:  # If the branch is already tied, skip it
+        if branch.tying.is_tied or branch.info.cut:  # If the branch is already tied, skip it
             continue
         for wire_id, wire in arch.branch_supports.items():  # Loop through each wire
             # print(f"ID {wire_id} num branch {wire.num_branch}")
@@ -225,7 +225,7 @@ def decide_guide(energy_matrix, branches, arch):
         min_arg = np.argwhere(energy_matrix == np.min(energy_matrix))  # Find the minimum energy branch to tie
         if (energy_matrix[min_arg[0][0]][min_arg[0][1]] == np.inf) or energy_matrix[min_arg[0][0]][min_arg[0][1]] > 0.25*math.exp(getIterationNb()/105):
             return  # If the minimum energy is too high, stop the process
-        if not branches[min_arg[0][0]].tying.has_tied and not branches[min_arg[0][0]].info.cut:  # If the branch has not been tied before
+        if not branches[min_arg[0][0]].tying.is_tied and not branches[min_arg[0][0]].info.cut:  # If the branch has not been tied before
             branches[min_arg[0][0]].tying.guide_target = arch.branch_supports[min_arg[0][1]]  # Set the guide target to the wire
             arch.branch_supports[min_arg[0][1]].add_branch()  # Increment the number of branches tied to the wire
             # print(f"Tying {min_arg[0][0]} to wire {min_arg[0][1]}")
@@ -239,11 +239,11 @@ def decide_guide(energy_matrix, branches, arch):
 def tie(lstring):
     for j, i in enumerate(lstring):  # Loop through each element in the lstring
         if i == 'C' and i[0].type.__class__.__name__ == 'Branch':  # Check if the element is a branch
-            if i[0].type.tying.tie_updated == False:  # If the branch is not updated, skip it
+            if i[0].type.tying.tie_needs_updating == False:  # If the branch is not updated, skip it
                 continue
             curr = i[0]  # Get the current branch
             if i[0].type.tying.guide_points:  # If the branch has guide points
-                i[0].type.tying.tie_updated = False  # Set the tie_updated flag to False
+                i[0].type.tying.tie_needs_updating = False  # Set the tie_needs_updating flag to False
                 #i[0].type.guide_target.add_branch()  # Add the branch to the guide target
                 lstring, count = i[0].type.tie_lstring(lstring, j)  # Tie the branch
 
@@ -254,7 +254,7 @@ def tie(lstring):
 def pruning_strategy(lstring):  # Remove remnants of cut
     cut = False  # Initialize the cut flag
     for j, i in enumerate(lstring):  # Loop through each element in the lstring
-        if i.name == 'C' and i[0].type.info.age > 6 and i[0].type.tying.has_tied == False and i[0].type.info.cut == False and i[0].type.info.prunable and i[0].type.tying.guide_target==-1:
+        if i.name == 'C' and i[0].type.info.age > 6 and i[0].type.tying.is_tied == False and i[0].type.info.cut == False and i[0].type.info.prunable and i[0].type.tying.guide_target==-1:
             i[0].type.info.cut = True  # Set the cut flag to True
             lstring = cut_from(j, lstring)  # Cut the branch using string manipulation
             #TODO: Remove branch from parent_child dict and wire
@@ -267,8 +267,8 @@ def pruning_strategy(lstring):  # Remove remnants of cut
 def StartEach(lstring):
     global parent_child_dict
     for i in parent_child_dict[trunk_base.name]:  # Loop through each child of the trunk base
-        if i.tying.tie_updated == False:  # If the branch is not updated
-            i.tie_update()  # Update the branch
+        if i.tying.tie_needs_updating == False:  # If the branch is not updated
+            i.set_tie_update()  # Update the branch
 
 # Function to end each iteration
 def EndEach(lstring):

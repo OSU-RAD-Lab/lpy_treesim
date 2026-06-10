@@ -246,7 +246,7 @@ def get_energy_mat(branches, arch):
   energy_matrix = np.ones((num_branches,num_wires))*np.inf
   #print(energy_matrix.shape)
   for branch_id, branch in enumerate(branches):
-    if branch.tying.has_tied:
+    if branch.tying.is_tied:
       continue
     for wire_id, wire in arch.branch_supports.items():
       if wire.num_branch>=1:
@@ -261,7 +261,7 @@ def decide_guide(energy_matrix, branches, arch):
     #print(min_arg)
     if(energy_matrix[min_arg[0][0]][min_arg[0][1]] == np.inf) or energy_matrix[min_arg[0][0]][min_arg[0][1]] > 1:
       return
-    if not (branches[min_arg[0][0]].tying.has_tied == True):# and not (arch.branch_supports[min_arg[0][1]].num_branch >=1):
+    if not (branches[min_arg[0][0]].tying.is_tied == True):# and not (arch.branch_supports[min_arg[0][1]].num_branch >=1):
       #print("Imp:",min_arg[0][0], min_arg[0][1], energy_matrix[min_arg[0][0]][min_arg[0][1]])
       branches[min_arg[0][0]].tying.guide_target = arch.branch_supports[min_arg[0][1]]#copy.deepcopy(arch.branch_supports[min_arg[0][1]].point)
       #trellis_wires.trellis_pts[min_arg[0][1]].num_branches+=1
@@ -273,12 +273,12 @@ def decide_guide(energy_matrix, branches, arch):
 def tie(lstring):
   for j,i in enumerate(lstring):
     if i == 'C' and i[0].type.__class__.__name__ == 'Branch':
-      if i[0].type.tying.tie_updated == False:
+      if i[0].type.tying.tie_needs_updating == False:
         continue
       curr = i[0]
       if i[0].type.tying.guide_points:
         #print("tying ", i[0].type.name, i[0].type.tying.guide_target.point)
-        i[0].type.tying.tie_updated = False
+        i[0].type.tying.tie_needs_updating = False
         i[0].type.tying.guide_target.add_branch()
         lstring, count = i[0].type.tie_lstring(lstring, j)
        
@@ -289,7 +289,7 @@ def tie(lstring):
 def pruning_strategy(lstring): #Remove remnants of cut
   cut = False
   for j,i in enumerate(lstring):
-    if i.name == 'C' and i[0].type.info.age > 6 and i[0].type.tying.has_tied == False and i[0].type.info.cut == False:
+    if i.name == 'C' and i[0].type.info.age > 6 and i[0].type.tying.is_tied == False and i[0].type.info.cut == False:
       
       i[0].type.info.cut = True      
       #print("Cutting", i[0].type.name) 
@@ -300,8 +300,8 @@ def pruning_strategy(lstring): #Remove remnants of cut
 def StartEach(lstring):
   global parent_child_dict
   for i in parent_child_dict[trunk_base.name]:
-      if i.tying.tie_updated == False:
-        i.tie_update()
+      if i.tying.tie_needs_updating == False:
+        i.set_tie_update()
     
   
 def EndEach(lstring):

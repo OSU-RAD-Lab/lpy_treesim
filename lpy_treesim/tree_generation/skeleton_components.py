@@ -151,6 +151,7 @@ class SkeletonComponent:
     def compute_t_values(self):
         """ Call AFTER all cylinders have been added"""
         # Really annoying to cast to float, but otherwise json doesn't work
+
         centers_as_np = np.array(self.centroids)
         self.start_pt = (float(centers_as_np[0, 0]), float(centers_as_np[0, 1]), float(centers_as_np[0, 2]))
         self.end_pt = (float(centers_as_np[-1, 0]), float(centers_as_np[-1, 1]), float(centers_as_np[-1, 2]))

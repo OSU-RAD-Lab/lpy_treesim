@@ -3,6 +3,7 @@ import openalea.plantgl.scenegraph as sg
 import openalea.plantgl.algo as alg
 
 from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvention
+from lpy_treesim.tree_generation.tree_structure import TreeStructure
 from lpy_treesim.utils.color_manager import ColorManager
 from lpy_treesim.tree_generation.skeleton_components import SkeletonComponent
 import numpy as np
@@ -93,7 +94,7 @@ def _stitch_cylinder(skel: SkeletonComponent, cyls: list, col_plant_type: tuple,
     return mesh_component
 
 
-def stitch_cylinders(tree:TreeNamingConvention) -> (dict, list):
+def stitch_cylinders(tree:TreeStructure) -> (dict, list):
 
     # Keep track of any tree components that do not have any mesh parts
     keys_to_remove = []
@@ -119,7 +120,7 @@ def stitch_cylinders(tree:TreeNamingConvention) -> (dict, list):
 
 
 # from https://pymeshlab.readthedocs.io/en/latest/tutorials/import_mesh_from_arrays.html
-def create_mesh(tree: TreeNamingConvention, tex_image_file_name)->(Trimesh, Trimesh, Trimesh):
+def create_mesh(tree: TreeStructure, tex_image_file_name)->(Trimesh, Trimesh, Trimesh):
     """ Put all the cylinders into one big TriMesh file
     Because TriMesh only supports adding one material (either texture coords, face colors, or vertex colors)
     this actually returns three meshes

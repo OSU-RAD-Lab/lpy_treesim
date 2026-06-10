@@ -135,7 +135,7 @@ def build_basicwood_prototypes(rng: np.random.Generator):
         max_length=5,
         thickness=0.05,
         growth_length=0.1,
-        cylinder_length=0.05,
+        cylinder_length=0.1,
         thickness_increment=0.001,
         color=(255, 0, 0),
         bud_spacing_age=2,

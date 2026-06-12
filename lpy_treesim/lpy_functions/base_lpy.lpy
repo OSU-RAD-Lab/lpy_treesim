@@ -4,15 +4,20 @@ Configure via extern variables passed to Lsystem(..., variables).
 """
 import os
 import sys
+from pathlib import Path
 
 
 # Ensure repository root is importable regardless of working directory
 CURRENT_DIR = os.path.dirname(__file__)
 if CURRENT_DIR not in sys.path:
     sys.path.append(CURRENT_DIR)
+TREE_BASE_DIR = Path(__file__).resolve().parents[1] / "tree_models" / "base_tree"
+if TREE_BASE_DIR not in sys.path:
+    sys.path.append(str(TREE_BASE_DIR))
 
-from tree_wood_prototypes import BasicWood, TreeBranch, BasicWoodConfig
-from lpy_helper_functions import *
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood, TreeBranch, BasicWoodConfig
+from lpy_treesim.lpy_functions.lpy_helper_functions import *
+from lpy_treesim.lpy_functions.lpy_geometry_fns import create_bezier_curve
 
 # -----------------------------------------------------------------------------
 # EXTERNALLY CONFIGURABLE PATHS
@@ -40,15 +45,17 @@ lpy_rng = np.random.default_rng(seed=seed_value)
 
 # Wood and simulation classes
 #   Note that these will point to, eg, UFO or Envy, as specified in the extern paths
-prototype_builder_fn = resolve_attr(prototype_builder_path)
-basicwood_prototypes = prototype_builder_fn(rng=lpy_rng)
-Trunk = resolve_attr(trunk_class_path)
-SimulationConfigClass = resolve_attr(simulation_config_class_path)
-SimulationClass = resolve_attr(simulation_class_path)
 
 # Create instances of the simulation and trunk variables
-simulation_config = SimulationConfigClass()
+SimulationConfigClass = resolve_attr(simulation_config_class_path)
+SimulationClass = resolve_attr(simulation_class_path)
+simulation_config = SimulationConfigClass(seed=seed_value)
 tree_sim = SimulationClass(simulation_config)
+
+prototype_builder_fn = resolve_attr(prototype_builder_path)
+basicwood_prototypes = prototype_builder_fn(rng=simulation_config.lpy_rng)
+Trunk = resolve_attr(trunk_class_path)
+
 main_trunk = Trunk(copy_from = basicwood_prototypes['trunk'])
 
 # Build trellis geometry and attractor grids.
@@ -100,6 +107,7 @@ generalized_cylinder = True
 # -----------------------------------------------------------------------------
 # Define the vocabulary of symbols used in the L-System grammar.
 # Each module represents a different type of plant component or operation.
+# WoodStart is a marker in the string that is used in the "tie" method in the simulation to identify where to put the tying curve
 module Attractors     # Trellis support structure that guides branch growth
 module grow_object(plant_segment, hierarchy)    # Growing plant parts (trunk, branches, spurs) with length/thickness and hierarchy dict
 module bud(bud_parameters, hierarchy)           # Dormant buds that can break to produce new branches with hierarchy dict
@@ -110,7 +118,7 @@ module trunk
 # GLOBAL L-SYSTEM PARAMETERS
 # -----------------------------------------------------------------------------
 # Create a growth guide curve for the initial trunk development
-trunk_guide_curve = create_bezier_curve(x_range = (-1, 1), y_range = (-1, 1), z_range = (0, 10), rng=lpy_rng)
+trunk_guide_curve = tree_sim.create_trunk_curve()
 
 # -----------------------------------------------------------------------------
 # AXIOM (STARTING STRING)
@@ -118,7 +126,7 @@ trunk_guide_curve = create_bezier_curve(x_range = (-1, 1), y_range = (-1, 1), z_
 # The initial L-System string that begins the simulation.
 # Starts with the trellis attractors, sets up the trunk guide curve,
 # and initializes the trunk growth with proper orientation and hierarchy dict.
-Axiom: Attractors(trellis_support)SetGuide(trunk_guide_curve, main_trunk.growth.max_length)trunk(branch_hierarchy)
+Axiom: Attractors(trellis_support)trunk(branch_hierarchy)
 
 # -----------------------------------------------------------------------------
 # DERIVATION PARAMETERS
@@ -203,9 +211,9 @@ bud(bud_parameters, hierarchy) :
 trunk(hierarchy):
   print(f"In trunk {generalized_cylinder}")
   if generalized_cylinder:
-    produce [@GcGetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)@Ge]
+    produce [SetGuide(trunk_guide_curve, main_trunk.growth.max_length)@GcGetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)@Ge]
   else:
-    produce [GetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)]
+    produce [SetGuide(trunk_guide_curve, main_trunk.growth.max_length)GetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)]
 
 # -----------------------------------------------------------------------------
 # GEOMETRIC INTERPRETATION (HOMOMORPHISM)

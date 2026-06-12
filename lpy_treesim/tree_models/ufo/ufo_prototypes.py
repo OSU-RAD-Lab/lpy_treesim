@@ -1,5 +1,5 @@
-from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import TreeBranch, BasicWoodConfig, TyingState
-from lpy_treesim.tree_models.base_tree.lpy_helper_functions import *
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWoodConfig, TyingState
+from lpy_treesim.lpy_functions.lpy_helper_functions import *
 
 
 class Spur(TreeBranch):
@@ -113,10 +113,10 @@ def build_basicwood_prototypes(rng: np.random.Generator):
     # Create configs for cleaner prototype setup
     spur_config = BasicWoodConfig(
         max_buds_segment=2,
-        max_length=0.1,
+        max_length=0.075,
         thickness=0.003,
-        growth_length=0.05,
-        cylinder_length=0.01,
+        growth_length=0.05 / 14.0,    # Roughly 2 inches per cycle
+        cylinder_length=0.025 / 14.0,        # Split each internode in half
         thickness_increment=0.0005,
         color=(0, 255, 0),
         bud_spacing_age=1,  # Spurs bud every 1 age unit
@@ -128,10 +128,10 @@ def build_basicwood_prototypes(rng: np.random.Generator):
 
     side_branch_config = BasicWoodConfig(
         max_buds_segment=2,
-        max_length=0.25,
+        max_length=0.6,      # Can grow up to 1.5-2 ft
         thickness=0.005,
-        growth_length=0.05,
-        cylinder_length=0.01,
+        growth_length=0.05 / 14.0,
+        cylinder_length=0.025 / 14.0,
         thickness_increment=0.0005,
         color=(0, 255, 0),
         bud_spacing_age=2,  # Tertiary branches bud every 3 age units
@@ -145,11 +145,11 @@ def build_basicwood_prototypes(rng: np.random.Generator):
     trunk_config = BasicWoodConfig(
         max_buds_segment=5,
         tie_type=TyingState.TyingType.TIE_ALONG,
-        max_length=3,
+        max_length=2.29,     # 5-6 feet, plus 20inches off the ground = 6*12 + 20 = 90 inches
         thickness=0.02,
         thickness_increment=0.00001,
-        growth_length=0.1,
-        cylinder_length=0.1,
+        growth_length=0.05 / 14.0,
+        cylinder_length=0.025 / 14.0,
         color=(255, 0, 0),
         bud_spacing_age=2,  # Trunk buds every 4 age units
         curve_x_range=(-0.3, 0.3),  # Conservative bounds for trunk

@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 
-from lpy_treesim.orchard_generation.generate_orchard import wire_asset
-
 
 @dataclass
 class WireBranchAttach:

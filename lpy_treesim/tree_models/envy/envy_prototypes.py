@@ -1,5 +1,5 @@
-from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import TreeBranch, BasicWoodConfig
-from lpy_treesim.tree_models.base_tree.lpy_helper_functions import *
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWoodConfig
+from lpy_treesim.lpy_functions.lpy_helper_functions import *
 
 
 class Spur(TreeBranch):

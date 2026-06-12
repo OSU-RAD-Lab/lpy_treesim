@@ -9,13 +9,17 @@ import numpy as np
 from openalea.plantgl.scenegraph.cspline import CSpline
 import collections
 from dataclasses import dataclass
+from enum import Enum
+
 from lpy_treesim.tie_prune.tying import TyingState
+from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
 import logging
 
 
 @dataclass
 class LocationState:
-    """Location tracking for a wood object: start point & direction, end point, and last tie location."""
+    """Location tracking for a wood object: start point & direction, end point and direction
+    These values are filled in from the string during the interpretation stage"""
 
     start: any = None      # Vector3
     start_dir: any = None  # Vector3
@@ -36,19 +40,65 @@ class LocationState:
 
 @dataclass
 class GrowthState:
-    """Growth parameters for a wood object."""
+    """Growth parameters for a wood object. These will be set when constructed but with
+       some noise, depending on the overall vigor level assigned to the branch"""
 
-    max_buds_segment: int = 5  # Total cumulative buds allowed across the entire branch segment (not per node)
-    thickness: float = 0.1
-    thickness_increment: float = 0.01
-    growth_length: float = 1.0
-    cylinder_length: float = 0.1
-    max_length: float = 7.0
+    # Set these
+    vigour_level: float = 0.5  # Between 0 and 1
+    length: float = 0.0
+    config: SimulationConfig = None  # Random number generator and number of iteration steps are in here
+
+    # These will be set to values based on vigour and default
+    mean_length_growth_per_year: list[float] = None
+    thickness: float = 0.001
+    mean_thickness_growth_per_iteration: float = 0.1
+    target_thickness_ratio = 0.025 / 1.0   # Ideal
+
+    # For tracking growth; year will increment when a year completes
+    year: int = 0
+    current_iteration: int = 0
+
+    def __post_init__(self):
+        if self.mean_length_growth_per_year is None:
+            #  Really should never get here... but between 0.5 and 1.5 meters
+            self.mean_length_growth_per_year = [(1.0 - self.vigour_level) * 0.5 + self.vigour_level * 1.5]
+        self.set_thickness_target()
+
+    def set_thickness_target(self):
+        """Calculate the target thickness based on the vigor level and expected growth for the year and current length
+           Only call on year boundaries """
+        estimated_length = self.length + self.length_growth_per_year()
+        low_ratio = 0.01 / 1.0
+        ideal_ratio = 0.025 / 1.0
+        high_ratio = 3.5 / 1.0
+        if self.vigour_level < 0.5:
+            t = self.vigour_level * 2.0
+            ratio = (1 - t) * low_ratio + t * ideal_ratio
+        else:
+            t = (self.vigour_level - 0.5) * 2.0
+            ratio = (1 - t) * ideal_ratio + t * high_ratio
+        if self.length > 0.0:
+            cur_ratio = self.thickness / self.length_growth_per_year()
+        else:
+            cur_ratio = 0.0
+        self.mean_thickness_growth_per_iteration = cur_ratio * (estimated_length) - self.thickness
+
+    def length_growth_per_year(self):
+        if self.year > len(self.mean_length_growth_per_year):
+            return self.mean_length_growth_per_year[-1]
+        return self.mean_length_growth_per_year[self.year]
+
+    def mean_length_growth_per_iteration(self):
+        return self.length_growth_per_year() / self.config.num_iter_per_year
 
     def get_thickness_increment(self):
-        # TODO: make this stochastic
-        thick_incr = np.random.normal(loc=self.thickness_increment, scale=0.1 * self.thickness_increment)
+        thick_incr = self.config.lpy_rng.normal(loc=self.mean_thickness_growth_per_iteration, scale=0.1 * self.mean_thickness_growth_per_iteration)
         return thick_incr
+
+    def get_length_increment(self):
+        mean_length_growth = self.mean_length_growth_per_iteration()
+        length_incr = self.config.lpy_rng.normal(loc=mean_length_growth, scale=0.1 * mean_length_growth)
+        return length_incr
 
 
 @dataclass
@@ -58,7 +108,6 @@ class InfoState:
     age: int = 0
     cut: bool = False
     prunable: bool = True
-    order: int = 0
     num_branches: int = 0
     color: tuple = (0, 0, 0)  # RGB tuple for visualization
     material: int = 0
@@ -72,43 +121,85 @@ class InfoState:
 
 @dataclass
 class BasicWoodConfig:
-    """Configuration parameters for BasicWood initialization."""
+    """ Configuration parameters for BasicWood initialization.
+    During one LPy interation the branch will grow some amount along a guide curve (if tied) or along
+      a starting direction, curving up.
+    The intent is to mimic the tie/prune cycle, so growth parameters are given in terms of yearly growth
+    Given a fixed number of iterations per year, we can determine the rest of the parameters
+    Buds for cherries are (usually) clearly vegetative versus fruiting, apples are a mix
+
+    For cherrys/apples (most fruit trees) growth in length and angle and bud placement can be characterized
+      as follows:
+      - Amount a branch will grow in a given year (usually more in the first 1-3 years)
+      - Bud spacing along the branch (how far apart are buds, on average?)
+      - Bud angle wrt the parent branch - this can vary by bud type (vegetative or fruit) and
+      - Bud angle on the branch - spiral pattern, 2/5 phyllotaxis, ie, the next bud will be a rotation of
+         144 degrees from the last one
+      - Branch diameter vs length is usually related, and follows
+         Ideal: < 2.5cm diameter per meter of length
+         Vigorous: approaching 3cm / m of length
+    [Note - these assume a dwarfing root stock of some sort]
+
+    Given parameters:
+      - number of iterations that equal one year
+      - A list of yearly growth length ranges by age eg, 12-36" in first year, 12-24" in 3rd year
+      - Average bud spacing
+      - Phyllotaxis angle
+      - Bud angle range by type [vegetative versus fruiting, versus mixed]
+      - Overall vigor - what percentage of the branches should be given 'vigorous' growth values
+      - Overall curviness of branches (used to create guide curves)
+      - What type of tying to do (if any)
+      - If the branch is prunable
+
+      - Note: Stopping (or slowing growth) can be handled by having the last yearly_growth_range be really small
+    Derived parameters
+      - How much to grow by at each iteration
+      - Diameters (initial) and diameter growth rates
+
+    Notes on the LString:
+    Within the lpy string creation, specifically grow_object, whenever a new bud is started (should_bud
+       returned true) then lpy inserts a parameter with the branch and the number of buds (set to zero)
+       Should bud defines a segment length to be total"""
+
+    class BudType(Enum):
+        VEGETATIVE = "vegetative"
+        FRUITING = "fruiting"
+        MIXED = "mixed"
+        dead = "dead"
 
     copy_from: any = None
-    max_buds_segment: int = 5  # Total cumulative buds allowed across the entire branch segment (not per node)
-    thickness: float = 0.1
-    thickness_increment: float = 0.01
-    growth_length: float = 1.0
-    cylinder_length: float = 0.1  # Length of each individual cylinder
-    max_length: float = 7.0
-    tie_type: TyingState.TyingType = TyingState.TyingType.NO_TIE
-    order: int = 0
-    color: tuple = (0, 0, 0)
-    material: int = 0
+    bud_spacing_range: tuple = (0.0254, 0.0508)  # 1-2 inches
+    yearly_growth_range: list[tuple] = None      # eg (1, 24, 36) would be up to 1 year between 24 and 36 inches
+    phyllotaxis_angle: float = 144               # How to space buds around a branch
+    bud_angle = dict = None                      # Bud angle relative to branch; ngle may depend on type of bud
+    tie_type: TyingState.TyingType = TyingState.TyingType.NO_TIE # How to tie this branch type to support
     prunable: bool = True
     name: str = None
-    bud_spacing_age: int = 2  # Age interval for bud creation
-    rng: np.random.Generator = None
-    use_generalized_cylinder: bool = True
+
+    # Random number to use - this is here for repeatability
+    lpy_rng: np.random.Generator = None
 
     # Curve parameters for L-System growth guides
-    curve_x_range: tuple = (-0.5, 0.5)  # X bounds for Bezier curve control points
-    curve_y_range: tuple = (-0.5, 0.5)  # Y bounds for Bezier curve control points
-    curve_z_range: tuple = (-1, 1)  # Z bounds for Bezier curve control points
+    #   Since growth curves are always in the heading direction (0,0,1) wiggle in x and y but straight in z
+    curve_x_range: tuple = (-0.25, 0.25)  # X bounds for Bezier curve control points
+    curve_y_range: tuple = (-0.25, 0.25)  # Y bounds for Bezier curve control points
+    curve_z_range: tuple = (0, 1)  # Z bounds for Bezier curve control points
 
     def __post_init__(self):
         """Validate geometric parameters for consistent growth behavior."""
-        if self.growth_length is not None and self.cylinder_length is not None:
-            if self.growth_length < self.cylinder_length:
-                raise ValueError(
-                    "BasicWoodConfig.growth_length must be >= cylinder_length "
-                    f"(got {self.growth_length} < {self.cylinder_length})"
-                )
+        if self.yearly_growth_range is None:
+            """ Set to 24-36 inches the first 3 years, 12-24 for the next 3, then 2-6"""
+            self.yearly_growth_range = []
+            for _ in range(0, 3):
+                self.yearly_growth_range.append((0.3, 0.6))
+            self.yearly_growth_range.append((0.05, 0.1))
+        if self.bud_angle is None:
+            self.bud_angle = {"vegetative": (15, 35),
+                              "fruiting": (30-50),
+                              "mixed": (15-50)}
 
 
 class BasicWood(ABC):
-    eps = 1e-6   # Default clip value for comparisons
-
     @staticmethod
     def clone(obj):
         try:
@@ -116,9 +207,11 @@ class BasicWood(ABC):
         except copy.Error:
             raise copy.Error(f"Not able to copy {obj}") from None
 
-    def __init__(self, config=None, copy_from=None, **kwargs):
+    def __init__(self, config:BasicWoodConfig=None, copy_from:BasicWoodConfig=None, **kwargs):
 
-        # Validate parameters
+        # This will be over-riden with either the copy from or input config
+        self.config: BasicWoodConfig() = None
+
         if copy_from is None and config is None:
             raise ValueError("Either 'config' or 'copy_from' must be provided")
 
@@ -130,22 +223,43 @@ class BasicWood(ABC):
         if not isinstance(config, BasicWoodConfig):
             raise ValueError("config must be provided when copy_from is None")
 
-        self.rng = config.rng
-
         self.location = LocationState()
         # Tying status - contains what type of tying and current tie state and points to tie to
         self.tying = TyingState(tie_type=config.tie_type)
 
+        # Growth Variables  - generate variables stochastically
+        vigor = self.config.lpy_rng.normal(0.5, 0.2)
+        if vigor < 0.0:
+            vigor = 0.0
+        if vigor > 1.0:
+            vigor = 1.0
+
+        mgl = []
+        for mgl_item in self.yearly_growth_range:
+            mean_range = (1.0 - vigor) * mgl_item[1] + vigor * mgl_item[2]
+            mean_sd = 0.2 * (mgl_item[2] - mgl_item[1])
+            mgl = self.config.lpy_rng.normal(mean_range, mean_sd)
+            mgl.append(mgl_item[0], mgl_it)
+        self.growth = GrowthState(vigour_level=vigor,
+                                  config=self.config,
+
+                                  )
+
+        vigour_level: float = 0.5  # Between 0 and 1
+        length: float = 0.0
+        config: SimulationConfig = None  # Random number generator and number of iteration steps are in here
+
+        # These will be set to values based on vigour and default
+        mean_length_growth_per_year: list[float] = None
+        thickness: float = 0.001
+        mean_thickness_growth_per_iteration: float = 0.1
+        target_thickness_ratio = 0.025 / 1.0  # Ideal
+
+        # For tracking growth; year will increment when a year completes
+        year: int = 0
+        current_iteration: int = 0
         # Information Variables
         self.info = InfoState(order=config.order, color=config.color, material=config.material, prunable=config.prunable)
-        self.__length = 0
-        # Growth Variables
-        self.growth = GrowthState(max_buds_segment=config.max_buds_segment,
-                                  thickness=config.thickness,
-                                  thickness_increment=config.thickness_increment,
-                                  growth_length=config.growth_length,
-                                  cylinder_length=config.cylinder_length,
-                                  max_length=config.max_length)
         # Bud spacing for L-System rules
         self.bud_spacing_age = config.bud_spacing_age
 
@@ -207,24 +321,28 @@ class BasicWood(ABC):
         Also checks that the branch is currently growing in the direction of the wire..."""
 
         # Vector from branch start to next wire point
-        v = np.zeros((1, 3))
         wire_dir = self.tying.wire_attach.attractor_dir
+        print(f"Branch {self.name}, indx {self.tying.last_tie_index}", end="")
         if np.dot(wire_dir, end_dir) < 0.0:
             # Oops, branch growing in the wrong direction - set to next wire point to enable reasonable
             # bending at tie down
             next_indx = self.tying.last_tie_index + 1
             if next_indx >= self.tying.wire_attach.attractor_pts.shape[1] - 1:
                 # off the end - return -1
+                print(" -1")
                 return -1
+            print(f" {next_indx}")
             return next_indx
 
-        for indx in range(self.tying.last_tie_index + 1, self.tying.wire_attach.attractor_pts.shape[1]):
+        for indx in range(self.tying.last_tie_index + 1, self.tying.wire_attach.attractor_pts.shape[0]):
             wire_point = self.tying.wire_attach.attractor_pts[indx, :]
             v = wire_point - end_pt
             if np.dot(v, wire_dir) >= 0.0:
+                print(f" {indx}")
                 return indx
 
         # Off the end of the wire
+        print(" -1")
         return -1
 
     def _get_x_wire_noise(self, pt_branch: np.array, tie_point: np.array):
@@ -342,8 +460,11 @@ class BasicWood(ABC):
         """
         if not self.tying.is_tied:
             return
+
+        self.logger.info(f"Updating guide {self.name} {self.tying.last_tie_index}")
         # Ran out of tie points
         if self.tying.last_tie_index >= self.tying.wire_attach.attractor_pts.shape[1]:
+            self.logger.info(f"  Off end")
             return
 
         # Case 1: We haven't started tying yet, so create a guide curve that goes from the end point
@@ -368,6 +489,7 @@ class BasicWood(ABC):
                 # Flag that we need to update the guide curve in the LString
                 self.tying.tie_needs_updating = True
         # Note: actual guide curve will be updated at EndEach hook, not here
+        self.logger.info(f"Done updating guide {self.name} {self.tying.last_tie_index} {self.tying.guide_points[-1]}")
 
     def tie_lstring(self, lstring, index):
         """Insert a SetGuide(...) after position `index` in `lstring`.

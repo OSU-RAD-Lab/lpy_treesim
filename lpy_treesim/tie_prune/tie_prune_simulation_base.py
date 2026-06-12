@@ -13,49 +13,12 @@ and implement architecture-specific methods like point generation.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import numpy as np
-from lpy_treesim.tie_prune.wire_support import Support
-from lpy_treesim.tie_prune.lpy_sring_prune_edit_fns import cut_from
-from lpy_treesim.tie_prune.tying import TyingState
 from scipy.optimize import linear_sum_assignment
-
-
-@dataclass
-class SimulationConfig(ABC):
-    """Base configuration class for tree training simulations.
-
-    Architecture-specific configs should inherit from this and add their own parameters.
-    Common parameters across all architectures are defined here.
-
-    """
-
-    # Tying and Pruning Intervals
-    num_iteration_tie: int = 5
-    num_iteration_prune: int = 16
-
-    # Energy Parameters
-    energy_distance_weight: float = 0.5  # Weight for distance in energy calculation
-    energy_threshold: float = 1.0  # Maximum energy threshold for tying
-
-    # Support parameters - override these to get support
-    start_height: float = 0.5
-    angle: float = 0.0
-    spacing_wires: float = 0.45
-    num_wires: int = 6
-    x_left: float = -1.0
-    x_right: float = 1.0
-
-    # Pruning Parameters
-    pruning_age_threshold: int = 6  # Age threshold for pruning untied branches
-
-    # L-System Parameters
-    derivation_length: int = 256  # Number of derivation steps - somewhere between 100 and 1000
-    use_generalized_cylinder: bool = False  # Whether to wrap new branches in @Gc/@Ge blocks
-
-    # Growth Parameters
-    tolerance: float = 1e-5  # Tolerance for comparison between floats
-
-    # Visualization Parameters
-    attractor_point_width: int = 10  # Width of attractor points in visualization
+from lpy_treesim.tie_prune.wire_support import Support
+from lpy_treesim.lpy_functions.lpy_sring_prune_edit_fns import cut_from
+from lpy_treesim.tie_prune.tying import TyingState
+from lpy_treesim.lpy_functions.lpy_geometry_fns import create_bezier_curve
+from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
 
 
 class TreeSimulationBase(ABC):
@@ -96,6 +59,12 @@ class TreeSimulationBase(ABC):
         self.branch_attractor = None
 
         self.generate_attractor_grids()
+
+    @abstractmethod
+    def create_trunk_curve(self):
+        """ Create an initial growth curve for the tree trunk. Defaults to straight up"""
+        curve = create_bezier_curve(x_range = (-1, 1), y_range = (-1, 1), z_range = (0, 10), rng=self.config.lpy_rng)
+        return curve
 
     @abstractmethod
     def generate_attractor_grids(self):
@@ -254,7 +223,6 @@ class TreeSimulationBase(ABC):
         # Remove branch and its children from parent_map
         if parent_map and branch_name in parent_map:
             del parent_map[branch_name]
-
     
     def prune(self, lstring, branch_hierarchy, parent_map=None):
         """

@@ -11,33 +11,11 @@ from lpy_treesim.tree_generation.tree_structure import TreeStructure
 import logging
 
 
-
-# 2. Define a Python Debugger listener to trap L-Py engine callbacks
-class PythonLsystemDebugger:
-    def __init__(self):
-        self.step_count = 0
-
-    def step_begin(self, current_string):
-        """Called at the start of a generation step."""
-        print(f"\n--- [Debugger] Starting Generation {self.step_count} ---")
-        print(f"Current full string: {current_string}")
-
-    def rule_applied(self, matching_module, replaced_by_string):
-        """Called every time a specific production rule matches a module."""
-        print(f"  [Match] Module '{matching_module.name}' matched a rule!")
-        print(f"  [Rewrite] '{matching_module}' ---> '{replaced_by_string}'")
-
-    def step_end(self, final_string):
-        """Called when all modules in the generation step are processed."""
-        print(f"Resulting full string: {final_string}")
-        self.step_count += 1
-
-
 class TreeBuilder:
     logger = logging.getLogger(__name__)
     b_init = False
 
-    BASE_LPY_PATH = Path(__file__).resolve().parents[1] / "tree_models" / "base_tree" / "base_lpy.lpy"
+    BASE_LPY_PATH = Path(__file__).resolve().parents[1] / "lpy_functions" / "base_lpy.lpy"
 
     def __init__(self,
                  tree_name: str,

@@ -25,6 +25,7 @@ class LocationState:
     start_dir: any = None  # Vector3
     end: any = None        # Vector3
     end_dir: any = None    # Vector3
+    end_left_dir: any = None # Vector3
 
     def __post_init__(self):
         """Initialize Vector3 points if not provided."""
@@ -36,6 +37,8 @@ class LocationState:
             self.end = Vector3(0, 0, 0)
         if self.end_dir is None:
             self.end_dir = Vector3(0, 0, 0)
+        if self.end_left_dir is None:
+            self.end_left_dir = Vector3(0, 0, 0)
 
 
 @dataclass
@@ -45,8 +48,13 @@ class GrowthState:
 
     # Set these
     vigour_level: float = 0.5  # Between 0 and 1
+
+    # Random number to use - this is here for repeatability
+    #  These both come from config
+    lpy_rng: np.random.Generator = None
+    num_iter_per_year: int = -1
+
     length: float = 0.0
-    config: SimulationConfig = None  # Random number generator and number of iteration steps are in here
 
     # These will be set to values based on vigour and default
     mean_length_growth_per_year: list[float] = None
@@ -55,10 +63,12 @@ class GrowthState:
     target_thickness_ratio = 0.025 / 1.0   # Ideal
 
     # For tracking growth; year will increment when a year completes
-    year: int = 0
-    current_iteration: int = 0
+    year: int = 0   # Increments after every pruning cycle
+    age: int = 0    # In iterations
 
     def __post_init__(self):
+        if self.num_iter_per_year == -1:
+            raise ValueError("Growth state: Forgot to set num_iter_per_year")
         if self.mean_length_growth_per_year is None:
             #  Really should never get here... but between 0.5 and 1.5 meters
             self.mean_length_growth_per_year = [(1.0 - self.vigour_level) * 0.5 + self.vigour_level * 1.5]
@@ -92,31 +102,51 @@ class GrowthState:
         return self.length_growth_per_year() / self.config.num_iter_per_year
 
     def get_thickness_increment(self):
-        thick_incr = self.config.lpy_rng.normal(loc=self.mean_thickness_growth_per_iteration, scale=0.1 * self.mean_thickness_growth_per_iteration)
+        thick_incr = self.lpy_rng.normal(loc=self.mean_thickness_growth_per_iteration, scale=0.1 * self.mean_thickness_growth_per_iteration)
         return thick_incr
 
     def get_length_increment(self):
         mean_length_growth = self.mean_length_growth_per_iteration()
-        length_incr = self.config.lpy_rng.normal(loc=mean_length_growth, scale=0.1 * mean_length_growth)
+        length_incr = self.lpy_rng.normal(loc=mean_length_growth, scale=0.1 * mean_length_growth)
         return length_incr
 
 
 @dataclass
-class InfoState:
-    """Information/metadata for a wood object."""
+class BudSite:
+    """ Potential bud site on branch. These should be positioned (roughly) evenly along the branch at the
+    desired spacing. The bud can be vegetative or fruiting or mixed - if mixed, will produce a fruiting bud
+    followed by a vegetative bud with some probability (as opposed to just a vegetative or fruiting bud)
+    If a bud is marked as dormant then it has nothing growihg out of it (yet)
+    Dormant buds can transition to vegetative or fruiting or mixed buds with some probability, spawning either a branch or a spur or both
+    Pruned buds mark where wood was pruned; they can be resurrected by turning them back to dormant"""
+    class BudType(Enum):
+        VEGETATIVE = "vegetative"
+        FRUITING = "fruiting"
+        MIXED = "mixed"
+        DORMANT = "dormant"
+        PRUNED = "pruned"
 
-    age: int = 0
-    cut: bool = False
-    prunable: bool = True
-    num_branches: int = 0
-    color: tuple = (0, 0, 0)  # RGB tuple for visualization
-    material: int = 0
-    branch_dict: any = None  # collections.deque
+    bud_state: BudType = BudType.DORMANT
+    bud_break_probabilities: tuple = (0.1, 0.3, 0.25)  # eg, will turn vegetative with 0.1 prob, fruiting w 0.3 - 0.1
 
-    def __post_init__(self):
-        """Initialize branch_dict if not provided."""
-        if self.branch_dict is None:
-            self.branch_dict = collections.deque()
+    # Random number to use - this is here for repeatability
+    lpy_rng: np.random.Generator = None
+
+    def is_bud_break(self):
+        if self.bud_state is not BudSite.BudType.DORMANT:
+            return False
+        # Controls when the buds break
+        prob = self.lpy_rng.uniform(0.0, 1.0)
+        if prob < self.bud_break_probabilities[0]:
+            self.bud_state = BudSite.BudType.VEGETATIVE
+        elif prob < self.bud_break_probabilities[1]:
+            self.bud_state = BudSite.BudType.FRUITING
+        elif prob < self.bud_break_probabilities[2]:
+            self.bud_state = BudSite.BudType.MIXED
+        else:
+            return False
+        # Breaking out of dormancy
+        return True
 
 
 @dataclass
@@ -161,13 +191,6 @@ class BasicWoodConfig:
        returned true) then lpy inserts a parameter with the branch and the number of buds (set to zero)
        Should bud defines a segment length to be total"""
 
-    class BudType(Enum):
-        VEGETATIVE = "vegetative"
-        FRUITING = "fruiting"
-        MIXED = "mixed"
-        dead = "dead"
-
-    copy_from: any = None
     bud_spacing_range: tuple = (0.0254, 0.0508)  # 1-2 inches
     yearly_growth_range: list[tuple] = None      # eg (1, 24, 36) would be up to 1 year between 24 and 36 inches
     phyllotaxis_angle: float = 144               # How to space buds around a branch
@@ -178,15 +201,18 @@ class BasicWoodConfig:
 
     # Random number to use - this is here for repeatability
     lpy_rng: np.random.Generator = None
+    num_iter_per_year: int = -1
 
     # Curve parameters for L-System growth guides
     #   Since growth curves are always in the heading direction (0,0,1) wiggle in x and y but straight in z
     curve_x_range: tuple = (-0.25, 0.25)  # X bounds for Bezier curve control points
     curve_y_range: tuple = (-0.25, 0.25)  # Y bounds for Bezier curve control points
-    curve_z_range: tuple = (0, 1)  # Z bounds for Bezier curve control points
+    curve_z_range: tuple = (1.0, 2.0)     # Z bounds for Bezier curve control points
 
     def __post_init__(self):
         """Validate geometric parameters for consistent growth behavior."""
+        if self.num_iter_per_year == -1:
+            raise ValueError("BasicWoodConfig: Forgot to initialize num_iter_per_year")
         if self.yearly_growth_range is None:
             """ Set to 24-36 inches the first 3 years, 12-24 for the next 3, then 2-6"""
             self.yearly_growth_range = []
@@ -195,8 +221,8 @@ class BasicWoodConfig:
             self.yearly_growth_range.append((0.05, 0.1))
         if self.bud_angle is None:
             self.bud_angle = {"vegetative": (15, 35),
-                              "fruiting": (30-50),
-                              "mixed": (15-50)}
+                              "fruiting": (30, 50),
+                              "mixed": (15, 50)}
 
 
 class BasicWood(ABC):
@@ -207,24 +233,19 @@ class BasicWood(ABC):
         except copy.Error:
             raise copy.Error(f"Not able to copy {obj}") from None
 
-    def __init__(self, config:BasicWoodConfig=None, copy_from:BasicWoodConfig=None, **kwargs):
-
+    def __init__(self, config:BasicWoodConfig):
+        # Unique name
+        self.name: str = ""
+        x
         # This will be over-riden with either the copy from or input config
-        self.config: BasicWoodConfig() = None
-
-        if copy_from is None and config is None:
-            raise ValueError("Either 'config' or 'copy_from' must be provided")
-
-        # Handle config-based initialization
-        if copy_from:
-            self.__copy_constructor__(copy_from)
-            return
-
+        self.config = config
         if not isinstance(config, BasicWoodConfig):
-            raise ValueError("config must be provided when copy_from is None")
+            raise ValueError("Config should be tree-specific config inherited from BasicWoodConfig")
 
+        # Track end points and orientations
         self.location = LocationState()
-        # Tying status - contains what type of tying and current tie state and points to tie to
+
+        # Tying status - contains what type of tying and attractor points, plus guide points
         self.tying = TyingState(tie_type=config.tie_type)
 
         # Growth Variables  - generate variables stochastically
@@ -234,40 +255,25 @@ class BasicWood(ABC):
         if vigor > 1.0:
             vigor = 1.0
 
+        # Use the vigor setting plus some noise to establish growth rate for this branch
         mgl = []
-        for mgl_item in self.yearly_growth_range:
-            mean_range = (1.0 - vigor) * mgl_item[1] + vigor * mgl_item[2]
-            mean_sd = 0.2 * (mgl_item[2] - mgl_item[1])
-            mgl = self.config.lpy_rng.normal(mean_range, mean_sd)
-            mgl.append(mgl_item[0], mgl_it)
+        for mgl_item in self.config.yearly_growth_range:
+            for yr in range(0, mgl_item[0]):
+                mean_range = (1.0 - vigor) * mgl_item[1] + vigor * mgl_item[2]
+                mean_sd = 0.2 * (mgl_item[2] - mgl_item[1])
+                mean_value = self.config.lpy_rng.normal(mean_range, mean_sd)
+                mgl.append(mean_value)
+
+        # Start thickness range - probably could be a parameter, but...
+        start_thickness = (1.0 - vigor) * 0.0005 + vigor * 0.0015
         self.growth = GrowthState(vigour_level=vigor,
-                                  config=self.config,
+                                  thickness=start_thickness,
+                                  mean_length_growth_per_year=mgl,
+                                  num_iter_per_year=self.config.num_iter_per_year,
+                                  lpy_rng=self.config.lpy_rng)
 
-                                  )
-
-        vigour_level: float = 0.5  # Between 0 and 1
-        length: float = 0.0
-        config: SimulationConfig = None  # Random number generator and number of iteration steps are in here
-
-        # These will be set to values based on vigour and default
-        mean_length_growth_per_year: list[float] = None
-        thickness: float = 0.001
-        mean_thickness_growth_per_iteration: float = 0.1
-        target_thickness_ratio = 0.025 / 1.0  # Ideal
-
-        # For tracking growth; year will increment when a year completes
-        year: int = 0
-        current_iteration: int = 0
-        # Information Variables
-        self.info = InfoState(order=config.order, color=config.color, material=config.material, prunable=config.prunable)
-        # Bud spacing for L-System rules
-        self.bud_spacing_age = config.bud_spacing_age
-
-        # Curve parameters for L-System growth guides
-        self.curve_x_range = config.curve_x_range
-        self.curve_y_range = config.curve_y_range
-        self.curve_z_range = config.curve_z_range
-
+        # Where all the budsites are located
+        self.bud_sites = []
         self.logger = logging.getLogger(__name__)
 
     def __copy_constructor__(self, copy_from):
@@ -276,9 +282,11 @@ class BasicWood(ABC):
             setattr(self, k, v)
         # self.__dict__.update(update_dict)
 
-    @abstractmethod
-    def is_bud_break(self, num_buds_segment: int) -> bool:
-        """This method defines if a bud will break or not -> returns true for yes, false for not. Input can be any variables"""
+    def is_add_bud_site(self, num_buds_segment: int) -> bool:
+        """This method defines if a bud site should be added here. By default, generates a random number
+        for the next bud site location relative to the last and if it's far enough away, generate one"""
+
+
         pass
         # Example
         # prob_break = self.bud_break_prob_func(num_buds, self.num_buds_segment)

@@ -203,7 +203,7 @@ bud(bud_parameters, hierarchy) :
       curve = create_bezier_curve(x_range=new_branch.curve_x_range, y_range=new_branch.curve_y_range, z_range=new_branch.curve_z_range, rng=lpy_rng)
       nproduce SetGuide(curve, new_branch.growth.max_length)
     # Produce new branch with random orientation and growth object
-    nproduce @RGetPos(new_branch.location.start)GetHead(new_branch.location.start_dir)WoodStart(ParameterSet(type = new_branch))/(lpy_rng.random()*360)&(lpy_rng.random()*360)grow_object(new_branch, hierarchy)GetPos(new_branch.location.end)GetHead(new_branch.location.end_dir)
+    nproduce @RGetPos(new_branch.location.start)GetHead(new_branch.location.start_dir)WoodStart(ParameterSet(type = new_branch))/(lpy_rng.random()*360)&(lpy_rng.random()*360)grow_object(new_branch, hierarchy)GetPos(new_branch.location.end)GetHead(new_branch.location.end_dir)GetLeft(new_branch.location.end_left_dir)
     if generalized_cylinder:
       nproduce @Ge
     produce ]bud(bud_parameters, hierarchy)
@@ -211,9 +211,9 @@ bud(bud_parameters, hierarchy) :
 trunk(hierarchy):
   print(f"In trunk {generalized_cylinder}")
   if generalized_cylinder:
-    produce [SetGuide(trunk_guide_curve, main_trunk.growth.max_length)@GcGetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)@Ge]
+    produce [SetGuide(trunk_guide_curve, main_trunk.growth.max_length)@GcGetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)GetLeft(main_trunk.location.end_left_dir)@Ge]
   else:
-    produce [SetGuide(trunk_guide_curve, main_trunk.growth.max_length)GetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)]
+    produce [SetGuide(trunk_guide_curve, main_trunk.growth.max_length)GetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)GetLeft(main_trunk.location.end_left_dir)]
 
 # -----------------------------------------------------------------------------
 # GEOMETRIC INTERPRETATION (HOMOMORPHISM)

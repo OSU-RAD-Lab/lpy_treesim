@@ -5,6 +5,7 @@ Configure via extern variables passed to Lsystem(..., variables).
 import os
 import sys
 from pathlib import Path
+import numpy as np
 
 
 # Ensure repository root is importable regardless of working directory
@@ -15,9 +16,7 @@ TREE_BASE_DIR = Path(__file__).resolve().parents[1] / "tree_models" / "base_tree
 if TREE_BASE_DIR not in sys.path:
     sys.path.append(str(TREE_BASE_DIR))
 
-from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood, TreeBranch, BasicWoodConfig
-from lpy_treesim.lpy_functions.lpy_helper_functions import *
-from lpy_treesim.lpy_functions.lpy_geometry_fns import create_bezier_curve
+from lpy_treesim.lpy_functions.lpy_helper_functions import start_each_common, end_each_common, resolve_attr
 
 # -----------------------------------------------------------------------------
 # EXTERNALLY CONFIGURABLE PATHS
@@ -30,10 +29,7 @@ extern(
   trunk_class_path = "tree_models.Envy.Envy_prototypes.Trunk",
   simulation_config_class_path = "tree_models.Envy.Envy_simulation.EnvySimulationConfig",
   simulation_class_path = "tree_models.Envy.Envy_simulation.EnvySimulation",
-  axiom_pitch = 0.0,
-  axiom_yaw = 0.0,
   branch_hierarchy = {},
-  per_cylinder_label = None,
   seed_value = None,
 )
 
@@ -53,17 +49,14 @@ simulation_config = SimulationConfigClass(seed=seed_value)
 tree_sim = SimulationClass(simulation_config)
 
 prototype_builder_fn = resolve_attr(prototype_builder_path)
-basicwood_prototypes = prototype_builder_fn(rng=simulation_config.lpy_rng)
+basicwood_prototypes = prototype_builder_fn(lpy_rng=lpy_rng, sim_config=simulation_config)
 Trunk = resolve_attr(trunk_class_path)
 
-main_trunk = Trunk(copy_from = basicwood_prototypes['trunk'])
+# Create the main trunk
+main_trunk = Trunk(basicwood_prototypes['trunk'])
 
 # Build trellis geometry and attractor grids.
 trellis_support = tree_sim.support
-
-# Grab how often to tie and how often to prune
-tying_interval_iterations = simulation_config.num_iteration_tie
-pruning_interval_iterations = simulation_config.num_iteration_prune
 
 # Track parent/child relationships for tying/pruning decisions.
 branch_hierarchy["root"] = [main_trunk]
@@ -72,7 +65,7 @@ branch_hierarchy["root"] = [main_trunk]
 # The branch_hierarchy dictionary is also parsed in tree_builder.export_hierarchy_dict to create the
 #   skeleton and branch id names
 parent_map = {}  # Internal bookkeeping for efficient parent lookup
-branch_hierarchy[main_trunk.name] =[]
+branch_hierarchy[main_trunk.name] = []
 
 
 # L-Py callbacks delegate to the Python helpers so architectures share logic.
@@ -87,14 +80,13 @@ def EndEach(lstring):
     lstring,
     branch_hierarchy,
     tree_sim,
-    tying_interval_iterations,
-    pruning_interval_iterations,
     simulation_config,
     main_trunk,
     getIterationNb,
   )
-#generalized_cylinder = getattr(simulation_config, "use_generalized_cylinder", True)
-generalized_cylinder = True
+
+generalized_cylinder = getattr(simulation_config, "use_generalized_cylinder", True)
+
 # =============================================================================
 # L-SYSTEM GRAMMAR DEFINITION
 # =============================================================================
@@ -110,15 +102,17 @@ generalized_cylinder = True
 # WoodStart is a marker in the string that is used in the "tie" method in the simulation to identify where to put the tying curve
 module Attractors     # Trellis support structure that guides branch growth
 module grow_object(plant_segment, hierarchy)    # Growing plant parts (trunk, branches, spurs) with length/thickness and hierarchy dict
+module bud_site(plant_segment, hierarchy)       # Adding a bud site along a branch
 module bud(bud_parameters, hierarchy)           # Dormant buds that can break to produce new branches with hierarchy dict
 module branch        # Branch segments in the L-System string
+module BudStart      # Starting point of a bud
 module WoodStart     # Starting point of wood segments (used for tying operations)
 module trunk
 # -----------------------------------------------------------------------------
 # GLOBAL L-SYSTEM PARAMETERS
 # -----------------------------------------------------------------------------
 # Create a growth guide curve for the initial trunk development
-trunk_guide_curve = tree_sim.create_trunk_curve()
+trunk_guide_curve = main_trunk.growth_guide_curve()
 
 # -----------------------------------------------------------------------------
 # AXIOM (STARTING STRING)
@@ -126,7 +120,7 @@ trunk_guide_curve = tree_sim.create_trunk_curve()
 # The initial L-System string that begins the simulation.
 # Starts with the trellis attractors, sets up the trunk guide curve,
 # and initializes the trunk growth with proper orientation and hierarchy dict.
-Axiom: Attractors(trellis_support)trunk(branch_hierarchy)
+Axiom: Attractors(trellis_support)+(main_trunk.angle_wrt_ground())Trunk(branch_hierarchy)
 
 # -----------------------------------------------------------------------------
 # DERIVATION PARAMETERS
@@ -141,87 +135,30 @@ derivation length: simulation_config.derivation_length
 # These rules control the growth, branching, and development of the tree.
 
 production:
-# GROW_OBJECT PRODUCTION RULE
-# Handles the growth of plant segments (trunk, branches, spurs)
-# Determines whether to continue growing, stop, or produce buds
-grow_object(plant_segment, hierarchy):
-  if plant_segment == None:
-    # Null object - terminate this branch
-    produce *
-  if plant_segment.length >= plant_segment.growth.max_length:
-    # Maximum length reached - stop growing this segment
-    nproduce *
-  else:
-    # Continue growing - update segment properties
-    if plant_segment.contour is not None:
-      nproduce SetContour(plant_segment.contour)
-    # Update internal state of the plant segment
-    plant_segment.grow_one()
-    # Update physical representation
-    # Instance-level labeling, unique color per branch instance
-    r, g, b = color_manager.get_unique_color(plant_segment.name)
-    nproduce SetColor(r,g,b)
-    # Produce internode segments (n cylinders per growth step)
-    n_cylinders = int(plant_segment.growth.growth_length / plant_segment.growth.cylinder_length)
-    for i in range(n_cylinders):
-      nproduce I(plant_segment.growth.cylinder_length, plant_segment.growth.thickness, plant_segment)
-    # Produce bud (after all cylinders in this growth step)
-    if plant_segment.pre_bud_rule(plant_segment, simulation_config):
-      for generated in plant_segment.post_bud_rule(plant_segment, simulation_config):
-        nproduce new(generated[0], *generated[1])
-    if should_bud(plant_segment, simulation_config):
-        # Age-based bud production for lateral branching
-        nproduce bud(ParameterSet(type = plant_segment, num_buds = 0), hierarchy)
-        if plant_segment.post_bud_rule(plant_segment, simulation_config):
-          for generated in plant_segment.post_bud_rule(plant_segment, simulation_config):
-            nproduce new(generated[0], *generated[1])
-    produce grow_object(plant_segment, hierarchy)
-
-# BUD PRODUCTION RULE
-# Controls bud break and branch initiation
-# Determines when buds activate to produce new branches
-bud(bud_parameters, hierarchy) :
-  if bud_parameters.type.is_bud_break(bud_parameters.num_buds):
-    # Bud break condition met - create new branch
-    new_branch = bud_parameters.type.create_branch()
-    if new_branch == None:
-      # Branch creation failed - terminate
-      produce *
-    # Register new branch in parent-child relationship tracking
-    branch_hierarchy[new_branch.name] = []  # Initialize empty children list for new branch
-    branch_hierarchy[bud_parameters.type.name].append(new_branch)  # Add to parent's children
-    parent_map[new_branch.name] = bud_parameters.type.name  # Map child to parent for efficient lookup
-    # Update branch counters
-    bud_parameters.num_buds+=1
-    bud_parameters.type.info.num_branches+=1
-    
-    nproduce [
-    if generalized_cylinder:
-      nproduce @Gc
-    if hasattr(new_branch, 'curve_x_range'):
-      # Curved branches: set up custom growth guide curve
-      curve = create_bezier_curve(x_range=new_branch.curve_x_range, y_range=new_branch.curve_y_range, z_range=new_branch.curve_z_range, rng=lpy_rng)
-      nproduce SetGuide(curve, new_branch.growth.max_length)
-    # Produce new branch with random orientation and growth object
-    nproduce @RGetPos(new_branch.location.start)GetHead(new_branch.location.start_dir)WoodStart(ParameterSet(type = new_branch))/(lpy_rng.random()*360)&(lpy_rng.random()*360)grow_object(new_branch, hierarchy)GetPos(new_branch.location.end)GetHead(new_branch.location.end_dir)GetLeft(new_branch.location.end_left_dir)
-    if generalized_cylinder:
-      nproduce @Ge
-    produce ]bud(bud_parameters, hierarchy)
 
 trunk(hierarchy):
   print(f"In trunk {generalized_cylinder}")
+  nproduce[
+  nproduce SetGuide(trunk_guide_curve, main_trunk.growth.max_length)
   if generalized_cylinder:
-    produce [SetGuide(trunk_guide_curve, main_trunk.growth.max_length)@GcGetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)GetLeft(main_trunk.location.end_left_dir)@Ge]
-  else:
-    produce [SetGuide(trunk_guide_curve, main_trunk.growth.max_length)GetPos(main_trunk.location.start)GetHead(main_trunk.location.start_dir)WoodStart(ParameterSet(type = main_trunk))&(axiom_pitch)/(axiom_yaw)grow_object(main_trunk, hierarchy)GetPos(main_trunk.location.end)GetHead(main_trunk.location.end_dir)GetLeft(main_trunk.location.end_left_dir)]
+    nproduce @Gc
+  nproduce GetPos(main_trunk.location.start)
+  nproduce GetHead(main_trunk.location.start_dir)
+  nproduce WoodStart(ParameterSet(type = main_trunk))
+  # nproduce grow_object(main_trunk, hierarchy)
+  nproduce GetPos(main_trunk.location.end)
+  nproduce GetHead(main_trunk.location.end_dir)
+  nproduce GetLeft(main_trunk.location.end_left_dir)
+  if generalized_cylinder:
+    nproduce @Ge
+  produce ]
 
 # -----------------------------------------------------------------------------
 # GEOMETRIC INTERPRETATION (HOMOMORPHISM)
 # -----------------------------------------------------------------------------
 interpretation:
 I(s,r,o):
-  new_radius = o.growth.get_thickness_increment()
-  produce I(s,r+new_radius,o) F(s, new_radius)
+  produce I(s,o.growth.diameter,o) F(s, o.growth.diameter)
 
 S(a,r,o):
   # Map abstract L-System modules to concrete 3D geometry for rendering.

@@ -85,3 +85,9 @@ class SimulationConfig(ABC):
             if current_iteration % prune_iteration:
                 return True
         return False
+
+    def do_year_increment(self, current_iteration: int):
+        if current_iteration % self.num_iter_per_year == 1:
+            if current_iteration > 1:
+                return True
+        return False

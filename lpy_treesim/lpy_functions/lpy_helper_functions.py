@@ -29,18 +29,16 @@ from openalea.lpy import Lsystem, newmodule
 import numpy as np
 from typing import Callable, Dict, Iterable
 import importlib
-from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import TreeBranch
+from lpy_treesim.tie_prune.tie_prune_simulation_base import SimulationConfig
+from lpy_treesim.tree_models.base_tree.basic_wood_config import BasicWoodConfig
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicTrunk
 from lpy_treesim.tie_prune.tie_prune_simulation_base import TreeSimulationBase
-
-def should_bud(plant_segment, simulation_config):
-    """Determine if a plant segment should produce a bud"""
-    return np.isclose(plant_segment.info.age % plant_segment.bud_spacing_age, 0, atol=simulation_config.tolerance)
 
 
 def start_each_common(lstring,
                       branch_hierarchy: Dict[str, Iterable],
                       tree_sim: TreeSimulationBase,
-                      main_trunk: TreeBranch,
+                      main_trunk: BasicTrunk,
 ):
     """Shared pre-iteration tying preparation logic.
     @param lstring - the actual lstring being generated
@@ -64,18 +62,20 @@ def start_each_common(lstring,
 def end_each_common(lstring,
                     branch_hierarchy: Dict[str, Iterable],
                     tree_sim: TreeSimulationBase,
-                    tying_interval_iterations: int,
-                    pruning_interval_iterations: int,
-                    simulation_config,
-                    main_trunk,
+                    simulation_config: SimulationConfig,
+                    main_trunk: BasicTrunk,
                     get_iteration_number: Callable[[], int],
 ):
     """Shared post-iteration tying and pruning orchestration."""
     current_iteration = get_iteration_number() + 1
 
-    if current_iteration % tying_interval_iterations == 0:
+    if simulation_config.do_trunk_tying(current_iteration):
+        # Pin tree trunk one iteration before branches so vectors
+        #   update correctly
         if tree_sim.trunk_attractor:
             main_trunk.update_guide()
+
+    if simulation_config.do_branch_tying(current_iteration):
 
         branches = branch_hierarchy[main_trunk.name]
         # Estimate of cost to tie branches to open wire attachments
@@ -92,9 +92,13 @@ def end_each_common(lstring,
         while tree_sim.tie(lstring):
             pass
 
-    if current_iteration % pruning_interval_iterations == 0:
+    if simulation_config.do_pruning(current_iteration):
         while tree_sim.prune(lstring, branch_hierarchy):
             pass
+
+    if simulation_config.do_year_increment(current_iteration):
+        for item in branch_hierarchy.items():
+            item.add_year()
 
     return lstring
 

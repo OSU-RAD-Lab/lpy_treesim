@@ -1,48 +1,23 @@
-from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWoodConfig, TyingState
+from lpy_treesim.tie_prune.tying import TyingState
+from lpy_treesim.tree_models.base_tree.bud_site import BudSite
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicSpur, BasicBranch, BasicTrunk
 from lpy_treesim.lpy_functions.lpy_helper_functions import *
+from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvention
+from lpy_treesim.tie_prune.tie_prune_simulation_base import SimulationConfig
 
 
-class Spur(TreeBranch):
-    def __init__(self, config=None, copy_from=None, prototype_dict: dict=None):
-        super().__init__(config, copy_from, prototype_dict, )
-        return
-
-    def is_bud_break(self, num_buds_segment):
-        if num_buds_segment >= self.growth.max_buds_segment:
-            return False
-        return self.rng.random() < 0.1 * (1 - num_buds_segment / self.growth.max_buds_segment)
+class SideBranch(BasicBranch):
+    def __init__(self, config):
+        super().__init__(config)
 
     def create_branch(self):
-        return None
+        # Create another side branch
+        new_branch = SideBranch(config=self.config.configs_dict["side_branch"])
+        return new_branch
 
-    def pre_bud_rule(self, plant_segment, simulation_config):
-        return None
-
-    def post_bud_rule(self, plant_segment, simulation_config):
-        # radius = plant_segment.growth.thickness * simulation_config.thickness_multiplier
-        # # return L-Py module directly
-        # # from openalea.lpy import newModule
-        # return [('@O', [float(radius)])]
-        return None
-
-
-class TertiaryBranch(TreeBranch):
-    def __init__(self, config=None, copy_from=None, prototype_dict: dict=None):
-        super().__init__(config, copy_from, prototype_dict, )
-        return
-
-    def is_bud_break(self, num_buds_segment):
-        if num_buds_segment >= self.growth.max_buds_segment:
-            return False
-        if self.rng.random() < 0.005 * self.growth.growth_length * (1 - num_buds_segment / self.growth.max_buds_segment):
-            return True
-
-    def create_branch(self):
-        if self.rng.random() > 0.8:
-            new_ob = Branch(copy_from=self.prototype_dict["side_branch"])
-        else:
-            new_ob = Spur(copy_from=self.prototype_dict["spur"])
-        return new_ob
+    def create_spur(self):
+        new_spur = BasicSpur(config = self.config.configs_dict["spur"])
+        return new_spur
 
     def pre_bud_rule(self, plant_segment, simulation_config):
         return None
@@ -51,27 +26,18 @@ class TertiaryBranch(TreeBranch):
         return None
 
 
-class Branch(TreeBranch):
-    def __init__(self, config=None, copy_from=None, prototype_dict: dict=None):
-        super().__init__(config, copy_from, prototype_dict, )
-        return
-
-    def is_bud_break(self, num_buds_segment : int) -> bool:
-        if num_buds_segment >= self.growth.max_buds_segment:
-            return False
-        if self.rng.random() < 0.2 * (1 - num_buds_segment / self.growth.max_buds_segment):
-            return True
-        return False
+class PrimaryBranch(BasicBranch):
+    def __init__(self, config):
+        super().__init__(config)
 
     def create_branch(self):
-        try:
-            if self.rng.random() > 0.9:
-                new_ob = TertiaryBranch(copy_from=self.prototype_dict["side_branch"])
-            else:
-                new_ob = Spur(copy_from=self.prototype_dict["spur"])
-        except:
-            return None
-        return new_ob
+        # Create another side branch
+        new_branch = SideBranch(config=self.config.configs_dict["side_branch"])
+        return new_branch
+
+    def create_spur(self):
+        new_spur = BasicSpur(config=self.config.configs_dict["spur"])
+        return new_spur
 
     def pre_bud_rule(self, plant_segment, simulation_config):
         return None
@@ -80,25 +46,19 @@ class Branch(TreeBranch):
         return None
 
 
-class Trunk(TreeBranch):
+class Trunk(BasicTrunk):
     """Details of the trunk while growing a tree, length, thickness, where to attach them etc"""
 
-    def __init__(self, config=None, copy_from=None, prototype_dict: dict=None):
-        super().__init__(config, copy_from, prototype_dict, )
-        return
-
-    def is_bud_break(self, num_buds_segment):
-        if num_buds_segment >= self.growth.max_buds_segment:
-            return False
-        if self.rng.random() > 0.05 * self.length / self.growth.max_length * (
-            1 - num_buds_segment / self.growth.max_buds_segment
-        ):
-            return False
-        return True
+    def __init__(self, config):
+        super().__init__(config)
 
     def create_branch(self):
-        if self.rng.random() > 0.1:
-            return Branch(copy_from=self.prototype_dict["branch"])
+        new_branch = PrimaryBranch(config=self.config.configs_dict["primary_branch"])
+        return new_branch
+
+    def create_spur(self):
+        new_spur = BasicSpur(config=self.config.configs_dict["spur"])
+        return new_spur
 
     def pre_bud_rule(self, plant_segment, simulation_config):
         return None
@@ -106,80 +66,76 @@ class Trunk(TreeBranch):
     def post_bud_rule(self, plant_segment, simulation_config):
         return None
 
-def build_basicwood_prototypes(rng: np.random.Generator):
-    # growth_length = 0.1
-    basicwood_prototypes = {}
+    def angle_wrt_ground(self):
+        return 45
+
+
+def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: SimulationConfig = None):
+    """ For cherries, we have the trunk which generates vertical leaders (side branches that turn into
+         vertical leaders). Each vertical leader generates side branches fairly regularly; these side
+         branches are mostly spurs (just fruiting sites) with the occaisionally grow too much branch.
+        Side branches can generate more side branches, although with diminishing growth rates"""
+
+    if lpy_rng is None:
+        lpy_rng = np.random.default_rng()
+
+    bud_angle_probs = {BudSite.BudType.VEGETATIVE: (15, 35),
+                       BudSite.BudType.FRUITING: (30, 50),
+                       BudSite.BudType.MIXED: (15, 50)}
 
     # Create configs for cleaner prototype setup
-    spur_config = BasicWoodConfig(
-        max_buds_segment=2,
-        max_length=0.075,
-        thickness=0.003,
-        growth_length=0.05 / 14.0,    # Roughly 2 inches per cycle
-        cylinder_length=0.025 / 14.0,        # Split each internode in half
-        thickness_increment=0.0005,
-        color=(0, 255, 0),
-        bud_spacing_age=1,  # Spurs bud every 1 age unit
-        curve_x_range=(-0.2, 0.2),  # Tighter bounds for spur curves
-        curve_y_range=(-0.2, 0.2),  # Tighter bounds for spur curves
-        curve_z_range=(-1, 1),  # Same Z range
-        rng=rng
-    )
+    spur_config = BasicWoodConfig(bud_spacing_range=(0.001, 0.002),  # Use for spacing each year's fruit location
+                                  yearly_growth_range=[(1, 0.1, 0.15), (3, 0.0025, 0.05)], # Grows 1-2 inches per year
+                                  taper_amount=0.01, # Ends in a point
+                                  curve_x_range=(-0.02, 0.02),
+                                  curve_y_range=(-0.02, 0.02),
+                                  color=TreeNamingConvention.semantic_color("spur"),
+                                  num_iter_per_year=sim_config.num_iter_per_year,
+                                  lpy_rng=lpy_rng)
 
-    side_branch_config = BasicWoodConfig(
-        max_buds_segment=2,
-        max_length=0.6,      # Can grow up to 1.5-2 ft
-        thickness=0.005,
-        growth_length=0.05 / 14.0,
-        cylinder_length=0.025 / 14.0,
-        thickness_increment=0.0005,
-        color=(0, 255, 0),
-        bud_spacing_age=2,  # Tertiary branches bud every 3 age units
-        curve_x_range=(-0.5, 0.5),  # Moderate bounds for tertiary branches
-        curve_y_range=(-0.5, 0.5),  # Moderate bounds for tertiary branches
-        curve_z_range=(-1, 1),  # Same Z range
-        rng=rng
-    )
+    side_branch_config = BasicWoodConfig(bud_spacing_range=(0.01, 0.02),  # Slightly less than the vertical leaders
+                                         yearly_growth_range=[(1, 0.025, 0.05), (3, 0.0025, 0.05)], # 4-12 inches, dropping to 1-2 inches
+                                         taper_amount=0.1, # Gets skinny
+                                         bud_angle_probs=bud_angle_probs,
+                                         bud_break_probs=(0.05, 0.5, 0.55),
+                                         curve_x_range=(-0.1, 0.1),
+                                         curve_y_range=(-0.1, 0.1),
+                                         color=TreeNamingConvention.semantic_color("branch"),
+                                         num_iter_per_year=sim_config.num_iter_per_year,
+                                         lpy_rng=lpy_rng)
 
-    # Tip the trunk over
-    trunk_config = BasicWoodConfig(
-        max_buds_segment=5,
-        tie_type=TyingState.TyingType.TIE_ALONG,
-        max_length=2.29,     # 5-6 feet, plus 20inches off the ground = 6*12 + 20 = 90 inches
-        thickness=0.02,
-        thickness_increment=0.00001,
-        growth_length=0.05 / 14.0,
-        cylinder_length=0.025 / 14.0,
-        color=(255, 0, 0),
-        bud_spacing_age=2,  # Trunk buds every 4 age units
-        curve_x_range=(-0.3, 0.3),  # Conservative bounds for trunk
-        curve_y_range=(-0.3, 0.3),  # Conservative bounds for trunk
-        curve_z_range=(-0.5, 0.5),  # Tighter Z range for trunk
-        prunable=False,
-        rng=rng
-    )
+    primary_branch_config = BasicWoodConfig(bud_spacing_range=(0.0254, 0.0508),  # 1-2 inches
+                                            yearly_growth_range=[(1, 0.6, 0.9), (2, 0.5, 0.7), (3, 0.15, 0.3), (4, 0.05, 0.15)], # 24-36 inches per year, tapering off
+                                            taper_amount=0.2, # Not too skinny
+                                            bud_angle_probs=bud_angle_probs,
+                                            bud_break_probs=(0.2, 0.6, 0.8), # Most buds break as fruiting
+                                            tie_type=TyingState.TyingType.TIE_ACROSS,
+                                            curve_x_range=(-0.2, 0.2),
+                                            curve_y_range=(-0.2, 0.2),
+                                            color=TreeNamingConvention.semantic_color("branch"),
+                                            num_iter_per_year=sim_config.num_iter_per_year,
+                                            lpy_rng=lpy_rng)
 
-    # Vertical leaders
-    branch_config = BasicWoodConfig(
-        max_buds_segment=2,
-        tie_type=TyingState.TyingType.TIE_ACROSS,
-        max_length=2.5,
-        thickness=0.01,
-        thickness_increment=0.001,
-        growth_length=0.1,
-        cylinder_length=0.02,
-        color=(255, 150, 0),
-        bud_spacing_age=2,  # Branches bud every 2 age units
-        curve_x_range=(-0.4, 0.4),  # Moderate bounds for primary branches
-        curve_y_range=(-0.4, 0.4),  # Moderate bounds for primary branches
-        curve_z_range=(-1, 1),  # Same Z range
-        rng=rng
-    )
+    trunk_config = BasicWoodConfig(bud_spacing_range=(0.0254, 0.0508),  # 1-2 inches
+                                   yearly_growth_range=[(1, 0.6, 0.9), (2, 0.5, 0.7), (3, 0.15, 0.3), (4, 0.05, 0.15)], # 24-36 inches per year, tapering off
+                                   taper_amount=0.4, # Not too skinny
+                                   bud_angle_probs=bud_angle_probs,
+                                   bud_break_probs=(0.6, 0.7, 0.8), # Most buds break as vegetative
+                                   tie_type=TyingState.TyingType.TIE_ALONG,
+                                   curve_x_range=(-0.2, 0.2),
+                                   curve_y_range=(-0.2, 0.2),
+                                   color=TreeNamingConvention.semantic_color("trunk"),
+                                   num_iter_per_year=sim_config.num_iter_per_year,
+                                   lpy_rng=lpy_rng)
 
     # Setup prototypes using configs
-    basicwood_prototypes["spur"] = Spur(config=spur_config, prototype_dict=basicwood_prototypes)
-    basicwood_prototypes["side_branch"] = TertiaryBranch(config=side_branch_config, prototype_dict=basicwood_prototypes)
-    basicwood_prototypes["trunk"] = Trunk(config=trunk_config, prototype_dict=basicwood_prototypes)
-    basicwood_prototypes["branch"] = Branch(config=branch_config, prototype_dict=basicwood_prototypes)
+    basicwood_prototypes = {}
+    basicwood_prototypes["spur"] = spur_config
+    basicwood_prototypes["side_branch"] = side_branch_config
+    basicwood_prototypes["primary_branch"] = primary_branch_config
+    basicwood_prototypes["trunk"] = trunk_config
+
+    for _, item in basicwood_prototypes.items():
+        item.configs_dict = basicwood_prototypes
 
     return basicwood_prototypes

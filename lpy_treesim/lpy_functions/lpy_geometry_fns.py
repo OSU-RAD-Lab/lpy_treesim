@@ -23,8 +23,6 @@ from openalea.plantgl.all import (
     BezierCurve,
 )
 import numpy as np
-from typing import Callable, Dict, Iterable
-import importlib
 
 
 def angle_between(angle, min_angle, max_angle):
@@ -93,12 +91,10 @@ def generate_noisy_branch_curve(radius: float, rng: np.random.Generator, num_con
     return NurbsCurve(control_points, degree=min(num_control_points - 1, 3), stride=num_control_points * 100)
 
 
-def create_noisy_branch_contour(
-    radius,
-    noise_factor,
-    rng: np.random.Generator,
-    num_points=100,
-):
+def create_noisy_branch_contour(radius,
+                                noise_factor,
+                                rng: np.random.Generator,
+                                num_points=100,):
     """
     Create a noisy 2D contour for branch cross-sections.
 
@@ -142,9 +138,11 @@ def create_noisy_branch_contour(
     return Polyline2D(point_array)
 
 
-def create_bezier_curve(
-    num_control_points=6, x_range=(-2, 2), y_range=(-2, 2), z_range=(0, 10), rng: np.random.Generator = None
-) -> BezierCurve:
+def create_bezier_curve(num_control_points=6,
+                        x_range=(-2, 2),
+                        y_range=(-2, 2),
+                        total_length=10.0,
+                        rng: np.random.Generator=None) -> BezierCurve:
     """
     Create a randomized 3D Bezier curve for growth guidance.
 
@@ -156,15 +154,18 @@ def create_bezier_curve(
         num_control_points: Number of control points for the Bezier curve
         x_range: Tuple (min_x, max_x) defining the x-coordinate range
         y_range: Tuple (min_y, max_y) defining the y-coordinate range
-        z_range: Tuple (min_z, max_z) defining the z-coordinate range
+        total_length: Max z
         seed_value: Random seed for reproducible curve generation
 
     Returns:
         BezierCurve: PlantGL Bezier curve object for growth guidance
     """
 
+    if rng == None:
+        rng = np.random.default_rng()
+
     # Generate control points with progressive z-coordinates
-    z_values = np.linspace(z_range[0], z_range[1], num_control_points)
+    z_values = np.linspace(0.0, total_length, num_control_points)
     control_points = []
 
     for z_value in z_values:

@@ -26,12 +26,6 @@ class UFOSimulationConfig(SimulationConfig):
     So iterations between tying should be around 24/1.7 = 14 (assuming mean bud spacing of 1.7)
     """
 
-    # Override base defaults for UFO-specific values
-    num_iteration_tie: int = 14
-    num_iteration_prune: int = 14
-    pruning_age_threshold: int = 14  # Prune once a year
-    derivation_length: int = 160
-
     # UFO-specific Support Structure
     start_height: float = 0.5   # 20 inches
     angle: float = 0.0
@@ -45,9 +39,6 @@ class UFOSimulationConfig(SimulationConfig):
     ufo_x_spacing: float = 0.3
     ufo_z_value: float = 1.4
     ufo_y_value: float = 0
-
-    # UFO-specific Growth Parameters
-    thickness_multiplier: float = 1.2  # Multiplier for internode thickness
 
     use_generalized_cylinders: bool = True
 
@@ -78,7 +69,7 @@ class UFOSimulation(TreeSimulationBase):
         return self.support
 
     def create_trunk_curve(self):
-        """ Create an initial growth curve that is at a 45 degree angle (which is how trees are planged)"""
+        """ Create an initial growth curve that is at a 45 degree angle (which is how trees are planted)"""
         control_pts = []
         n_pts = 6
         angle = np.pi / 4.0

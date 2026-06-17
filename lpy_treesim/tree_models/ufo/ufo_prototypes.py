@@ -16,7 +16,7 @@ class SideBranch(BasicBranch):
         return new_branch
 
     def create_spur(self):
-        new_spur = BasicSpur(config = self.config.configs_dict["spur"])
+        new_spur = BasicSpur(config=self.config.configs_dict["spur"])
         return new_spur
 
     def pre_bud_rule(self, plant_segment, simulation_config):
@@ -84,9 +84,9 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                        BudSite.BudType.MIXED: (15, 50)}
 
     # Create configs for cleaner prototype setup
-    spur_config = BasicWoodConfig(bud_spacing_range=(0.001, 0.002),  # Use for spacing each year's fruit location
-                                  yearly_growth_range=[(1, 0.1, 0.15), (3, 0.0025, 0.05)], # Grows 1-2 inches per year
-                                  taper_amount=0.01, # Ends in a point
+    spur_config = BasicWoodConfig(bud_spacing_range=(0.001, 0.002),  # Use for spacing each age_in_years's fruit location
+                                  yearly_growth_range=[(1, 0.1, 0.15), (3, 0.0025, 0.05)],  # Grows 1-2 inches per age_in_years
+                                  taper_amount=0.01,  # Ends in a point
                                   curve_x_range=(-0.02, 0.02),
                                   curve_y_range=(-0.02, 0.02),
                                   color=TreeNamingConvention.semantic_color("spur"),
@@ -94,8 +94,9 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                   lpy_rng=lpy_rng)
 
     side_branch_config = BasicWoodConfig(bud_spacing_range=(0.01, 0.02),  # Slightly less than the vertical leaders
-                                         yearly_growth_range=[(1, 0.025, 0.05), (3, 0.0025, 0.05)], # 4-12 inches, dropping to 1-2 inches
-                                         taper_amount=0.1, # Gets skinny
+                                         yearly_growth_range=[(1, 0.025, 0.05), (3, 0.0025, 0.05)],  # 4-12 inches, dropping to 1-2 inches
+                                         taper_amount=0.1,    # Gets skinny
+                                         prune_length=0.15,   # Prune past 6 inches
                                          bud_angle_probs=bud_angle_probs,
                                          bud_break_probs=(0.05, 0.5, 0.55),
                                          curve_x_range=(-0.1, 0.1),
@@ -105,10 +106,12 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                          lpy_rng=lpy_rng)
 
     primary_branch_config = BasicWoodConfig(bud_spacing_range=(0.0254, 0.0508),  # 1-2 inches
-                                            yearly_growth_range=[(1, 0.6, 0.9), (2, 0.5, 0.7), (3, 0.15, 0.3), (4, 0.05, 0.15)], # 24-36 inches per year, tapering off
-                                            taper_amount=0.2, # Not too skinny
+                                            # 24-36 inches per age_in_years, tapering off
+                                            yearly_growth_range=[(1, 0.6, 0.9), (2, 0.5, 0.7), (3, 0.15, 0.3), (4, 0.05, 0.15)],
+                                            taper_amount=0.2,   # Not too skinny
+                                            prune_length=1.2 * sim_config.end_height(),
                                             bud_angle_probs=bud_angle_probs,
-                                            bud_break_probs=(0.2, 0.6, 0.8), # Most buds break as fruiting
+                                            bud_break_probs=(0.2, 0.6, 0.8),   # Most buds break as fruiting
                                             tie_type=TyingState.TyingType.TIE_ACROSS,
                                             curve_x_range=(-0.2, 0.2),
                                             curve_y_range=(-0.2, 0.2),
@@ -117,10 +120,12 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                             lpy_rng=lpy_rng)
 
     trunk_config = BasicWoodConfig(bud_spacing_range=(0.0254, 0.0508),  # 1-2 inches
-                                   yearly_growth_range=[(1, 0.6, 0.9), (2, 0.5, 0.7), (3, 0.15, 0.3), (4, 0.05, 0.15)], # 24-36 inches per year, tapering off
-                                   taper_amount=0.4, # Not too skinny
+                                   # 24-36 inches per age_in_years, tapering off
+                                   yearly_growth_range=[(1, 0.6, 0.9), (2, 0.5, 0.7), (3, 0.15, 0.3), (4, 0.05, 0.15)],
+                                   taper_amount=0.3,  # Not too skinny
+                                   prune_length=1.1 * (sim_config.x_right - sim_config.x_left),
                                    bud_angle_probs=bud_angle_probs,
-                                   bud_break_probs=(0.6, 0.7, 0.8), # Most buds break as vegetative
+                                   bud_break_probs=(0.6, 0.7, 0.8),  # Most buds break as vegetative
                                    tie_type=TyingState.TyingType.TIE_ALONG,
                                    curve_x_range=(-0.2, 0.2),
                                    curve_y_range=(-0.2, 0.2),
@@ -129,13 +134,15 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                    lpy_rng=lpy_rng)
 
     # Setup prototypes using configs
-    basicwood_prototypes = {}
-    basicwood_prototypes["spur"] = spur_config
-    basicwood_prototypes["side_branch"] = side_branch_config
-    basicwood_prototypes["primary_branch"] = primary_branch_config
-    basicwood_prototypes["trunk"] = trunk_config
+    basicwood_prototypes = {"spur": spur_config,
+                            "side_branch": side_branch_config,
+                            "primary_branch": primary_branch_config,
+                            "trunk": trunk_config}
 
-    for _, item in basicwood_prototypes.items():
+    for item in basicwood_prototypes.values():
         item.configs_dict = basicwood_prototypes
+        # Pad out the yearly growth rate so that it matches the total number of simulation years
+        if item.yearly_growth_range[-1][0] < sim_config.n_years:
+            item.yearly_growth_range.append((sim_config.n_years, item.yearly_growth_range[-1][1], item.yearly_growth_range[-1][2]))
 
     return basicwood_prototypes

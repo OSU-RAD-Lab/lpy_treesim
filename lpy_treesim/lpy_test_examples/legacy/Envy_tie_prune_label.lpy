@@ -254,7 +254,7 @@ def tie(lstring):
 def pruning_strategy(lstring):  # Remove remnants of cut
     cut = False  # Initialize the cut flag
     for j, i in enumerate(lstring):  # Loop through each element in the lstring
-        if i.name == 'C' and i[0].type.info.age > 6 and i[0].type.tying.is_tied == False and i[0].type.info.cut == False and i[0].type.info.prunable and i[0].type.tying.guide_target==-1:
+        if i.name == 'C' and i[0].type.info.age_in_iterations > 6 and i[0].type.tying.is_tied == False and i[0].type.info.cut == False and i[0].type.info.prunable and i[0].type.tying.guide_target==-1:
             i[0].type.info.cut = True  # Set the cut flag to True
             lstring = cut_from(j, lstring)  # Cut the branch using string manipulation
             #TODO: Remove branch from parent_child dict and wire
@@ -318,7 +318,7 @@ grow_object(o) :
     produce *
   else:
     if o.length >= o.growth.max_length:
-      o.info.age += 1
+      o.info.age_in_iterations += 1
       nproduce *
     else:
       # Get object's usual color and apply it
@@ -346,7 +346,7 @@ grow_object(o) :
       else:
         # If o is a Trunk, Branch, or NonTrunk, simply produce the internodes 
         nproduce I(o.growth.growth_length, o.growth.thickness, o) 
-        if np.isclose(o.info.age%bud_spacing_age,0, atol = 0.01):
+        if np.isclose(o.info.age_in_iterations % bud_spacing_age, 0, atol = 0.01):
           nproduce bud(ParameterSet(type=o, num_buds=0))
         produce grow_object(o)
 

@@ -67,15 +67,13 @@ def end_each_common(lstring,
                     get_iteration_number: Callable[[], int],
 ):
     """Shared post-iteration tying and pruning orchestration."""
-    current_iteration = get_iteration_number() + 1
-
-    if simulation_config.do_trunk_tying(current_iteration):
+    if simulation_config.do_trunk_tying(tree_sim.current_iteration):
         # Pin tree trunk one iteration before branches so vectors
         #   update correctly
         if tree_sim.trunk_attractor:
             main_trunk.update_guide()
 
-    if simulation_config.do_branch_tying(current_iteration):
+    if simulation_config.do_branch_tying(tree_sim.current_iteration):
 
         branches = branch_hierarchy[main_trunk.name]
         # Estimate of cost to tie branches to open wire attachments
@@ -92,13 +90,16 @@ def end_each_common(lstring,
         while tree_sim.tie(lstring):
             pass
 
-    if simulation_config.do_pruning(current_iteration):
+    if simulation_config.do_pruning(tree_sim.current_iteration):
         while tree_sim.prune(lstring, branch_hierarchy):
             pass
 
-    if simulation_config.do_year_increment(current_iteration):
-        for item in branch_hierarchy.items():
-            item.add_year()
+    if simulation_config.do_year_increment(tree_sim.current_iteration):
+        for items in branch_hierarchy.values():
+            for item in items:
+                item.add_year()
+
+    tree_sim.current_iteration = get_iteration_number() + 1
 
     return lstring
 

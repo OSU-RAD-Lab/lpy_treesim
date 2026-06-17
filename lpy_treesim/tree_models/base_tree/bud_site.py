@@ -1,13 +1,9 @@
 """
-Defines the abstract class BasicWood along with helper classes LocationState, GrowthState, InfoState and TyingState
+Defines a bud site; bud sites mark where on the branch/trunk spurs/branches can grow
 """
 
-from abc import ABC, abstractmethod
-from openalea.plantgl.all import *
-import copy
+from abc import ABC
 import numpy as np
-from openalea.plantgl.scenegraph.cspline import CSpline
-import collections
 from dataclasses import dataclass
 from enum import Enum
 
@@ -19,7 +15,7 @@ class BudSite(ABC):
     """ Potential bud site on branch. These should be positioned (roughly) evenly along the branch at the
     desired spacing. The bud can be vegetative or fruiting or mixed - if mixed, will produce a fruiting bud
     followed by a vegetative bud with some probability (as opposed to just a vegetative or fruiting bud)
-    If a bud is marked as dormant than it has nothing growihg out of it (yet)
+    If a bud is marked as dormant because it has nothing growihg out of it (yet)
     Dormant buds can transition to vegetative or fruiting or mixed buds with some probability, spawning either a branch or a spur or both
     Pruned buds mark where wood was pruned; they can be resurrected by turning them back to dormant"""
 
@@ -44,9 +40,10 @@ class BudSite(ABC):
     dist_along: float = 0.0
 
     # Parent branch - used to call create branch/spur on parent
-    wood_parent = None
-    branch_child = None
-    spur_child = None
+    #   Note - can't declare type because that creates a circular reference
+    wood_parent: object = None
+    branch_child: object = None
+    spur_child: object = None
 
     # Random number to use - this is here for repeatability
     lpy_rng: np.random.Generator = None

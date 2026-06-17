@@ -157,6 +157,10 @@ def create_mesh(tree: TreeStructure, tex_image_file_name)->(Trimesh, Trimesh, Tr
 
         v_offset += len(mc["vertices"])
 
+    if len(vs) == 0:
+        print(f"Warning: No mesh parts, bailing")
+        return None, None, None
+
     vs_np = np.array(vs, dtype=np.float64)
     vs_tex_np = np.array(vs_tex, dtype=np.float32)
     vs_cols_np = np.array(vs_col, dtype=np.uint8)
@@ -230,13 +234,16 @@ def plant_gl_scene_to_vertices_and_faces(scene, tree_mapping: dict, color_mappin
     return n_cyl
 
 
-def write_mesh(fname: str, tree: TreeNamingConvention, image_name: str):
+def write_mesh(fname: str, tree: TreeStructure, image_name: str):
     # Use TriMesh to write out the mesh in a handful of forms
     #  - tm texture mapping coordinates
     #  - fc faces colored by semantic labels
     #  - vc vertices colored by instance labels
     mesh_uv, mesh_fc, mesh_vc = create_mesh(tree=tree, tex_image_file_name=image_name)
-    mesh_uv.export(str(fname) + "_tm.obj")
-    mesh_fc.export(str(fname) + "_fc.ply")
-    mesh_fc.export(str(fname) + "_fc.obj")
-    mesh_vc.export(str(fname) + "_vc.ply")
+    if mesh_uv is not None:
+        mesh_uv.export(str(fname) + "_tm.obj")
+    if mesh_fc is not None:
+        mesh_fc.export(str(fname) + "_fc.ply")
+        mesh_fc.export(str(fname) + "_fc.obj")
+    if mesh_vc is not None:
+        mesh_vc.export(str(fname) + "_vc.ply")

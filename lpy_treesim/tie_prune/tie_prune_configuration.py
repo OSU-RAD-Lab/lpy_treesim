@@ -14,7 +14,7 @@ class SimulationConfig(ABC):
 
     Contains information on:
     - The support structure
-    - Default values for how many iterations equals one year's worth of growth
+    - Default values for how many iterations equals one age_in_years's worth of growth
     - Parameters for determining amount of effort needed to tie a branch to a wire
     """
 
@@ -43,7 +43,6 @@ class SimulationConfig(ABC):
 
     # L-System Parameters
     n_years:int = 6  # for a total of num_iter_per_year * n_year derivation steps
-    use_generalized_cylinder: bool = False  # Whether to wrap new branches in @Gc/@Ge blocks
 
     # Growth Parameters
     tolerance: float = 1e-5  # Tolerance for comparison between floats
@@ -60,29 +59,33 @@ class SimulationConfig(ABC):
     def __post_init__(self):
         self.lpy_rng = np.random.default_rng(self.seed)
 
+    def end_height(self):
+        return self.start_height + self.num_wires * self.spacing_wires
+
     @property
     def derivation_length(self):
         return self.n_years * self.num_iter_per_year
 
     def do_trunk_tying(self, current_iteration: int):
         # Tie the iteration before branch tying so shape propagates correctly
-        if current_iteration % (self.num_iter_per_year - 1):
+        return False
+        if current_iteration % (self.num_iter_per_year - 1) == 0:
             return True
         return False
 
     def do_branch_tying(self, current_iteration: int):
         # Tie the iteration before branch tying so shape propagates correctly
-        if current_iteration % (self.num_iter_per_year):
+        if current_iteration % (self.num_iter_per_year) == 0:
             return True
         return False
 
     def do_pruning(self, current_iteration: int):
         # Prune the iteration after tying (and at 3/4 of growth if doing summer pruning)
-        if current_iteration % (self.num_iter_per_year + 1):
+        if current_iteration % (self.num_iter_per_year + 1) == 0:
             return True
         if self.prune_summer:
             prune_iteration = 3 * self.num_iter_per_year // 4
-            if current_iteration % prune_iteration:
+            if current_iteration % prune_iteration == 0:
                 return True
         return False
 

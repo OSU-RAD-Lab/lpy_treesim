@@ -19,7 +19,8 @@ class TreeBuilder:
 
     def __init__(self,
                  tree_name: str,
-                 seed_value: int):
+                 seed_value: int,
+                 interactive: bool):
 
         if not  TreeBuilder.b_init:
             # Ensure repository root is discoverable for prototype imports
@@ -32,6 +33,9 @@ class TreeBuilder:
         # For unique labeling of branch cylinders
         self.color_manager = ColorManager()
 
+        # Show tree or not while building
+        self.b_interactive = interactive
+
         # Where to find the source code and start values for the trunk
         self.extern_vars = {
             "prototype_builder_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_prototypes.build_basicwood_prototypes",
@@ -43,6 +47,7 @@ class TreeBuilder:
             "axiom_pitch": 0.0,
             "axiom_yaw": 0.0,
             "seed_value": seed_value,
+            "interactive": self.b_interactive
         }
         # Enable batch mode before displaying anything
         self.__lsystem = Lsystem(str(TreeBuilder.BASE_LPY_PATH), self.extern_vars)
@@ -54,32 +59,70 @@ class TreeBuilder:
     def convert_vec3_to_tuple(vec3) -> tuple:
         return (float(vec3.x), float(vec3.y), float(vec3.z))
 
-    def generate_tree(self, b_interactive=True):
+    @staticmethod
+    def make_string_readable(lstring: str):
+
+        str_copy = lstring.split('[')
+        indent = 0
+        check_keywords = ["Support", "Trunk", "Branch", "Spur"]
+        for piece in str_copy:
+            if "]" in piece:
+                indent -= 2
+            else:
+                indent += 2
+            n_spaces = " " * indent
+            piece = piece.replace("]", "]\n" + n_spaces)
+            piece = piece.replace("WoodStart", "\n" + n_spaces + "WoodStart")
+            piece = piece.replace("ParameterSet(type=", "PS(")
+
+            print(f"{n_spaces}[", end='')
+            split_names = piece.split("<")
+            if piece[0] != "<":
+                print(split_names[0], end='')
+                split_names = split_names[1:]
+            for sn in split_names:
+                if len(sn) == 0:
+                    continue
+                k = sn.split(">")
+                print_kw = ""
+                for kw in check_keywords:
+                    if kw in k[0]:
+                        print_kw = kw
+                        break
+
+                if "name" in k[1]:
+                    print(f"{k[1][6:]}", end='')
+                else:
+                    print(f"{print_kw}{k[1]}", end='')
+                for left_over in k[2:]:
+                    print(f"{left_over}", end='')
+
+    def generate_tree(self):
         """ Actually build the lpy string
         @param b_interactive - do you want to have to hit a key every iteration?"""
 
         lstring = self.__lsystem.axiom
 
-        if b_interactive:
+        if self.b_interactive:
             Viewer.start()
 
         for iteration in range(self.__lsystem.derivationLength):
             # One iteration - replace symbols
             lstring = self.__lsystem.derive(lstring, iteration, 1)
 
-            string_readable = str(lstring).replace("]", "]\n")
-            print(f"{string_readable}\n\n")
+            print(f"Iteration {iteration}")
+            self.make_string_readable(str(lstring))
 
             # DO NOT TAKE OUT THIS LINE - or everything will stop working
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
             interpreted_string = self.__lsystem.interpret(lstring)
 
-            if b_interactive:
+            if self.b_interactive:
                 scene =  self.__lsystem.sceneInterpretation(interpreted_string)
                 Viewer.display(scene)
                 input("Press Enter to continue...")
 
-        if b_interactive:
+        if self.b_interactive:
             Viewer.exit()
 
         # String and scene (which has geometry)

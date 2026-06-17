@@ -23,6 +23,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--tree-name", type=str, default="envy", help="Tree family to generate (UFO/Envy/etc.)")
     parser.add_argument("--texture-name", type=str, default="apple", help="Use/make all textures with this name")
     parser.add_argument("--verbose", action="store_true", help="Print progress details")
+    parser.add_argument("--interactive", action="store_true", help="Show tree growing")
     parser.add_argument(
         "--dataset-seed", type=int, default=None, help="Optional deterministic seed for dataset generation"
     )
@@ -74,7 +75,7 @@ def main():
         tree_seed = tree_rng.integers(low=0, high=1_000_000)
 
         # Initialize the class
-        lsb = TreeBuilder(tree_name=args.tree_name, seed_value=int(tree_seed))
+        lsb = TreeBuilder(tree_name=args.tree_name, seed_value=int(tree_seed), interactive=args.interactive)
 
         if args.verbose:
             print(f"INFO: Generating {args.tree_name} tree #{index:03d}")
@@ -82,7 +83,7 @@ def main():
 
         # Generates the l-string that everything is built off of, then converts it to the "scene"
         #   Also sets one color for each spur/branch/trunk instance (stored in branch_hierarchy)
-        lstring, scene = lsb.generate_tree(b_interactive=False)
+        lstring, scene = lsb.generate_tree()
 
         # Converts the scene to our tree structure.
         #   Mapping maps the unique ids from the lstring into our tree structure

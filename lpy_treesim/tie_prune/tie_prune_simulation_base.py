@@ -17,6 +17,8 @@ from scipy.optimize import linear_sum_assignment
 from lpy_treesim.tie_prune.wire_support import Support
 from lpy_treesim.lpy_functions.lpy_sring_prune_edit_fns import cut_from
 from lpy_treesim.tie_prune.tying import TyingState
+from lpy_treesim.tree_models.base_tree.bud_site import BudSite
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 from lpy_treesim.lpy_functions.lpy_geometry_fns import create_bezier_curve
 from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
 
@@ -57,6 +59,8 @@ class TreeSimulationBase(ABC):
         # Attractor grids will be added in generate_points
         self.trunk_attractor = None
         self.branch_attractor = None
+
+        self.current_iteration: int = 0  # Set in start_common
 
         self.generate_attractor_grids()
 
@@ -223,18 +227,46 @@ class TreeSimulationBase(ABC):
         # Remove branch and its children from parent_map
         if parent_map and branch_name in parent_map:
             del parent_map[branch_name]
-    
+
+    def prune_length(self, lstring, branch_hierarchy, parent_map=None):
+        """ This trims branches (not cuts them off) but if the cut-off bit has
+            buds then need to remove those branches. Call before tie-down to ensure that
+            you don't have to then cut off a tied-down branch..."""
+        for position, symbol in enumerate(lstring):
+            # Check if this is a WoodStart module (represents a branch)
+            if symbol.name == "WoodStart":
+                branch: BasicWood = symbol[0].type
+
+                # Check pruning criteria
+                buds = branch.prune_growth_length()
+                if buds is None:
+                    continue
+
+                for bud in buds:
+                    print(f"Pruning {bud.name}")
+                    # Remove the bud from the L-System string
+                    for bud_pos, symb in enumerate(lstring):
+                        if symb.name == "BudStart":
+                            bud_in_string: BudSite = symbol[0].type
+                            if bud_in_string.name == bud.name:
+                                lstring = cut_from(bud_pos, lstring)
+
+                    self.remove_children_from_hierarchy(bud, branch_hierarchy, parent_map)
+
+            return True
+        return False
+
     def prune(self, lstring, branch_hierarchy, parent_map=None):
         """
-        Prune old branches that exceed the age threshold and haven't been tied to wires.
+        Prune old branches that exceed the age_in_iterations threshold and haven't been tied to wires.
 
         This function implements the pruning strategy for the tree training simulation.
-        It identifies branches that have grown too old (exceeding the pruning age threshold)
+        It identifies branches that have grown too old (exceeding the pruning age_in_iterations threshold)
         but haven't been successfully tied to trellis wires. Such branches are considered
         unproductive and are removed from the L-System to encourage new growth.
 
         The pruning criteria are:
-        1. Branch age exceeds the configured pruning threshold
+        1. Branch age_in_iterations exceeds the configured pruning threshold
         2. Branch has not been tied to any trellis wire
         3. Branch has not already been marked for cutting
         4. Branch is prunable (respects the prunable flag)
@@ -262,18 +294,18 @@ class TreeSimulationBase(ABC):
         for position, symbol in enumerate(lstring):
             # Check if this is a WoodStart module (represents a branch)
             if symbol.name == "WoodStart":
-                branch = symbol[0].type
+                branch: BasicWood = symbol[0].type
 
                 # Check pruning criteria
-                age_exceeds_threshold = branch.info.age > self.config.pruning_age_threshold
+                age_exceeds_threshold = branch.growth.age_in_iterations > self.config.pruning_age_threshold
                 not_tied_to_wire = not branch.tying.is_tied
-                not_already_cut = not branch.info.cut
-                is_prunable = branch.info.prunable
+                not_already_cut = not branch.cut
+                is_prunable = branch.config.prunable
 
                 # Prune if all criteria are met
                 if age_exceeds_threshold and not_tied_to_wire and not_already_cut and is_prunable:
                     # Mark branch as cut to prevent re-processing
-                    branch.info.cut = True
+                    branch.cut = True
 
                     # Remove the branch from the L-System string
                     lstring = cut_from(position, lstring)

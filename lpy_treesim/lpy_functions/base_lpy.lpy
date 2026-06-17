@@ -30,6 +30,7 @@ extern(
   simulation_config_class_path = "tree_models.Envy.Envy_simulation.EnvySimulationConfig",
   simulation_class_path = "tree_models.Envy.Envy_simulation.EnvySimulation",
   branch_hierarchy = {},
+  interactive = False,
   seed_value = None,
 )
 
@@ -67,8 +68,11 @@ branch_hierarchy["root"] = [main_trunk]
 parent_map = {}  # Internal bookkeeping for efficient parent lookup
 branch_hierarchy[main_trunk.name] = []
 
+# Keep just names in the strings; this makes it much easier to read the strings
+names_to_objects = {main_trunk.name, main_trunk}
 
 # L-Py callbacks delegate to the Python helpers so architectures share logic.
+# TODO don't need to pass in main_trunk, esp when we split to two trunks
 def StartEach(lstring):
   """Proxy to shared tying preparation logic."""
   start_each_common(lstring, branch_hierarchy, tree_sim, main_trunk)
@@ -84,8 +88,6 @@ def EndEach(lstring):
     main_trunk,
     getIterationNb,
   )
-
-generalized_cylinder = getattr(simulation_config, "use_generalized_cylinder", True)
 
 # =============================================================================
 # L-SYSTEM GRAMMAR DEFINITION
@@ -108,6 +110,7 @@ module branch        # Branch segments in the L-System string
 module BudStart      # Starting point of a bud
 module WoodStart     # Starting point of wood segments (used for tying operations)
 module trunk
+module make_cylinders
 # -----------------------------------------------------------------------------
 # GLOBAL L-SYSTEM PARAMETERS
 # -----------------------------------------------------------------------------
@@ -120,7 +123,7 @@ trunk_guide_curve = main_trunk.growth_guide_curve()
 # The initial L-System string that begins the simulation.
 # Starts with the trellis attractors, sets up the trunk guide curve,
 # and initializes the trunk growth with proper orientation and hierarchy dict.
-Axiom: Attractors(trellis_support)+(main_trunk.angle_wrt_ground())Trunk(branch_hierarchy)
+Axiom: Attractors(trellis_support)&(main_trunk.angle_wrt_ground())trunk(branch_hierarchy)
 
 # -----------------------------------------------------------------------------
 # DERIVATION PARAMETERS
@@ -135,34 +138,102 @@ derivation length: simulation_config.derivation_length
 # These rules control the growth, branching, and development of the tree.
 
 production:
-
+# GROW_OBJECT PRODUCTION RULE
+# Handles the growth of plant segments (trunk, branches, spurs)
+# Determines whether to continue growing, stop, or produce buds
 trunk(hierarchy):
-  print(f"In trunk {generalized_cylinder}")
+  print(f"In trunk {}")
   nproduce[
-  nproduce SetGuide(trunk_guide_curve, main_trunk.growth.max_length)
-  if generalized_cylinder:
-    nproduce @Gc
   nproduce GetPos(main_trunk.location.start)
   nproduce GetHead(main_trunk.location.start_dir)
-  nproduce WoodStart(ParameterSet(type = main_trunk))
-  # nproduce grow_object(main_trunk, hierarchy)
+  nproduce WoodStart(ParameterSet(type=main_trunk, name=main_trunk.name))
+  nproduce SetGuide(trunk_guide_curve, main_trunk.growth.prune_length)
+  nproduce grow_object(main_trunk, hierarchy)
   nproduce GetPos(main_trunk.location.end)
   nproduce GetHead(main_trunk.location.end_dir)
   nproduce GetLeft(main_trunk.location.end_left_dir)
-  if generalized_cylinder:
-    nproduce @Ge
   produce ]
+
+make_cylinders(plant_segment):
+  print(f"Making cylinders for {plant_segment.name} Length {plant_segment.growth.length} step {plant_segment.config.cylinder_length}", end="")
+  # Instance-level labeling, unique color per branch instance
+  r, g, b = color_manager.get_unique_color(plant_segment.name)
+  nproduce SetColor(r, g, b)
+  start_diameter = plant_segment.growth.get_start_diameter()
+  end_diameter = plant_segment.growth.get_end_diameter()
+
+  print(f"Start diam {start_diameter} end diam {end_diameter}")
+  produce I(plant_segment, plant_segment.config.cylinder_length, start_diameter, end_diameter)
+  # Produce internode segments (n cylinders per growth step)
+  #n_cylinders = int(plant_segment.growth.length / plant_segment.config.cylinder_length)
+  #if n_cylinders < 1:
+  #  n_cylinders = 1
+  #step_along = plant_segment.growth.length / n_cylinders
+  #delta_t = 1.0 / n_cylinders
+
+  # At each cylinder, advance the turtle along step_along and change the diameter
+  #for i in range(n_cylinders):
+  #  t = i * delta_t
+  #  diameter = (1.0 - t) * start_diameter + t * end_diameter
+  #  nproduce I(step_along, diameter)
+
+grow_object(plant_segment, hierarchy):
+  if plant_segment == None:
+    # Null object - terminate this branch and generate cylinders
+    make_cylinders(plant_segment)
+    produce *
+  if plant_segment.growth.length > 1.1 * plant_segment.growth.prune_length:
+    # Maximum length reached - stop growing this segment. Will be pruned anyways
+    nproduce *
+  else:
+    # Continue growing - update segment properties
+    contour = plant_segment.contour_curve()
+    if contour is not None:
+      nproduce SetContour(contour)
+    # Update internal state of the plant segment
+    plant_segment.grow()
+    # Update physical representation
+    print(f"{tree_sim.current_iteration} of {simulation_config.derivation_length}")
+    if tree_sim.current_iteration >= simulation_config.derivation_length - 2:
+      # Simulation ending - generate the cylinders
+      produce make_cylinders(plant_segment)
+    # Produce bud (after all cylinders in this growth step)
+    if plant_segment.pre_bud_rule(plant_segment, simulation_config):
+      for generated in plant_segment.post_bud_rule(plant_segment, simulation_config):
+        nproduce new(generated[0], *generated[1])
+    if plant_segment.is_add_bud_site():
+        # Age-based bud production for lateral branching - add bud site
+        # nproduce bud_site(ParameterSet(type=plant_segment, name=plant_segment.name), hierarchy)
+        if plant_segment.post_bud_rule(plant_segment, simulation_config):
+          for generated in plant_segment.post_bud_rule(plant_segment, simulation_config):
+            nproduce new(generated[0], *generated[1])
+    produce grow_object(plant_segment, hierarchy)
+
 
 # -----------------------------------------------------------------------------
 # GEOMETRIC INTERPRETATION (HOMOMORPHISM)
+#  This only gets called in the interpolation step (called in tree builder) to create
+#  geometry. So you will not see F's in the string when you print it out
+#  Note: Not using generalized cylinders because we are going to manually stitch the
+#   mesh cylinders together anyways. We do want to control the tapering and the
+#   step size along the cylinders
 # -----------------------------------------------------------------------------
 interpretation:
-I(s,r,o):
-  produce I(s,o.growth.diameter,o) F(s, o.growth.diameter)
 
-S(a,r,o):
-  # Map abstract L-System modules to concrete 3D geometry for rendering.
-  produce F(a, r)
+I(plant_segment, step, start_diameter, end_diameter):
+  n_cylinders = int(plant_segment.growth.length / plant_segment.config.cylinder_length)
+  if n_cylinders < 1:
+    n_cylinders = 1
+  step_along = plant_segment.growth.length / n_cylinders
+  delta_t = 1.0 / n_cylinders
+
+  # At each cylinder, advance the turtle along step_along and change the diameter
+  for i in range(n_cylinders):
+    t = i * delta_t
+    diameter = (1.0 - t) * start_diameter + t * end_diameter
+    nproduce _(diameter) F(step_along)
+
+  produce *
 
 # -----------------------------------------------------------------------------
 # ATTRACTOR VISUALIZATION
@@ -173,6 +244,6 @@ Attractors(trellis_support):
   # Display enabled attractor points as visual markers
   trellis_support.check_valid()
   points_to_display = trellis_support.attractor_grid.get_enabled_points()
-  if len(points_to_display) > 0:
+  if interactive and len(points_to_display) > 0:
     produce [,(3) @g(PointSet(points_to_display,width=simulation_config.attractor_point_width))]
 

@@ -3,11 +3,9 @@ Defines the abstract class BasicWood along with helper classes LocationState, Gr
 """
 
 from abc import ABC, abstractmethod
-from openalea.plantgl.all import *
 import copy
 import numpy as np
 from openalea.plantgl.scenegraph.cspline import CSpline
-from dataclasses import dataclass
 
 from lpy_treesim.lpy_functions.lpy_geometry_fns import create_bezier_curve
 from lpy_treesim.tree_models.base_tree.basic_wood_growth_location import GrowthState, LocationState
@@ -40,6 +38,9 @@ class BasicWood(ABC):
         # Tying status - contains what type of tying and attractor points, plus guide points
         self.tying = TyingState(tie_type=config.tie_type)
 
+        # Track cut y/n
+        self.cut = False
+
         # Growth Variables  - generate variables stochastically
         vigor = self.config.lpy_rng.normal(0.5, 0.2)
         if vigor < 0.0:
@@ -49,20 +50,21 @@ class BasicWood(ABC):
 
         # Use the vigor setting plus some noise to establish growth rate for this branch
         mgl = []
+        start_year = 0
         for mgl_item in self.config.yearly_growth_range:
-            for yr in range(0, mgl_item[0]):
+            for yr in range(start_year, mgl_item[0]):
                 mean_range = (1.0 - vigor) * mgl_item[1] + vigor * mgl_item[2]
                 mean_sd = 0.2 * (mgl_item[2] - mgl_item[1])
                 mean_value = self.config.lpy_rng.normal(mean_range, mean_sd)
                 mgl.append(mean_value)
+                start_year += 1
 
-        # Start thickness range - probably could be a parameter, but...
-        start_diameter = (1.0 - vigor) * 0.0005 + vigor * 0.0015
         # Parameters controlling growth
         self.growth = GrowthState(vigour_level=vigor,
-                                  diameter=start_diameter,
                                   mean_length_growth_per_year=mgl,
+                                  prune_length=config.prune_length,
                                   num_iter_per_year=self.config.num_iter_per_year,
+                                  taper=self.config.taper_amount,
                                   lpy_rng=self.config.lpy_rng)
 
         # Where all the budsites are located
@@ -123,21 +125,32 @@ class BasicWood(ABC):
         """This method can define any internal changes happening to the properties of the class, such as reduction in thickness increment etc."""
         pass
 
-    @property
-    def length(self):
-        return self.growth.length
-
-    @length.setter
-    def length(self, length):
-        self.growth.length = length
-
     def grow(self):
-        self.growth.age += 1
-        self.growth.length += self.growth.get_length_increment()
-        self.growth.diameter += self.growth.get_diameter_increment()
+        self.growth.age_in_iterations += 1
+        length_incr = self.growth.get_length_increment()
+        self.growth.length += length_incr
+        self.growth.length_without_pruning += length_incr
+
+    def prune_growth_length(self):
+        """ Call during pruning step to prune back long growth"""
+        if self.growth.length_without_pruning > self.growth.prune_length:
+            # Add a bit of noise to model pruning cut noise
+            target_length = self.config.lpy_rng.normal(self.growth.prune_length, 0.01)
+            if target_length < 0.0001:
+                target_length = 0.0001
+
+            self.growth.length = target_length
+            prune_buds = []
+            for indx, bud in enumerate(self.bud_sites):
+                # These *SHOULD* be in length order
+                if bud.dist_along > target_length:
+                    prune_buds = self.bud_sites[indx:]
+                    del self.bud_sites[indx:]
+                    return prune_buds
+        return None
 
     def add_year(self):
-        self.growth.year += 1
+        self.growth.age_in_years += 1
 
     @abstractmethod
     def create_branch(self):
@@ -160,7 +173,11 @@ class BasicWood(ABC):
         return create_bezier_curve(num_control_points=6,
                                    x_range=self.config.curve_x_range,
                                    y_range=self.config.curve_y_range,
-                                   total_length=self.growth.max_length)
+                                   total_length=self.growth.prune_length)
+
+    def contour_curve(self):
+        # If you want a non-circular cross section... use lpy_geometry functions to make a contour
+        return None
 
     def update_guide(self):
         """ If the branch/trunk has grown past the last tie point then append more guide points
@@ -189,7 +206,7 @@ class BasicWood(ABC):
         # Case 3: We have grown past the last tie point and need to add to the guide curve
         # Sets self.tying.guide_points and self.tying.guide_length
         self.tying.tie_needs_updating = False
-        print(f"Branch {self.name}, end=")
+        print(f"Branch {self.name}", end="")
 
         if self.tying.last_tie_index == -1:
             self.tying.start_guide_points(self.location)

@@ -103,7 +103,7 @@ def tie_down(lstring):
   global branch_dict, pts
   tied = False
   for j,i in enumerate(lstring):
-    if i.name == 'C' and branch_dict[i[0].branch_id].tied == False and i[0].age > 3 and i[0].age < 21 :
+    if i.name == 'C' and branch_dict[i[0].branch_id].tied == False and i[0].age_in_iterations > 3 and i[0].age_in_iterations < 21 :
       curve = []
       i[0].tied = True
       branch_dict[i[0].branch_id].tied = True
@@ -205,7 +205,7 @@ A(t,o) :
        
 C(p):
   global branch_dict
-  p.age+=1
+  p.age_in_iterations+=1
   branch_dict[p.branch_id].age+=1
   branch_dict[p.branch_id].age = min(branch_dict[p.branch_id].age,21)
 Attractors :

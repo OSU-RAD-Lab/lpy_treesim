@@ -14,12 +14,12 @@ class BasicWoodConfig:
     During one LPy interation the branch will grow some amount along a guide curve (if tied) or along
       a starting direction, curving up.
     The intent is to mimic the tie/prune cycle, so growth parameters are given in terms of yearly growth
-    Given a fixed number of iterations per year, we can determine the rest of the parameters
+    Given a fixed number of iterations per age_in_years, we can determine the rest of the parameters
     Buds for cherries are (usually) clearly vegetative versus fruiting, apples are a mix
 
     For cherrys/apples (most fruit trees) growth in length and angle and bud placement can be characterized
       as follows:
-      - Amount a branch will grow in a given year (usually more in the first 1-3 years)
+      - Amount a branch will grow in a given age_in_years (usually more in the first 1-3 years)
       - Bud spacing along the branch (how far apart are buds, on average?)
       - Bud angle wrt the parent branch - this can vary by bud type (vegetative or fruit) and
       - Bud angle on the branch - spiral pattern, 2/5 phyllotaxis, ie, the next bud will be a rotation of
@@ -30,8 +30,8 @@ class BasicWoodConfig:
     [Note - these assume a dwarfing root stock of some sort]
 
     Given parameters:
-      - number of iterations that equal one year
-      - A list of yearly growth length ranges by age eg, 12-36" in first year, 12-24" in 3rd year
+      - number of iterations that equal one age_in_years
+      - A list of yearly growth length ranges by age_in_iterations eg, 12-36" in first age_in_years, 12-24" in 3rd age_in_years
       - Average bud spacing
       - Phyllotaxis angle
       - Bud angle range by type [vegetative versus fruiting, versus mixed]
@@ -51,12 +51,14 @@ class BasicWoodConfig:
        Should bud defines a segment length to be total"""
 
     bud_spacing_range: tuple = (0.0254, 0.0508)  # 1-2 inches
-    yearly_growth_range: list[tuple] = None      # eg (1, 24, 36) would be up to 1 year between 24 and 36 inches
+    yearly_growth_range: list[tuple] = None      # eg (1, 24, 36) would be up to 1 age_in_years between 24 and 36 inches
     taper_amount: float = 0.5                    # How much to taper by
     phyllotaxis_angle: float = 144               # How to space buds around a branch
     bud_angle_probs: dict = None                # Bud angle relative to branch; angle may depend on type of bud
     bud_break_probs: tuple = (0.1, 0.3, 0.35)   # EG , will turn vegetative with 0.1 prob, fruiting w 0.3 - 0.1
     tie_type: TyingState.TyingType = TyingState.TyingType.NO_TIE # How to tie this branch type to support
+    cylinder_length: float = 0.03                # Generate cylinders every inch or so
+    prune_length: float = 1000.0                 # If you want to have the branch pruned after a certain length...
     prunable: bool = True
 
     # Random number to use - this is here for repeatability

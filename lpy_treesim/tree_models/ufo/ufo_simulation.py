@@ -19,7 +19,7 @@ class UFOSimulationConfig(SimulationConfig):
     Buds are spaced 1-2 inches apart on dwarfing root stock (0.0254m - 0.0508m)
     Branches grow 12-24 inches in one season (mature), 24-36 inches (first 3 years)
       -- (0.305m - 0.61m) and (0.61m - 0.94m)
-    Target: 12-24 inches per year for best cherry production
+    Target: 12-24 inches per age_in_years for best cherry production
 
     For branches under three years they should grow 24-36 inches and have buds every 1-2 inches.
     From an lpy iteration standpoint, that's 24/2 = 12 to 36/1 = 36 growth steps (call it 24)
@@ -33,6 +33,7 @@ class UFOSimulationConfig(SimulationConfig):
     num_wires: int = 6          # Make a bit taller than 5
     x_left: float = 0.0         # Start at the trunk center
     x_right: float = 1.8        # 5-6 ' to the right
+    n_years:int = 4
 
     # UFO-specific Point Generation
     ufo_x_range: tuple = (0.65, 3)
@@ -73,7 +74,7 @@ class UFOSimulation(TreeSimulationBase):
         control_pts = []
         n_pts = 6
         angle = np.pi / 4.0
-        # Assume one year before first tie, should grow 24-36 inches, so make the guide curve at least 3 feet long (1 m)
+        # Assume one age_in_years before first tie, should grow 24-36 inches, so make the guide curve at least 3 feet long (1 m)
         curve_length = 1.0
         delta_step = curve_length / n_pts
         for n in range(0, n_pts):

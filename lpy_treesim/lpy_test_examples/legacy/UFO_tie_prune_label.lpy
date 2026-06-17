@@ -176,7 +176,7 @@ def get_energy_mat(branches, arch):
     for wire_id, wire in arch.branch_supports.items():
       if wire.num_branch>=1:
         continue
-      energy_matrix[branch_id][wire_id] = ed(wire.point, branch.location.start)/2+ed(wire.point,branch.location.end)/2#,+v.num_branches*10+branch.bend_energy(deflection, curr_branch.info.age)
+      energy_matrix[branch_id][wire_id] = ed(wire.point, branch.location.start)/2+ed(wire.point,branch.location.end)/2#,+v.num_branches*10+branch.bend_energy(deflection, curr_branch.info.age_in_iterations)
   return energy_matrix
 
 def decide_guide(energy_matrix, branches, arch):
@@ -241,7 +241,7 @@ def EndEach(lstring):
 def pruning_strategy(lstring): #Remove remnants of cut
   cut = False
   for j,i in enumerate(lstring):
-    if i.name == 'C' and i[0].type.info.age > 8 and i[0].type.tying.is_tied == False and i[0].type.info.cut == False:
+    if i.name == 'C' and i[0].type.info.age_in_iterations > 8 and i[0].type.tying.is_tied == False and i[0].type.info.cut == False:
       i[0].type.info.cut = True      
       lstring = cut_from(j, lstring)
       return True
@@ -277,7 +277,7 @@ grow_object(o) :
       produce I(o.growth.growth_length, o.growth.thickness, o)bud(ParameterSet(type = o, num_buds = 0))@O(o.growth.thickness*1.2)grow_object(o)
     else:
       nproduce I(o.growth.growth_length, o.growth.thickness, o)
-      if np.isclose(o.info.age%bud_spacing_age,0, atol = 0.01):
+      if np.isclose(o.info.age_in_iterations % bud_spacing_age, 0, atol = 0.01):
           nproduce bud(ParameterSet(type = o, num_buds = 0))
       produce grow_object(o)
     #produce I(o.growth_length, o.thickness, o)bud(ParameterSet(type = o, num_buds = 0))grow_object(o)

@@ -54,40 +54,34 @@ basicwood_prototypes = prototype_builder_fn(lpy_rng=lpy_rng, sim_config=simulati
 Trunk = resolve_attr(trunk_class_path)
 
 # Create the main trunk
+# TODO call as many times as there are trunks
+# Create a growth guide curve for the initial trunk development
 main_trunk = Trunk(basicwood_prototypes['trunk'])
+trunk_guide_curve = main_trunk.growth_guide_curve()
 
 # Build trellis geometry and attractor grids.
 trellis_support = tree_sim.support
 
 # Track parent/child relationships for tying/pruning decisions.
+# Format: Name->list of bud children
 branch_hierarchy["root"] = [main_trunk]
-# branch_hierarchy: dict[str, list] maps parent name to list of child branch objects
-# parent_map: dict[str, str] maps child name to parent name for O(1) parent lookup during pruning
-# The branch_hierarchy dictionary is also parsed in tree_builder.export_hierarchy_dict to create the
-#   skeleton and branch id names
-parent_map = {}  # Internal bookkeeping for efficient parent lookup
 branch_hierarchy[main_trunk.name] = []
 
-# Keep just names in the strings; this makes it much easier to read the strings
-names_to_objects = {main_trunk.name, main_trunk}
+# Set to true to generate the actual geometry on the final iteration
+generate_geometry = False
 
 # L-Py callbacks delegate to the Python helpers so architectures share logic.
-# TODO don't need to pass in main_trunk, esp when we split to two trunks
 def StartEach(lstring):
   """Proxy to shared tying preparation logic."""
-  start_each_common(lstring, branch_hierarchy, tree_sim, main_trunk)
+  start_each_common(lstring, branch_hierarchy, tree_sim)
 
 
 def EndEach(lstring):
   """Proxy to shared tying/pruning orchestration logic."""
-  return end_each_common(
-    lstring,
-    branch_hierarchy,
-    tree_sim,
-    simulation_config,
-    main_trunk,
-    getIterationNb,
-  )
+  return end_each_common(lstring,
+                         branch_hierarchy,
+                         tree_sim,
+                         getIterationNb)
 
 # =============================================================================
 # L-SYSTEM GRAMMAR DEFINITION
@@ -101,21 +95,21 @@ def EndEach(lstring):
 # -----------------------------------------------------------------------------
 # Define the vocabulary of symbols used in the L-System grammar.
 # Each module represents a different type of plant component or operation.
-# WoodStart is a marker in the string that is used in the "tie" method in the simulation to identify where to put the tying curve
+# WoodStart and BudStart are markers in the string that are used in the "tie"  and
+#  prune methods in the simulation to identify where to put the tying curve/prune
 module Attractors     # Trellis support structure that guides branch growth
-module grow_object(plant_segment, hierarchy)    # Growing plant parts (trunk, branches, spurs) with length/thickness and hierarchy dict
-module bud_site(plant_segment, hierarchy)       # Adding a bud site along a branch
-module bud(bud_parameters, hierarchy)           # Dormant buds that can break to produce new branches with hierarchy dict
-module branch        # Branch segments in the L-System string
+module grow_object(plant_segment)    # Growing plant parts (trunk, branches, spurs) with length/thickness and hierarchy dict
+module bud_site(plant_segment)       # Adding a bud site along a branch
+module add_bud(bud_parameter)        # Dormant buds that can break to produce new branches with hierarchy dict
+module add_branch(plant_segment)     # Adds a trunk/branch/spur
 module BudStart      # Starting point of a bud
 module WoodStart     # Starting point of wood segments (used for tying operations)
-module trunk
-module make_cylinders
+# Geometry creation
+module make_cylinders(plant_segment)
+module make_bud(bud)
 # -----------------------------------------------------------------------------
 # GLOBAL L-SYSTEM PARAMETERS
 # -----------------------------------------------------------------------------
-# Create a growth guide curve for the initial trunk development
-trunk_guide_curve = main_trunk.growth_guide_curve()
 
 # -----------------------------------------------------------------------------
 # AXIOM (STARTING STRING)
@@ -123,7 +117,7 @@ trunk_guide_curve = main_trunk.growth_guide_curve()
 # The initial L-System string that begins the simulation.
 # Starts with the trellis attractors, sets up the trunk guide curve,
 # and initializes the trunk growth with proper orientation and hierarchy dict.
-Axiom: Attractors(trellis_support)&(main_trunk.angle_wrt_ground())trunk(branch_hierarchy)
+Axiom: Attractors(trellis_support)&(main_trunk.angle_wrt_ground())add_branch(main_trunk, trunk_guide_curve)
 
 # -----------------------------------------------------------------------------
 # DERIVATION PARAMETERS
@@ -138,76 +132,119 @@ derivation length: simulation_config.derivation_length
 # These rules control the growth, branching, and development of the tree.
 
 production:
-# GROW_OBJECT PRODUCTION RULE
-# Handles the growth of plant segments (trunk, branches, spurs)
-# Determines whether to continue growing, stop, or produce buds
-trunk(hierarchy):
-  print(f"In trunk {}")
+# Put a branch/trunk in the string
+add_branch(plant_segment, guide_curve):
   nproduce[
-  nproduce GetPos(main_trunk.location.start)
-  nproduce GetHead(main_trunk.location.start_dir)
-  nproduce WoodStart(ParameterSet(type=main_trunk, name=main_trunk.name))
-  nproduce SetGuide(trunk_guide_curve, main_trunk.growth.prune_length)
-  nproduce grow_object(main_trunk, hierarchy)
-  nproduce GetPos(main_trunk.location.end)
-  nproduce GetHead(main_trunk.location.end_dir)
-  nproduce GetLeft(main_trunk.location.end_left_dir)
+  # These grab the current turtle position and heading; for use in tie downs
+  nproduce GetPos(plant_segment.location.start)
+  nproduce GetHead(plant_segment.location.start_dir)
+  nproduce GetLeft(plant_segment.location.start_left_dir)
+  # This just places a marker in the string so we can cut it out later when pruning/adding a guide curve
+  WoodStart(ParameterSet(type=plant_segment, name=plant_segment.name))
+  if guide_curve:
+    nproduce SetGuide(guide_curve, plant_segment.growth.prune_length)
+  # This will (eventually) make geometry
+  nproduce make_cylinders(plant_segment)
+  # This is the main recursive call; it will keep calling itself until the max branch length is reached
+  nproduce grow_object(plant_segment)
+  # This is suppose to capture the end location of the branch; warning that it's not always accurate
+  nproduce GetPos(plant_segment.location.end)
+  nproduce GetHead(plant_segment.location.end_dir)
+  nproduce GetLeft(plant_segment.location.end_left_dir)
+  produce]
+
+
+# This will either generate the geometry (last iteration) or just place hold where the geometry goes
+make_cylinders(plant_segment):
+  #  print(f"Making cylinders for {plant_segment.name} Length {plant_segment.growth.length} step {plant_segment.config.cylinder_length}", end="")
+  if generate_geometry:
+    print(f"Start diam {start_diameter} end diam {end_diameter}")
+    # Instance-level labeling, unique color per branch instance
+    r, g, b = color_manager.get_unique_color(plant_segment.name)
+    nproduce SetColor(r, g, b)
+    contour = plant_segment.contour_curve()
+    if contour is not None:
+      nproduce SetContour(contour)
+    start_diameter = plant_segment.growth.get_start_diameter()
+    end_diameter = plant_segment.growth.get_end_diameter()
+    produce I(plant_segment, plant_segment.config.cylinder_length, start_diameter, end_diameter)
+  else:
+    # Just keep putting this symbol back in the string
+    produce make_cylinders(plant_segment)
+
+
+# This will either generate the geometry (last iteration) or just place hold where the geometry goes
+make_bud(bud):
+  #  print(f"Making cylinders for {plant_segment.name} Length {plant_segment.growth.length} step {plant_segment.config.cylinder_length}", end="")
+  if generate_geometry:
+    # Instance-level labeling, unique color per branch instance
+    r, g, b = color_manager.get_unique_color(bud.name)
+    nproduce SetColor(r, g, b)
+    start_diameter = plant_segment.growth.get_start_diameter()
+    end_diameter = plant_segment.growth.get_end_diameter()
+    produce IBud(bud.length, bud.start_diameter(), bud.end_diameter)
+  else:
+    # Just keep putting this symbol back in the string
+    produce make_bud(bud)
+
+
+# BUD SITE PRODUCTION RULE
+# Controls placing bud sites along a branch
+# See bud_break below for when a bud actually transitions into branch or spur
+bud_site(bud_parameters):
+  # Bud break condition met - create new branch
+  new_bud = bud_parameters.type.add_bud_site()
+  if new_bud == None:
+    # Bud creation failed - terminate - this shouldn't happen...
+    produce *
+  # Register new branch in parent-child relationship tracking
+  branch_hierarchy[new_bud.name] = []  # Initialize empty children list for new branch
+  branch_hierarchy[bud_parameters.type.name].append(new_bud)  # Add to parent's children
+  nproduce [
+  # Put the bud in the string - Next iteration will determine if the bud produces a branch
+  # Labeling with BudStart so we can find it again
+  nproduce GetPos(new_bud.start_loc)
+  nproduce GetHead(new_bud.start_dir)
+  # Marker in the string
+  nproduce BudStart(ParameterSet(type=new_bud, name=new_bud.name))
+  nproduce bud(ParameterSet(type=new_bud, name=new_bud.name))
   produce ]
 
-make_cylinders(plant_segment):
-  print(f"Making cylinders for {plant_segment.name} Length {plant_segment.growth.length} step {plant_segment.config.cylinder_length}", end="")
-  # Instance-level labeling, unique color per branch instance
-  r, g, b = color_manager.get_unique_color(plant_segment.name)
-  nproduce SetColor(r, g, b)
-  start_diameter = plant_segment.growth.get_start_diameter()
-  end_diameter = plant_segment.growth.get_end_diameter()
 
-  print(f"Start diam {start_diameter} end diam {end_diameter}")
-  produce I(plant_segment, plant_segment.config.cylinder_length, start_diameter, end_diameter)
-  # Produce internode segments (n cylinders per growth step)
-  #n_cylinders = int(plant_segment.growth.length / plant_segment.config.cylinder_length)
-  #if n_cylinders < 1:
-  #  n_cylinders = 1
-  #step_along = plant_segment.growth.length / n_cylinders
-  #delta_t = 1.0 / n_cylinders
-
-  # At each cylinder, advance the turtle along step_along and change the diameter
-  #for i in range(n_cylinders):
-  #  t = i * delta_t
-  #  diameter = (1.0 - t) * start_diameter + t * end_diameter
-  #  nproduce I(step_along, diameter)
-
-grow_object(plant_segment, hierarchy):
+# GROWTH PRODUCTION RULE
+# Handles: growing the branch length
+#  1) Adding buds
+#  2) Adding
+grow_object(plant_segment):
   if plant_segment == None:
     # Null object - terminate this branch and generate cylinders
-    make_cylinders(plant_segment)
     produce *
   if plant_segment.growth.length > 1.1 * plant_segment.growth.prune_length:
     # Maximum length reached - stop growing this segment. Will be pruned anyways
     nproduce *
   else:
     # Continue growing - update segment properties
-    contour = plant_segment.contour_curve()
-    if contour is not None:
-      nproduce SetContour(contour)
     # Update internal state of the plant segment
     plant_segment.grow()
     # Update physical representation
-    print(f"{tree_sim.current_iteration} of {simulation_config.derivation_length}")
     if tree_sim.current_iteration >= simulation_config.derivation_length - 2:
       # Simulation ending - generate the cylinders
-      produce make_cylinders(plant_segment)
+      generate_geometry = True
     # Produce bud (after all cylinders in this growth step)
     if plant_segment.pre_bud_rule(plant_segment, simulation_config):
       for generated in plant_segment.post_bud_rule(plant_segment, simulation_config):
         nproduce new(generated[0], *generated[1])
     if plant_segment.is_add_bud_site():
         # Age-based bud production for lateral branching - add bud site
-        # nproduce bud_site(ParameterSet(type=plant_segment, name=plant_segment.name), hierarchy)
+        # First move the turtle along by the distance since the last bud
+        nproduce f(plant_segment.growth_since_last_bud())
+        # Now add bud
+        nproduce bud_site(ParameterSet(type=plant_segment, name=plant_segment.name))
         if plant_segment.post_bud_rule(plant_segment, simulation_config):
           for generated in plant_segment.post_bud_rule(plant_segment, simulation_config):
             nproduce new(generated[0], *generated[1])
-    produce grow_object(plant_segment, hierarchy)
+    # Continue growing
+    produce grow_object(plant_segment)
 
 
 # -----------------------------------------------------------------------------
@@ -226,14 +263,21 @@ I(plant_segment, step, start_diameter, end_diameter):
     n_cylinders = 1
   step_along = plant_segment.growth.length / n_cylinders
   delta_t = 1.0 / n_cylinders
-
   # At each cylinder, advance the turtle along step_along and change the diameter
   for i in range(n_cylinders):
     t = i * delta_t
     diameter = (1.0 - t) * start_diameter + t * end_diameter
     nproduce _(diameter) F(step_along)
+  # Reset to base so the f.. methods work
+  loc = plant_segment.lcoation.start
+  nproduce @M(loc[0], loc[1], loc[2])
+  h = plant_segment.lcoation.start_dir
+  l = plant_segment.lcoation.start_left_dir
+  produce @R(h[0], h[1], h[2], l[0], l[1], l[2])
 
-  produce *
+IBud(length, start_diameter, end_diameter):
+  nproduce _(start_diameter)
+  produce F(length, end_diameter)
 
 # -----------------------------------------------------------------------------
 # ATTRACTOR VISUALIZATION

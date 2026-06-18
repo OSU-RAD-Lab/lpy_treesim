@@ -8,6 +8,8 @@ from openalea.plantgl.all import *
 from lpy_treesim.tree_generation.skeleton_components import SkeletonComponent, JunctionComponent
 from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvention
 from lpy_treesim.tree_generation.tree_structure import TreeStructure
+from lpy_treesim.tree_models.base_tree.bud_site import BudSite
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 import logging
 
 
@@ -127,89 +129,84 @@ class TreeBuilder:
 
         # String and scene (which has geometry)
         return lstring, self.__lsystem.sceneInterpretation(lstring)
-    
-    def create_tree_structure(self) -> tuple[TreeStructure, dict]:
+
+    def _add_buds(self,
+                  mapping_tree_structure: dict,
+                  mapping_lpy: dict,
+                  tree: TreeStructure,
+                  parent_dict: dict,
+                  parent_lpy: BasicWood,
+                  bud_sites: list[BudSite]):
+        new_junctions = []
+        trunk_id = TreeNamingConvention.get_trunk_id(parent_dict)
+        parent_ids = tree.get_parent_id_list(parent_dict)
+        parent_name = parent_dict["name"]
+        for bud in bud_sites:
+            child_add_name = []
+            if bud.branch_child:
+                child_name = bud.branch_child.name
+                branch_dict = tree.new_branch(trunk_id=trunk_id, parent_ids=parent_ids)
+                mapping_tree_structure[child_name] = branch_dict
+                mapping_lpy[child_name] = bud.branch_child
+                child_add_name.append(branch_dict["name"])
+            if bud.spur_child:
+                child_name = bud.spur_child.name
+                spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=parent_ids)
+                mapping_tree_structure[child_name] = spur_dict
+                mapping_lpy[child_name] = bud.branch_spur
+                child_add_name.append(spur_dict["name"])
+
+            for child_name in child_add_name:
+                junction = JunctionComponent()
+                junction.parent_name = parent_name
+                junction.child_name = child_name
+                junction.t_along = bud.dist_along
+                junction.radius = parent_lpy.growth.get_diameter(bud.dist_along)
+                junction.pt_attach = bud.start_loc
+                junction.ang_attach = bud.bud_angle_from_parent
+                new_junctions.append(junction)
+
+        return new_junctions
+
+    def create_tree_structure(self) -> (TreeStructure, dict):
         tree = TreeStructure()
 
-        mapping = {}
-        for key_orig, branch in self.branch_hierarchy.items():
+        mapping_tree_structure = {}
+        mapping_lpy = {}
+        # This is organized as name -> list of buds
+        for key_orig, child_list in self.branch_hierarchy.items():
             key = key_orig.lower().strip()
             if "root" in key:
+                # Root - start adding trunks
                 root_dict = tree.new_root()
-                mapping[key_orig] = root_dict
-            elif "trunk" in key:
-                trunk_dict = tree.new_trunk()
-                mapping[key_orig] = trunk_dict
-                trunk_id = trunk_dict["id"]
-                for child in branch:
-                    junction = JunctionComponent()
-                    junction.parent_name = trunk_dict["name"]
-                    tree.trunk_junctions.append(junction)
-
-                    child_key = child.name.lower().strip()
-                    if "branch" in child_key:
-                        branch_dict = tree.new_branch(trunk_id=trunk_id, parent_ids=[])
-                        mapping[child.name] = branch_dict
-                        junction.child_name = branch_dict["name"]
-                    elif "spur" in child_key:
-                        spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=[])
-                        mapping[child.name] = spur_dict
-                        junction.child_name = spur_dict["name"]
-                    else:
-                        print(f"Unknown key {child_key}")
-            elif "branch" in key:
-                if key_orig not in mapping:
-                    raise ValueError(f"Child {key} should already be in mapping dictionary")
-
-                branch_dict = mapping[key_orig]
-                parent_ids = tree.get_parent_id_list(branch_dict)
-                parent_ids.append(branch_dict["id"])
-                trunk_id = TreeNamingConvention.get_trunk_id(branch_dict)
-
-                for child in branch:
-                    junction = JunctionComponent()
-                    junction.parent_name = branch_dict["name"]
-                    tree.branch_junctions.append(junction)
-
-                    child_key = child.name.lower().strip()
-                    if child.name in mapping:
-                        raise ValueError(f"Child {child.name} is already in mapping dictionary, child of {key_orig}")
-
-                    if "branch" in child_key:
-                        branch_dict = tree.new_branch(trunk_id=trunk_id, parent_ids=parent_ids)
-                        mapping[child.name] = branch_dict
-                        junction.child_name = branch_dict["name"]
-                    elif "spur" in child_key:
-                        spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=parent_ids)
-                        mapping[child.name] = spur_dict
-                        junction.child_name = spur_dict["name"]
-                    else:
-                        print(f"Unknown key {child_key}")
-            elif "spur" in key:
-                pass
+                for trunk in child_list:
+                    trunk_dict = tree.new_trunk()
+                    mapping_tree_structure[trunk.name] = trunk_dict
+                    mapping_lpy[trunk.name] = trunk
+            elif "bud" in key:
+                continue
             else:
-                print(f"Unknown key {key}")
+                branch_dict = mapping_tree_structure[key_orig]
+                branch_lpy = mapping_lpy[key_orig]
+                nj = self._add_buds(mapping_tree_structure=mapping_tree_structure,
+                                    mapping_lpy=mapping_lpy,
+                                    tree=tree,
+                                    parent_dict=branch_dict,
+                                    parent_lpy=branch_lpy,
+                                    bud_sites=child_list)
+                if "tree" in key:
+                    tree.trunk_junctions.extend(nj)
+                else:
+                    tree.branch_junctions.extend(nj)
 
-        # TODO: Extract out angle and t for junction
-        for key, branch in self.branch_hierarchy.items():
-            for child in branch:
-                child_name = child.name
-                part_dict = mapping[child_name]
-                part_dict["skel"] = SkeletonComponent(part_dict["name"])
-                part_dict["skel"].start_pt = self.convert_vec3_to_tuple(child.location.start)
-                part_dict["skel"].start_vec = self.convert_vec3_to_tuple(child.location.start_dir)
-                part_dict["skel"].end_pt = self.convert_vec3_to_tuple(child.location.end)
-
-        # Do this after the skeleton parts have been created
-        for junc in tree.trunk_junctions:
-            trunk_part = tree.part_list[TreeNamingConvention._trunk_key()][junc.parent_name]
-            trunk_part["skel"].add_junction(junc)
-
-        for junc in tree.branch_junctions:
-            branch_part = tree.part_list[TreeNamingConvention._branch_key()][junc.parent_name]
-            branch_part["skel"].add_junction(junc)
-
-        return tree, mapping
+        # Fill in remaining skeleton components
+        for part_name, part_dict in mapping_tree_structure.items():
+            lpy_part = mapping_lpy[part_name]
+            part_dict["skel"] = SkeletonComponent(part_dict["name"])
+            part_dict["skel"].start_pt = self.convert_vec3_to_tuple(lpy_part.location.start)
+            part_dict["skel"].start_vec = self.convert_vec3_to_tuple(lpy_part.location.start_dir)
+            part_dict["skel"].end_pt = self.convert_vec3_to_tuple(lpy_part.location.end)
+        return tree, mapping_tree_structure
 
     def export_hierarchy_dict(self) -> dict:
         named_hierarchy = {}

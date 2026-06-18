@@ -6,6 +6,7 @@ from abc import ABC
 import numpy as np
 from dataclasses import dataclass
 from enum import Enum
+from openalea.plantgl.all import Vector3
 
 import logging
 
@@ -32,12 +33,18 @@ class BudSite(ABC):
     bud_angle_around: float = 0.0
     bud_angle_from_parent: float = 0.0
 
+    # These are filled in when the string is interpreted
+    start_loc: Vector3 = Vector3(0, 0, 0)
+    start_dir: Vector3 = Vector3(0, 0, 0)
+
     # Unique name for bud site - parent name + bud and id
     name: str = ""
 
     # This tracks with the current branch's length when the bud was spawned. It is used to determine
     #  when the next bud will spawn
     dist_along: float = 0.0
+
+    age_year: int = 0
 
     # Parent branch - used to call create branch/spur on parent
     #   Note - can't declare type because that creates a circular reference
@@ -80,3 +87,16 @@ class BudSite(ABC):
             self.spur_child = self.wood_parent.create_spur()
             return self.spur_child
         return None
+
+    def add_year(self):
+        self.age_year += 1
+
+    def start_diameter(self):
+        return 0.01
+
+    def end_diameter(self):
+        return 0.001
+
+    def length(self):
+        diam = self.wood_parent.growth.get_diameter(self.dist_along)
+        return diam * 1.5

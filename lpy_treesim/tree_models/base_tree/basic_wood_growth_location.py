@@ -12,11 +12,12 @@ class LocationState:
     """Location tracking for a wood object: start point & direction, end point and direction
     These values are filled in from the string during the interpretation stage"""
 
-    start: any = None      # Vector3
-    start_dir: any = None  # Vector3
-    end: any = None        # Vector3
-    end_dir: any = None    # Vector3
-    end_left_dir: any = None # Vector3
+    start: Vector3 = None      # Vector3
+    start_dir: Vector3 = None  # Vector3
+    start_left_dir: Vector3 = None  # Vector3
+    end: Vector3 = None        # Vector3
+    end_dir: Vector3 = None    # Vector3
+    end_left_dir: Vector3 = None # Vector3
 
     def __post_init__(self):
         """Initialize Vector3 points if not provided."""
@@ -24,6 +25,8 @@ class LocationState:
             self.start = Vector3(0, 0, 0)
         if self.start_dir is None:
             self.start_dir = Vector3(1.0, 0, 0)
+        if self.start_left_dir is None:
+            self.start_left_dir = Vector3(1.0, 0, 0)
         if self.end is None:
             self.end = Vector3(0, 0, 0)
         if self.end_dir is None:
@@ -105,6 +108,10 @@ class GrowthState:
         if self.length < self.prune_length:
             end_diameter *= self.length / self.prune_length
         return end_diameter
+
+    def get_diameter(self, t: float = 0.5):
+        """ Linear scale at the moment"""
+        return (1.0 - t) * self.get_start_diameter() + t * self.get_end_diameter()
 
     def get_length_increment(self):
         # Generate a growth per iteration

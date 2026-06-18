@@ -37,46 +37,41 @@ from lpy_treesim.tie_prune.tie_prune_simulation_base import TreeSimulationBase
 
 def start_each_common(lstring,
                       branch_hierarchy: Dict[str, Iterable],
-                      tree_sim: TreeSimulationBase,
-                      main_trunk: BasicTrunk,
+                      tree_sim: TreeSimulationBase
 ):
     """Shared pre-iteration tying preparation logic.
     @param lstring - the actual lstring being generated
     @param branch_hierarchy - the current branch hierarchy as a dictionary
-    @param trellis_support - the trellis support (which has the attractor grids)
-    @param main_trunk - the trunk, which inherits from TreeBranch """
+    @param trellis_support - the trellis support (which has the attractor grids) """
 
-    # del lstring  # unused in shared logic; kept for L-Py parity
-    # If we haven't added the attractor for the main trunk, do so
-    if not main_trunk.tying.wire_attach and len(tree_sim.trunk_attractor) > 0:
-        main_trunk.tying.wire_attach = tree_sim.trunk_attractor[0]
+    # If we haven't added the attractor for the main trunks, do so
+    for trunk in branch_hierarchy["root"]:
+        if not trunk.tying.wire_attach and len(tree_sim.trunk_attractor) > 0:
+            trunk.tying.wire_attach = tree_sim.trunk_attractor[0]
 
-    """
-    # First level branches
-    for branch in branch_hierarchy[main_trunk.name]:
-        if not branch.tying.tie_needs_updating:
-            branch.set_tie_update()
-    """
     return lstring
 
 def end_each_common(lstring,
                     branch_hierarchy: Dict[str, Iterable],
                     tree_sim: TreeSimulationBase,
-                    simulation_config: SimulationConfig,
-                    main_trunk: BasicTrunk,
-                    get_iteration_number: Callable[[], int],
-):
+                    get_iteration_number: Callable[[], int]):
     """Shared post-iteration tying and pruning orchestration."""
-    if simulation_config.do_trunk_tying(tree_sim.current_iteration):
+    sim_config = tree_sim.config
+
+    if sim_config.do_trunk_tying(tree_sim.current_iteration):
         # Pin tree trunk one iteration before branches so vectors
         #   update correctly
-        if tree_sim.trunk_attractor:
-            main_trunk.update_guide()
+        for trunk in branch_hierarchy["root"]:
+            trunk.update_guide()
 
-    if simulation_config.do_branch_tying(tree_sim.current_iteration):
+    if sim_config.do_branch_tying(tree_sim.current_iteration):
+        trunk_branches = []
+        for trunk in branch_hierarchy["root"]:
+            for branch in branch_hierarchy[trunk.name]:
+                trunk_branches.append(branch)
 
-        branches = branch_hierarchy[main_trunk.name]
         # Estimate of cost to tie branches to open wire attachments
+        branches = tree_sim.get_trunk_branches(trunk_branches)
         energy_matrix, open_branches = tree_sim.get_energy_matrix(branches)
 
         # Actually tie some of the branches to the wires
@@ -90,11 +85,11 @@ def end_each_common(lstring,
         while tree_sim.tie(lstring):
             pass
 
-    if simulation_config.do_pruning(tree_sim.current_iteration):
+    if sim_config.do_pruning(tree_sim.current_iteration):
         while tree_sim.prune(lstring, branch_hierarchy):
             pass
 
-    if simulation_config.do_year_increment(tree_sim.current_iteration):
+    if sim_config.do_year_increment(tree_sim.current_iteration):
         for items in branch_hierarchy.values():
             for item in items:
                 item.add_year()

@@ -83,7 +83,15 @@ class TreeSimulationBase(ABC):
         """
         pass
 
-    def get_energy_matrix(self, all_branches):
+    def get_trunk_branches(self, trunk_branches: list[BudSite]):
+        """ Find all the buds that have branches growing from them"""
+        branches = []
+        for bud_site in trunk_branches:
+            if bud_site.branch_child:
+                branches.append(bud_site.branch_child)
+        return branches
+
+    def get_energy_matrix(self, branches: list[BasicWood]):
         """
         Calculate the energy matrix for optimal branch-to-wire assignment.
 
@@ -104,21 +112,21 @@ class TreeSimulationBase(ABC):
                           matrix[i][j] is the energy cost of assigning branch i to wire j.
                           Untied branches and occupied wires have infinite energy (np.inf).
         """
-        branches = []
-        for branch in all_branches:
+        open_branches = []
+        for branch in branches:
             # Skip branches that are already tied
             if not branch.tying.is_tied:
                 # And that haven't grown yet
-                if branch.length > 0.0:
-                    branches.append(branch)
-        num_branches = len(branches)
+                if branch.growth.length > 0.0:
+                    open_branches.append(branch)
+        num_branches = len(open_branches)
         num_wires = len(self.branch_attractor)
 
         # Initialize energy matrix with infinite values (impossible assignments)
         energy_matrix = np.full((num_branches, num_wires), 10000.0)
 
         # Calculate energy costs for all valid branch-wire combinations
-        for branch_idx, branch in enumerate(branches):
+        for branch_idx, branch in enumerate(open_branches):
             if branch.tying.is_tied:
                 continue
 
@@ -152,7 +160,7 @@ class TreeSimulationBase(ABC):
 
                 energy_matrix[branch_idx, wire_id] = total_energy
 
-        return energy_matrix, branches
+        return energy_matrix, open_branches
 
     def decide_guide(self, energy_matrix, branches):
         """

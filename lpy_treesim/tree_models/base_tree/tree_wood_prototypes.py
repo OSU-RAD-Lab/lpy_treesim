@@ -78,6 +78,12 @@ class BasicWood(ABC):
             setattr(self, k, v)
         # self.__dict__.update(update_dict)
 
+    def growth_since_last_bud(self)->float:
+        if len(self.bud_sites) == 0:
+            return self.growth.length
+
+        return self.growth.length - self.bud_sites[-1].dist_along
+
     def is_add_bud_site(self) -> bool:
         """This method defines if a bud site should be added here. By default, generates a random number
         for the next bud site location relative to the last and if it's far enough away, generate one"""
@@ -90,12 +96,7 @@ class BasicWood(ABC):
         if min_length_bud_site > self.config.bud_spacing_range[1]:
             min_length_bud_site = self.config.bud_spacing_range[1]
 
-        if len(self.bud_sites) == 0:
-            if min_length_bud_site < self.growth.length:
-                return True
-            return False
-
-        len_from_last = self.growth.length - self.bud_sites[-1].length
+        len_from_last = self.growth_since_last_bud()
         if min_length_bud_site < len_from_last:
             return True
         return False
@@ -110,7 +111,7 @@ class BasicWood(ABC):
                       bud_angle_probabilities=self.config.bud_angle_probs,
                       bud_angle_around=bud_angle_around,
                       wood_parent=self,
-                      dist_along=self.length,
+                      dist_along=self.growth.length,
                       lpy_rng=self.config.lpy_rng)
         self.bud_sites.append(bud)
         return bud

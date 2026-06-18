@@ -194,7 +194,7 @@ class TreeBuilder:
                                     parent_dict=branch_dict,
                                     parent_lpy=branch_lpy,
                                     bud_sites=child_list)
-                if "tree" in key:
+                if "trunk" in key:
                     tree.trunk_junctions.extend(nj)
                 else:
                     tree.branch_junctions.extend(nj)
@@ -222,7 +222,11 @@ class TreeBuilder:
         for key, branch in self.branch_hierarchy.items():
             for child in branch:
                 child_name = child.name.lower().strip()
-                named_hierarchy[child_name] = {"start": self.convert_vec3_to_tuple(child.location.start), "end": self.convert_vec3_to_tuple(child.location.end)}
+                if "bud" in child_name:
+                    named_hierarchy[child_name] = {"start": self.convert_vec3_to_tuple(child.start_loc)}
+                else:
+                    named_hierarchy[child_name] = {"start": self.convert_vec3_to_tuple(child.location.start),
+                                                   "end": self.convert_vec3_to_tuple(child.location.end)}
         return named_hierarchy
     
     def get_metadata(self) -> dict:

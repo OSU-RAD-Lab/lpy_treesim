@@ -62,6 +62,7 @@ class TreeSimulationBase(ABC):
 
         self.current_iteration: int = 0  # Set in start_common
 
+        self.generate_geometry: bool = False  # Set to True when ready for lstring to have geom
         self.generate_attractor_grids()
 
     @abstractmethod

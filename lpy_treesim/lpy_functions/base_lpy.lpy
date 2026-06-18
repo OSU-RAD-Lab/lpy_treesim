@@ -67,12 +67,13 @@ trellis_support = tree_sim.support
 branch_hierarchy["root"] = [main_trunk]
 branch_hierarchy[main_trunk.name] = []
 
-# Set to true to generate the actual geometry on the final iteration
-generate_geometry = False
-
 # L-Py callbacks delegate to the Python helpers so architectures share logic.
 def StartEach(lstring):
   """Proxy to shared tying preparation logic."""
+  if tree_sim.current_iteration >= simulation_config.derivation_length - 2:
+    # Simulation ending - generate the cylinders
+    print("Starting geometry")
+    tree_sim.generate_geometry = True
   start_each_common(lstring, branch_hierarchy, tree_sim)
 
 
@@ -157,8 +158,7 @@ add_branch(plant_segment, guide_curve):
 # This will either generate the geometry (last iteration) or just place hold where the geometry goes
 make_cylinders(plant_segment):
   #  print(f"Making cylinders for {plant_segment.name} Length {plant_segment.growth.length} step {plant_segment.config.cylinder_length}", end="")
-  if generate_geometry:
-    print(f"Start diam {start_diameter} end diam {end_diameter}")
+  if tree_sim.generate_geometry:
     # Instance-level labeling, unique color per branch instance
     r, g, b = color_manager.get_unique_color(plant_segment.name)
     nproduce SetColor(r, g, b)
@@ -167,7 +167,9 @@ make_cylinders(plant_segment):
       nproduce SetContour(contour)
     start_diameter = plant_segment.growth.get_start_diameter()
     end_diameter = plant_segment.growth.get_end_diameter()
-    produce I(plant_segment, plant_segment.config.cylinder_length, start_diameter, end_diameter)
+    nproduce[
+    nproduce I(plant_segment, plant_segment.config.cylinder_length, start_diameter, end_diameter)
+    produce]
   else:
     # Just keep putting this symbol back in the string
     produce make_cylinders(plant_segment)
@@ -176,7 +178,7 @@ make_cylinders(plant_segment):
 # This will either generate the geometry (last iteration) or just place hold where the geometry goes
 make_bud(bud):
   #  print(f"Making cylinders for {plant_segment.name} Length {plant_segment.growth.length} step {plant_segment.config.cylinder_length}", end="")
-  if generate_geometry:
+  if tree_sim.generate_geometry:
     # Instance-level labeling, unique color per branch instance
     r, g, b = color_manager.get_unique_color(bud.name)
     nproduce SetColor(r, g, b)
@@ -227,9 +229,6 @@ grow_object(plant_segment):
     # Update internal state of the plant segment
     plant_segment.grow()
     # Update physical representation
-    if tree_sim.current_iteration >= simulation_config.derivation_length - 2:
-      # Simulation ending - generate the cylinders
-      generate_geometry = True
     # Produce bud (after all cylinders in this growth step)
     if plant_segment.pre_bud_rule(plant_segment, simulation_config):
       for generated in plant_segment.post_bud_rule(plant_segment, simulation_config):
@@ -269,15 +268,18 @@ I(plant_segment, step, start_diameter, end_diameter):
     diameter = (1.0 - t) * start_diameter + t * end_diameter
     nproduce _(diameter) F(step_along)
   # Reset to base so the f.. methods work
-  loc = plant_segment.lcoation.start
-  nproduce @M(loc[0], loc[1], loc[2])
-  h = plant_segment.lcoation.start_dir
-  l = plant_segment.lcoation.start_left_dir
-  produce @R(h[0], h[1], h[2], l[0], l[1], l[2])
+  #loc = plant_segment.location.start
+  #nproduce @M(loc[0], loc[1], loc[2])
+  #h = plant_segment.location.start_dir
+  #l = plant_segment.location.start_left_dir
+  #produce @R(h[0], h[1], h[2], l[0], l[1], l[2])
 
 IBud(length, start_diameter, end_diameter):
+  nproduce[
+  nproduce EndGuide
   nproduce _(start_diameter)
-  produce F(length, end_diameter)
+  nproduce F(length, end_diameter)
+  nproduce]
 
 # -----------------------------------------------------------------------------
 # ATTRACTOR VISUALIZATION

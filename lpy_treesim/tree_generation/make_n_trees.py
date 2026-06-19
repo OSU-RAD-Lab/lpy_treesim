@@ -91,9 +91,9 @@ def main():
         tree, lpy_to_tree_mapping = lsb.create_tree_structure()
 
         # Adds to each tree component the mesh cylinders created by lpy
-        plant_gl_scene_to_vertices_and_faces(scene,
-                                             tree_mapping=lpy_to_tree_mapping,
-                                             color_mapping=lsb.color_manager)
+        bud_sites = plant_gl_scene_to_vertices_and_faces(scene,
+                                                         tree_mapping=lpy_to_tree_mapping,
+                                                         color_mapping=lsb.color_manager)
 
         # Now stitch together all of the mesh components into tubes instead of discrete cylinders
         # Also adds colors and texture coordinates
@@ -110,7 +110,7 @@ def main():
             mesh_path = args.output_dir / naming.mesh_filename(index, file_type="")
             uv_name = str(mesh_path) + "_uv.png"
             make_uv_texture(uv_name)
-            write_mesh(tree=tree, fname=mesh_path, image_name=uv_name)
+            write_mesh(tree=tree, fname=mesh_path, bud_sites=bud_sites, image_name=uv_name)
 
         if stage_context is not [] and args.usda:
             # Where the usd files are stored

@@ -97,6 +97,6 @@ class BudSite(ABC):
     def end_diameter(self):
         return 0.001
 
-    def length(self):
-        diam = self.wood_parent.growth.get_diameter(self.dist_along)
-        return diam * 1.5
+    def draw_length(self):
+        print(f"Bud {self.name} start loc {self.start_loc} dir {self.start_dir}")
+        return 0.2

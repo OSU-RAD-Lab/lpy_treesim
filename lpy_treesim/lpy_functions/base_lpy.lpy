@@ -66,6 +66,7 @@ trellis_support = tree_sim.support
 # Format: Name->list of bud children
 branch_hierarchy["root"] = [main_trunk]
 branch_hierarchy[main_trunk.name] = []
+map_name_instance = {main_trunk.name: main_trunk}
 
 # L-Py callbacks delegate to the Python helpers so architectures share logic.
 def StartEach(lstring):
@@ -107,7 +108,7 @@ module BudStart      # Starting point of a bud
 module WoodStart     # Starting point of wood segments (used for tying operations)
 # Geometry creation
 module make_cylinders(plant_segment)
-module make_bud(bud)
+module make_bud(bud_name)
 # -----------------------------------------------------------------------------
 # GLOBAL L-SYSTEM PARAMETERS
 # -----------------------------------------------------------------------------
@@ -141,7 +142,7 @@ add_branch(plant_segment, guide_curve):
   nproduce GetHead(plant_segment.location.start_dir)
   nproduce GetLeft(plant_segment.location.start_left_dir)
   # This just places a marker in the string so we can cut it out later when pruning/adding a guide curve
-  WoodStart(ParameterSet(type=plant_segment, name=plant_segment.name))
+  WoodStart(ParameterSet(name=plant_segment.name))
   if guide_curve:
     nproduce SetGuide(guide_curve, plant_segment.growth.prune_length)
   # This will (eventually) make geometry
@@ -176,18 +177,18 @@ make_cylinders(plant_segment):
 
 
 # This will either generate the geometry (last iteration) or just place hold where the geometry goes
-make_bud(bud):
+make_bud(bud_name):
   #  print(f"Making cylinders for {plant_segment.name} Length {plant_segment.growth.length} step {plant_segment.config.cylinder_length}", end="")
   if tree_sim.generate_geometry:
     # Instance-level labeling, unique color per branch instance
-    r, g, b = color_manager.get_unique_color(bud.name)
+    r, g, b = color_manager.get_unique_color(bud_name)
     nproduce SetColor(r, g, b)
-    start_diameter = plant_segment.growth.get_start_diameter()
-    end_diameter = plant_segment.growth.get_end_diameter()
-    produce IBud(bud.length, bud.start_diameter(), bud.end_diameter)
+    bud = map_name_instance[bud_name]
+    nproduce f(1.1 * bud.wood_parent.growth.get_diameter(bud.dist_along))
+    produce IBud(bud.draw_length(), bud.start_diameter(), bud.end_diameter())
   else:
     # Just keep putting this symbol back in the string
-    produce make_bud(bud)
+    produce make_bud(bud_name)
 
 
 # BUD SITE PRODUCTION RULE
@@ -202,14 +203,19 @@ bud_site(bud_parameters):
   # Register new branch in parent-child relationship tracking
   branch_hierarchy[new_bud.name] = []  # Initialize empty children list for new branch
   branch_hierarchy[bud_parameters.type.name].append(new_bud)  # Add to parent's children
-  nproduce [
+  map_name_instance[new_bud.name] = new_bud
   # Put the bud in the string - Next iteration will determine if the bud produces a branch
-  # Labeling with BudStart so we can find it again
   nproduce GetPos(new_bud.start_loc)
-  nproduce GetHead(new_bud.start_dir)
+  nproduce [
+  # Labeling with BudStart so we can find it again
   # Marker in the string
-  nproduce BudStart(ParameterSet(type=new_bud, name=new_bud.name))
-  nproduce bud(ParameterSet(type=new_bud, name=new_bud.name))
+  nproduce BudStart(ParameterSet(name=new_bud.name))
+  # Change the angle
+  #nproduce /(new_bud.bud_angle_around)^(90)
+  nproduce /(new_bud.bud_angle_around)^(new_bud.bud_angle_from_parent)
+  nproduce GetHead(new_bud.start_dir)
+  nproduce make_bud(new_bud.name)
+  nproduce bud(ParameterSet(name=new_bud.name))
   produce ]
 
 

@@ -120,7 +120,7 @@ def stitch_cylinders(tree:TreeStructure) -> (dict, list):
 
 
 # from https://pymeshlab.readthedocs.io/en/latest/tutorials/import_mesh_from_arrays.html
-def create_mesh(tree: TreeStructure, tex_image_file_name)->(Trimesh, Trimesh, Trimesh):
+def create_mesh(tree: TreeStructure, bud_sites: list[dict], tex_image_file_name)->(Trimesh, Trimesh, Trimesh):
     """ Put all the cylinders into one big TriMesh file
     Because TriMesh only supports adding one material (either texture coords, face colors, or vertex colors)
     this actually returns three meshes
@@ -133,9 +133,13 @@ def create_mesh(tree: TreeStructure, tex_image_file_name)->(Trimesh, Trimesh, Tr
     faces = []
     face_cols = []
     v_offset = 0
+
+    part_dicts = []
     for part_dict in tree.iterate_all_wood_parts():
-        mc = part_dict["mesh"]
-        if mc == None:
+        part_dicts.append(part_dict["mesh"])
+    part_dicts.extend(bud_sites)
+    for mc in part_dicts:
+        if mc is None:
             continue
 
         for v in mc["vertices"]:
@@ -181,14 +185,16 @@ def create_mesh(tree: TreeStructure, tex_image_file_name)->(Trimesh, Trimesh, Tr
 
 
 # Convert the PlantGL to a list of vertices and faces
-def plant_gl_scene_to_vertices_and_faces(scene, tree_mapping: dict, color_mapping:ColorManager) ->int:
+def plant_gl_scene_to_vertices_and_faces(scene, tree_mapping: dict, color_mapping:ColorManager) ->list[dict]:
     """ extract vertices and faces from a plantGL scene graph.
        The vertices/faces will be stored in the appropriate tree component
     @param tree_mapping - lpy branch parts to tree parts
     @param color_mapping - colors to lpy branch parts"""
     d = alg.Discretizer()
 
-    n_cyl = 0
+    # Hold the bud sites (if any)
+    bud_sites = []
+
     for item in scene:
         # Skip things that are not cylinders
         if not item.apply(d):
@@ -206,6 +212,7 @@ def plant_gl_scene_to_vertices_and_faces(scene, tree_mapping: dict, color_mappin
             print(f"Warning: Empty cylinder")
             continue
 
+
         # Use this trick to get the tree component part back
         color = item.appearance.diffuseColor()
 
@@ -213,7 +220,10 @@ def plant_gl_scene_to_vertices_and_faces(scene, tree_mapping: dict, color_mappin
         r, g, b = color
         unique_color = (r, g, b)
         hierarchy_name = color_mapping.color_to_name[unique_color]
-        tree_part_dict = tree_mapping[hierarchy_name]
+        if "bud" in hierarchy_name:
+            tree_part_dict = {}
+        else:
+            tree_part_dict = tree_mapping[hierarchy_name]
 
         # Store the points and the faces
         mesh_component = {"vertices":[], "faces":[]}
@@ -223,23 +233,37 @@ def plant_gl_scene_to_vertices_and_faces(scene, tree_mapping: dict, color_mappin
         for j in face:
             flatten_f = list(map(lambda x: x, j))
             mesh_component["faces"].append(flatten_f)
-        # Most of the plant parts are made of multiple cylinders which we'll stitch together later
-        tree_part_dict["mesh_cyl"].append(mesh_component)
+
         if n != 16:
             # Unless someone changes it, the default radial resolution of the cylinders should be 16
             print(f"Diff number of vs {n}")
 
-        n_cyl += 1
+        if "bud" in hierarchy_name:
+            bud_color = TreeNamingConvention.semantic_color("bud")
+            mesh_component["textures"] = []
+            mesh_component["uv_textures"] = []
+            mesh_component["vertex_colors"] = []
+            mesh_component["face_colors"] = []
+            for indx in range(0, len(mesh_component["vertices"])):
+                dt = (indx % n) / n
+                mesh_component["textures"].append((float(indx // n), dt))
+                mesh_component["uv_textures"].append((float(indx // n), dt))
+                mesh_component["vertex_colors"].append(bud_color)
+            for indx in range(0, len(mesh_component["faces"])):
+                mesh_component["face_colors"].append(bud_color)
+            bud_sites.append(mesh_component)
+        else:
+            # Most of the plant parts are made of multiple cylinders which we'll stitch together later
+            tree_part_dict["mesh_cyl"].append(mesh_component)
+    return bud_sites
 
-    return n_cyl
 
-
-def write_mesh(fname: str, tree: TreeStructure, image_name: str):
+def write_mesh(fname: str, tree: TreeStructure, bud_sites: list[dict], image_name: str):
     # Use TriMesh to write out the mesh in a handful of forms
     #  - tm texture mapping coordinates
     #  - fc faces colored by semantic labels
     #  - vc vertices colored by instance labels
-    mesh_uv, mesh_fc, mesh_vc = create_mesh(tree=tree, tex_image_file_name=image_name)
+    mesh_uv, mesh_fc, mesh_vc = create_mesh(tree=tree, bud_sites=bud_sites, tex_image_file_name=image_name)
     if mesh_uv is not None:
         mesh_uv.export(str(fname) + "_tm.obj")
     if mesh_fc is not None:

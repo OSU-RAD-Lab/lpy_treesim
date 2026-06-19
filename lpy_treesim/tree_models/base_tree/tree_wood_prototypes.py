@@ -106,6 +106,8 @@ class BasicWood(ABC):
         bud_name = self.name + f"_bud_{len(self.bud_sites)}"
         bud_angle_around = self.bud_angle_around
         self.bud_angle_around += self.config.phyllotaxis_angle + self.config.lpy_rng.uniform(-5, 5)
+        while self.bud_angle_around > 360.0:
+            self.bud_angle_around -= 360.0
         bud = BudSite(name=bud_name,
                       bud_break_probabilities=self.config.bud_break_probs,
                       bud_angle_probabilities=self.config.bud_angle_probs,

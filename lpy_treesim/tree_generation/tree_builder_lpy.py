@@ -62,42 +62,55 @@ class TreeBuilder:
         return (float(vec3.x), float(vec3.y), float(vec3.z))
 
     @staticmethod
+    def _replace_keyword(piece: str)->str:
+        check_keywords = ["Support", "Bud", "Spur", "Trunk", "Branch"]
+        for kw in check_keywords:
+            if kw in piece:
+                return "!" + kw + "!"
+        # No keyword found - don't replace
+        return "!" + piece + "!"
+
+    @staticmethod
+    def _take_out_class_refs(piece_in: str)->str:
+        piece = piece_in
+        while "<" in piece:
+            piece_kw = ""
+            if piece[0] == "<":
+                split_break = piece.split(">")
+                piece_kw = TreeBuilder._replace_keyword(split_break[0])
+                piece = piece_kw + "".join(split_break[1:])
+            else:
+                split_break_left = piece.split("<")
+                split_break_right = split_break_left[1].split(">")
+                piece_kw = TreeBuilder._replace_keyword(split_break_right[0])
+                piece = split_break_left[0] + piece_kw + "".join(split_break_right[1:])
+                for indx in range(2, len(split_break_left)):
+                    piece = piece + "<" + split_break_left[indx]
+        return piece
+
+    @staticmethod
     def make_string_readable(lstring: str):
 
-        str_copy = lstring.split('[')
+        str_break_left_bracket = lstring.split('[')
         indent = 0
-        check_keywords = ["Support", "Trunk", "Branch", "Spur"]
-        for piece in str_copy:
-            if "]" in piece:
-                indent -= 2
-            else:
-                indent += 2
+        for before_bracket in str_break_left_bracket:
+            indent += 2
+
+            b_has_end_bracket = before_bracket[-1] == "]"
+            str_break_end_bracket = before_bracket.split("]")
             n_spaces = " " * indent
-            piece = piece.replace("]", "]\n" + n_spaces)
-            piece = piece.replace("WoodStart", "\n" + n_spaces + "WoodStart")
-            piece = piece.replace("ParameterSet(type=", "PS(")
-
-            print(f"{n_spaces}[", end='')
-            split_names = piece.split("<")
-            if piece[0] != "<":
-                print(split_names[0], end='')
-                split_names = split_names[1:]
-            for sn in split_names:
-                if len(sn) == 0:
-                    continue
-                k = sn.split(">")
-                print_kw = ""
-                for kw in check_keywords:
-                    if kw in k[0]:
-                        print_kw = kw
-                        break
-
-                if "name" in k[1]:
-                    print(f"{k[1][6:]}", end='')
+            print(f"{n_spaces}[", end="")
+            for indx, up_to_end_bracket in enumerate(str_break_end_bracket):
+                n_spaces = " " * indent
+                piece = up_to_end_bracket.replace("WoodStart", "\n" + n_spaces + "WoodStart")
+                piece = piece.replace("ParameterSet(type=", "PS(")
+                piece = TreeBuilder._take_out_class_refs(piece)
+                print(f"{piece}", end="")
+                if indx < len(str_break_end_bracket) - 1 or b_has_end_bracket:
+                    print(f"]")
+                    indent -= 2
                 else:
-                    print(f"{print_kw}{k[1]}", end='')
-                for left_over in k[2:]:
-                    print(f"{left_over}", end='')
+                    print("\n")
 
     def generate_tree(self):
         """ Actually build the lpy string
@@ -119,6 +132,7 @@ class TreeBuilder:
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
             interpreted_string = self.__lsystem.interpret(lstring)
 
+            self.make_string_readable(str(interpreted_string))
             if self.b_interactive:
                 scene =  self.__lsystem.sceneInterpretation(interpreted_string)
                 Viewer.display(scene)

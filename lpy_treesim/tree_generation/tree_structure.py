@@ -125,6 +125,9 @@ class TreeStructure:
         if part_dict["parent_type"] == TreeNamingConvention._trunk_key():
             return []
 
+        if part_dict["parent_type"] == TreeNamingConvention._root_key():
+            return []
+
         if not TreeNamingConvention._branch_key() in part_dict["parent_type"]:
             print(f"Unknown parent type {part_dict["parent_type"]}")
             return []

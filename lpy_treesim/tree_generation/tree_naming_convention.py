@@ -33,7 +33,7 @@ import json
 
 
 class TreeNamingConvention:
-    part_names = ["rootstock", "trunk", "branch", "spur", "leaf", "flower", "fruit"]
+    part_names = ["rootstock", "trunk", "branch", "spur", "leaf", "flower", "fruit", "budsite"]
     ROOT_STOCK = 0
     TRUNK = 1
     BRANCH = 2
@@ -41,9 +41,14 @@ class TreeNamingConvention:
     LEAF = 4
     FLOWER = 5
     FRUIT = 6
+    BUDSITE = 7
 
     # For semantic labeling by part
-    _component_colors={"rootstock":(50, 50, 50), "trunk":(50, 50, 255), "branch":((50, 220, 50), (40, 190, 40), (30, 160, 30), (20, 130, 20)), "spur":(255, 50, 50)}
+    _component_colors={"rootstock":(50, 50, 50),
+                       "trunk":(50, 50, 255),
+                       "branch":((50, 220, 50), (40, 190, 40), (30, 160, 30), (20, 130, 20)),
+                       "spur":(255, 50, 50),
+                       "bud":(255, 255, 0)}
 
     def __init__(self):
         pass
@@ -61,6 +66,8 @@ class TreeNamingConvention:
                 return TreeNamingConvention._component_colors["branch"][0]
         elif "spur" in name:
             return TreeNamingConvention._component_colors["spur"]
+        elif "bud":
+            return TreeNamingConvention._component_colors["bud"]
         else:
             print(f"No known semantic name {name}")
         return (255, 255, 255)
@@ -229,4 +236,3 @@ class TreeNamingConvention:
         name_parts = last_name.split("-")
         level_str = name_parts[1]
         return int(level_str)
-        

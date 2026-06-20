@@ -19,12 +19,6 @@ class SideBranch(BasicBranch):
         new_spur = BasicSpur(config=self.config.configs_dict["spur"])
         return new_spur
 
-    def pre_bud_rule(self, plant_segment, simulation_config):
-        return None
-
-    def post_bud_rule(self, plant_segment, simulation_config):
-        return None
-
 
 class PrimaryBranch(BasicBranch):
     def __init__(self, config):
@@ -38,12 +32,6 @@ class PrimaryBranch(BasicBranch):
     def create_spur(self):
         new_spur = BasicSpur(config=self.config.configs_dict["spur"])
         return new_spur
-
-    def pre_bud_rule(self, plant_segment, simulation_config):
-        return None
-
-    def post_bud_rule(self, plant_segment, simulation_config):
-        return None
 
 
 class Trunk(BasicTrunk):
@@ -59,12 +47,6 @@ class Trunk(BasicTrunk):
     def create_spur(self):
         new_spur = BasicSpur(config=self.config.configs_dict["spur"])
         return new_spur
-
-    def pre_bud_rule(self, plant_segment, simulation_config):
-        return None
-
-    def post_bud_rule(self, plant_segment, simulation_config):
-        return None
 
     def angle_wrt_ground(self):
         return 45

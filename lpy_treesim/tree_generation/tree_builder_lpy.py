@@ -96,10 +96,13 @@ class TreeBuilder:
         for before_bracket in str_break_left_bracket:
             indent += 2
 
-            b_has_end_bracket = before_bracket[-1] == "]"
+            b_has_end_bracket = False
+            if len(before_bracket) > 0:
+                b_has_end_bracket = before_bracket[-1] == "]"
+
             str_break_end_bracket = before_bracket.split("]")
             n_spaces = " " * indent
-            print(f"{n_spaces}[", end="")
+            print(f"\n{n_spaces}[", end="")
             for indx, up_to_end_bracket in enumerate(str_break_end_bracket):
                 n_spaces = " " * indent
                 piece = up_to_end_bracket.replace("WoodStart", "\n" + n_spaces + "WoodStart")
@@ -109,8 +112,6 @@ class TreeBuilder:
                 if indx < len(str_break_end_bracket) - 1 or b_has_end_bracket:
                     print(f"]")
                     indent -= 2
-                else:
-                    print("\n")
 
     def generate_tree(self):
         """ Actually build the lpy string

@@ -31,7 +31,7 @@ class BudSite(ABC):
     bud_break_probabilities: tuple = (0.1, 0.3, 0.25)  # eg, will turn vegetative with 0.1 prob, fruiting w 0.3 - 0.1
     bud_angle_probabilities: dict = None              # Bud angle relative to branch; angle may depend on type of bud
     bud_angle_around: float = 0.0
-    bud_angle_from_parent: float = 0.0
+    bud_angle_from_parent: float = 90.0
 
     # These are filled in when the string is interpreted
     start_loc: Vector3 = Vector3(0, 0, 0)

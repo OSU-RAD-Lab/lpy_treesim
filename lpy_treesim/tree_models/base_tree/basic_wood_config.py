@@ -57,7 +57,6 @@ class BasicWoodConfig:
     bud_angle_probs: dict = None                # Bud angle relative to branch; angle may depend on type of bud
     bud_break_probs: tuple = (0.1, 0.3, 0.35)   # EG , will turn vegetative with 0.1 prob, fruiting w 0.3 - 0.1
     tie_type: TyingState.TyingType = TyingState.TyingType.NO_TIE # How to tie this branch type to support
-    cylinder_length: float = 0.03                # Generate cylinders every inch or so
     prune_length: float = 1000.0                 # If you want to have the branch pruned after a certain length...
     prunable: bool = True
 

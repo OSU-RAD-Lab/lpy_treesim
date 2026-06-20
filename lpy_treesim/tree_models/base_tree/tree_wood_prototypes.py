@@ -5,6 +5,7 @@ Defines the abstract class BasicWood along with helper classes LocationState, Gr
 from abc import ABC, abstractmethod
 import copy
 import numpy as np
+from openalea.plantgl.scenegraph import BezierCurve
 from openalea.plantgl.scenegraph.cspline import CSpline
 
 from lpy_treesim.lpy_functions.lpy_geometry_fns import create_bezier_curve
@@ -67,6 +68,9 @@ class BasicWood(ABC):
                                   taper=self.config.taper_amount,
                                   lpy_rng=self.config.lpy_rng)
 
+        # Growth curve
+        self.growth_curve: BezierCurve = self.initial_growth_curve()
+
         # Where all the budsites are located
         self.bud_angle_around = self.config.lpy_rng.uniform(0.0, 260.0)
         self.bud_sites = []
@@ -78,11 +82,13 @@ class BasicWood(ABC):
             setattr(self, k, v)
         # self.__dict__.update(update_dict)
 
-    def growth_since_last_bud(self)->float:
+    def dist_last_bud(self)->float:
         if len(self.bud_sites) == 0:
-            return self.growth.length
+            return 0.0
+        return self.bud_sites[-1].dist_along
 
-        return self.growth.length - self.bud_sites[-1].dist_along
+    def growth_since_last_bud(self)->float:
+        return self.growth.length - self.dist_last_bud()
 
     def is_add_bud_site(self) -> bool:
         """This method defines if a bud site should be added here. By default, generates a random number
@@ -118,15 +124,13 @@ class BasicWood(ABC):
         self.bud_sites.append(bud)
         return bud
 
-    @abstractmethod
-    def pre_bud_rule(self, plant_segment, simulation_config) -> str:
+    def pre_bud_rule(self) -> list:
         """This method can define any internal changes happening to the properties of the class, such as reduction in thickness increment etc."""
-        pass
+        return []
 
-    @abstractmethod
-    def post_bud_rule(self, plant_segment, simulation_config) -> str:
+    def post_bud_rule(self) -> list:
         """This method can define any internal changes happening to the properties of the class, such as reduction in thickness increment etc."""
-        pass
+        return []
 
     def grow(self):
         self.growth.age_in_iterations += 1
@@ -170,7 +174,7 @@ class BasicWood(ABC):
         """ Creates a new spur/fruiting site"""
         pass
 
-    def growth_guide_curve(self):
+    def initial_growth_curve(self):
         """ If not over-ridden later by tying, generate a growth curve.
         Note: This is relative to the starting direction of the wood object - so z is always 'out' """
         return create_bezier_curve(num_control_points=6,
@@ -237,6 +241,7 @@ class BasicWood(ABC):
         Returns (lstring, removed_count).
         """
         # Nothing to do if we don't have new guide points
+        return lstring, 0
         if not self.tying.tie_needs_updating:
             return lstring, 0
 
@@ -296,12 +301,6 @@ class BasicSpur(BasicWood):
     def update_guide(self):
         pass
 
-    def pre_bud_rule(self, plant_segment, simulation_config):
-        return None
-
-    def post_bud_rule(self, plant_segment, simulation_config):
-        return None
-
     def tie_lstring(self, lstring, index):
         return lstring, 0
 
@@ -320,12 +319,6 @@ class BasicBranch(BasicWood):
             self.name = f"{self.__class__.__name__}_{BasicBranch.__count}"
         BasicBranch.__count += 1
 
-    def pre_bud_rule(self, plant_segment, simulation_config):
-        return None
-
-    def post_bud_rule(self, plant_segment, simulation_config):
-        return None
-
 
 class BasicTrunk(BasicWood):
     """Base class for all tree branch types with common initialization logic"""
@@ -340,12 +333,6 @@ class BasicTrunk(BasicWood):
         if not name:
             self.name = f"trunk_{BasicTrunk.__count}"
         BasicTrunk.__count += 1
-
-    def pre_bud_rule(self, plant_segment, simulation_config):
-        return None
-
-    def post_bud_rule(self, plant_segment, simulation_config):
-        return None
 
     def angle_wrt_ground(self):
         return 0.0

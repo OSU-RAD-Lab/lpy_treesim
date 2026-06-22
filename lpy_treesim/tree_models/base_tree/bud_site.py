@@ -55,6 +55,9 @@ class BudSite(ABC):
     # Random number to use - this is here for repeatability
     lpy_rng: np.random.Generator = None
 
+    def is_dormant_or_pruned(self):
+        return self.bud_state is BudSite.BudType.DORMANT or self.bud_state is BudSite.BudType.PRUNED
+
     def is_bud_break(self):
         """ If bud break... will create the branch in the create_branch method"""
         if self.bud_state is not BudSite.BudType.DORMANT:
@@ -75,7 +78,8 @@ class BudSite(ABC):
         return True
 
     def create_branch(self):
-        """ If vegetative or mixed, will create a branch"""
+        """ If vegetative or mixed, will create a branch.
+        These (eventually) call the create_branch/spur methods on the iherited class """
         if self.bud_state is BudSite.BudType.VEGETATIVE or self.bud_state is BudSite.BudType.MIXED:
             self.branch_child = self.wood_parent.create_branch()
             return self.branch_child
@@ -92,11 +96,10 @@ class BudSite(ABC):
         self.age_year += 1
 
     def start_diameter(self):
-        return 0.01
+        return 0.1 * self.wood_parent.growth.get_diameter(self.dist_along)
 
     def end_diameter(self):
-        return 0.001
+        return 0.0001
 
     def draw_length(self):
-        print(f"Bud {self.name} start loc {self.start_loc} dir {self.start_dir}")
-        return 0.2
+        return 2 * self.wood_parent.growth.get_diameter(self.dist_along)

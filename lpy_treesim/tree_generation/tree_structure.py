@@ -30,6 +30,8 @@ and vertex ids to mesh components
 
 import itertools
 import json
+
+from lpy_treesim.tree_generation.skeleton_components import SkeletonComponent
 from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvention
 
 
@@ -112,6 +114,7 @@ class TreeStructure:
         blank_dict["mesh"] = None
         blank_dict["start_loc"] = (0, 0, 0)
         blank_dict["end_loc"] = (0, 0, 0)
+        blank_dict["skel"] = SkeletonComponent(part_name)
 
         for name in TreeNamingConvention.part_names:
             blank_dict[name] = []
@@ -355,3 +358,14 @@ class TreeStructure:
         return ret_dict
     
     # TODO Read in from dictionary
+
+
+def calculate_skeleton_junctions(tree: TreeStructure):
+    """ Once the cylinders have been stitched together, create the junctions from them"""
+    # TODO get junctions etc from bud site
+    return
+    for junction_lists in (tree.trunk_junctions, tree.branch_junctions):
+        for junction in junction_lists:
+            parent_dict = tree.map_full_name_to_part[junction.parent_name]
+            child_dict = tree.map_full_name_to_part[junction.child_name]
+            junction.set_attach(parent_dict["skel"], parent_dict["mesh"], child_dict["skel"])

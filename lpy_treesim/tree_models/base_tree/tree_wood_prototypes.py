@@ -57,6 +57,10 @@ class BasicWood(ABC):
                 mean_range = (1.0 - vigor) * mgl_item[1] + vigor * mgl_item[2]
                 mean_sd = 0.2 * (mgl_item[2] - mgl_item[1])
                 mean_value = self.config.lpy_rng.normal(mean_range, mean_sd)
+                if mean_value < mgl_item[1]:
+                    mean_value = mgl_item[1]
+                if mean_value > mgl_item[2]:
+                    mean_value = mgl_item[2]
                 mgl.append(mean_value)
                 start_year += 1
 
@@ -125,11 +129,15 @@ class BasicWood(ABC):
         return bud
 
     def pre_bud_rule(self) -> list:
-        """This method can define any internal changes happening to the properties of the class, such as reduction in thickness increment etc."""
+        """This method can define any internal changes happening to the properties of the class,
+           such as reduction in thickness increment etc.
+           Returns a list of lpy production rules (if any)"""
         return []
 
     def post_bud_rule(self) -> list:
-        """This method can define any internal changes happening to the properties of the class, such as reduction in thickness increment etc."""
+        """This method can define any internal changes happening to the properties of the class,
+        such as reduction in thickness increment etc.
+        Returns a list of lpy production rules (if any)"""
         return []
 
     def grow(self):
@@ -161,17 +169,18 @@ class BasicWood(ABC):
 
     @abstractmethod
     def create_branch(self):
-        """ Returns how a new branch when bud break happens. Eg, if trunk, makes primary branch"""
-
+        """ Returns how a new branch when bud break happens. Eg, if trunk, makes primary branch
+        These are abstract methods because the type of branch depends on the tree-type
+        Do not call directly - BudSite will call on it's parent when the bud breaks
+        Should return an instance of a class that inherits fromBasic Brqnch"""
         pass
-        # new_object = BasicWood.clone(self.branch_object)
-        # return new_object
-        # return BasicWood(self.num_buds_segment/2, self.bud_break_prob, self.thickness/2, self.thickness_increment/2, self.growth_length/2,\
-        # self.max_length/2, self.tie_type, self.bud_break_max_length/2, self.order+1, self.bud_break_prob_func)
 
     @abstractmethod
     def create_spur(self):
-        """ Creates a new spur/fruiting site"""
+        """ Creates a new spur/fruiting site.
+        These are abstract methods because the type of branch depends on the tree-type
+        Do not call directly - BudSite will call on it's parent when the bud breaks
+        Should return an instance of a class that inherits from BasicSpur"""
         pass
 
     def initial_growth_curve(self):

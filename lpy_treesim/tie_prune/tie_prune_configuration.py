@@ -1,6 +1,5 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
-from operator import truediv
 
 import numpy as np
 
@@ -66,7 +65,8 @@ class SimulationConfig(ABC):
 
     @property
     def derivation_length(self):
-        return self.n_years * self.num_iter_per_year
+        return 20
+        return self.n_years * self.num_iter_per_year + 3
 
     def do_trunk_tying(self, current_iteration: int):
         # Tie the iteration before branch tying so shape propagates correctly

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 from lpy_treesim.tree_models.base_tree.basic_wood_growth_location import LocationState
+from openalea.plantgl.all import Vector3
 
 
 @dataclass
@@ -29,7 +30,8 @@ class TyingState:
     tie_needs_updating: bool = False  # Set to false when guide curve updated, true when branch changes/new guide point added
     wire_attach: WireBranchAttach = None  # These are the list of points to tie to
     last_tie_index: int = -1          # Branch has been tied to all of the points up to this index
-    guide_points: list[tuple] = None  # Current set of guide points (control points of spline)
+    # Guide points are relative to branch's base coordinate system
+    guide_points: list[tuple] = None  # Current set of guide points (control points of Bezier curve)
     tie_type: TyingType = TyingType.NO_TIE  # One of tying_type
 
     @property
@@ -40,6 +42,97 @@ class TyingState:
         """Initialize guide_points as empty list if not provided."""
         if self.guide_points is None:
             self.guide_points = []
+
+    def set_initial_guide_points(self,
+                                 x_range=(-2, 2),
+                                 y_range=(-2, 2),
+                                 total_length=10.0,
+                                 rng: np.random.Generator=None):
+    """ Create Bezier curve guide points using wire spacing as a guide.
+    The guide points are in local coordinates; the intent is to have guide points spaced by wire spacing.
+    z is the heading direction, x and y are noise in and out/left-right """
+    if rng is None:
+        rng = np.random.default_rng()
+    if self.wire_attach:
+        spacing =
+    # Generate control points with progressive z-coordinates
+    z_values = np.linspace(0.0, total_length, num_control_points)
+    control_points = []
+
+    for z_value in z_values:
+        x_coord = rng.uniform(x_range[0], x_range[1])
+        y_coord = rng.uniform(y_range[0], y_range[1])
+        control_points.append(Vector4(x_coord, y_coord, z_value, 1))
+
+    # Create PlantGL Bezier curve
+    control_point_array = Point4Array(control_points)
+    return BezierCurve(control_point_array)
+
+    def _convert_guide_points_to_global(self, pt_origin: Vector3, heading: Vector3, left: Vector3 ):
+        """ Convert guide points from base curve position to global"""
+        gp_as_np = np.array(self.guide_points)
+        rot_mat = np.identity(3)
+        rot_mat[0, :] = np.array(heading)
+        rot_mat[1, :] = np.array(left)
+        rot_mat[2, :] = np.cross(rot_mat[0, :], rot_mat[1, :])
+        for ir in range(gp_as_np.shape[0]):
+            for ic in range(0, 3):
+                gp_as_np[ir, ic] -= pt_origin[ic]
+                gp_as_np[ir, :] = rot_mat @ gp_as_np[ir, :]
+        return gp_as_np
+
+    def _lengths_guide_pts(self, gps: np.array):
+        """ Spacing between guide points"""
+        lengths = []
+        for ir in range(0, gps.shape[0] - 1):
+            lengths.append(np.linalg.norm(gps.shape[ir+1, :] - gps.shape[ir, :]))
+        return lengths
+
+    def _assign_pts_wire(self, start_pt: np.array, lengths_cntrl_pts: list[float], gps: np.array):
+        """ Assign each guide point a wire index and t value between. Assign -1 if before wire or n if after
+        Assumption is that the starting point of the branch """
+        start_indx = 0
+        start_dist = 0.0
+        wire_dir = self.wire_attach.attractor_dir
+        for indx in range(0, self.wire_attach.attractor_pts.shape[0]):
+            dir_to_wire = self.wire_attach.attractor_pts[indx, :] - start_pt
+            if np.dot(wire_dir, dir_to_wire) > 0.0:
+                start_indx = indx
+                start_dist = np.linalg.norm(dir_to_wire)
+                break
+
+        assignment = []
+        last_indx = start_indx
+        for indx in range(0, gps.shape[0]):
+            if lengths_cntrl_pts[indx] < start_dist:
+                assignment.append((-1, 1.0))
+            elif lengths_cntrl_pts[indx]
+
+
+        # Vector from branch start to next wire point
+        wire_dir = self.wire_attach.attractor_dir
+        print(f" indx {self.last_tie_index}", end="")
+        if np.dot(wire_dir, end_dir) < 0.0:
+            # Oops, branch growing in the wrong direction - set to next wire point to enable reasonable
+            # bending at tie down
+            next_indx = self.last_tie_index + 1
+            if next_indx >= self.wire_attach.attractor_pts.shape[1] - 1:
+                # off the end - return -1
+                print(" -1")
+                return -1
+            print(f" {next_indx}")
+            return next_indx
+
+        for indx in range(self.last_tie_index + 1, self.wire_attach.attractor_pts.shape[0]):
+            wire_point = self.wire_attach.attractor_pts[indx, :]
+            v = wire_point - end_pt
+            if np.dot(v, wire_dir) >= 0.0:
+                print(f" {indx}")
+                return indx
+
+        # Off the end of the wire
+        print(" -1")
+        return -1
 
     def _find_next_wire_pt(self, end_pt: np.array, end_dir: np.array):
         """ If the end of the branch has gone past the last tie point then find the next wire point

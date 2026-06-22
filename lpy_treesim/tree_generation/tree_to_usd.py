@@ -229,7 +229,7 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
             sphere = UsdGeom.Sphere.Define(stage, sphere_path)            
             sphere.CreateRadiusAttr(junction.radius * scl_factor)
             xformable = UsdGeom.Xformable(sphere)
-            xformable.AddTranslateOp().Set(Gf.Vec3f(junction.pt_attach))
+            #xformable.AddTranslateOp().Set(Gf.Vec3f(junction.pt_attach))
 
             # Add collision physics
             UsdPhysics.CollisionAPI.Apply(sphere.GetPrim())

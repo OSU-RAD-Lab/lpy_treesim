@@ -127,7 +127,7 @@ class TreeBuilder:
             lstring = self.__lsystem.derive(lstring, iteration, 1)
 
             print(f"Iteration {iteration}")
-            self.make_string_readable(str(lstring))
+            # self.make_string_readable(str(lstring))
 
             # DO NOT TAKE OUT THIS LINE - or everything will stop working
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
@@ -168,7 +168,7 @@ class TreeBuilder:
                 child_name = bud.spur_child.name
                 spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=parent_ids)
                 mapping_tree_structure[child_name] = spur_dict
-                mapping_lpy[child_name] = bud.branch_spur
+                mapping_lpy[child_name] = bud.spur_child
                 child_add_name.append(spur_dict["name"])
 
             for child_name in child_add_name:
@@ -180,6 +180,7 @@ class TreeBuilder:
                 junction.pt_attach = bud.start_loc
                 junction.ang_attach = bud.bud_angle_from_parent
                 new_junctions.append(junction)
+                parent_dict["skel"].child_junctions.append(junction)
 
         return new_junctions
 
@@ -217,7 +218,6 @@ class TreeBuilder:
         # Fill in remaining skeleton components
         for part_name, part_dict in mapping_tree_structure.items():
             lpy_part = mapping_lpy[part_name]
-            part_dict["skel"] = SkeletonComponent(part_dict["name"])
             part_dict["skel"].start_pt = self.convert_vec3_to_tuple(lpy_part.location.start)
             part_dict["skel"].start_vec = self.convert_vec3_to_tuple(lpy_part.location.start_dir)
             part_dict["skel"].end_pt = self.convert_vec3_to_tuple(lpy_part.location.end)

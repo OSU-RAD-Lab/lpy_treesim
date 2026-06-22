@@ -11,7 +11,7 @@ from lpy_treesim.tree_generation.file_naming_config import FileNamingConfig
 from lpy_treesim.tree_generation.tree_to_usd import create_mesh_usd, check_texture
 from lpy_treesim.textures.generate_texture import make_texture_set, make_uv_texture
 from lpy_treesim.tree_generation.lpy_scene_to_mesh import plant_gl_scene_to_vertices_and_faces, stitch_cylinders, write_mesh
-from lpy_treesim.tree_generation.skeleton_components import calculate_skeleton_junctions
+from lpy_treesim.tree_generation.tree_structure import calculate_skeleton_junctions
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +99,8 @@ def main():
         # Also adds colors and texture coordinates
         color_to_part, keys_to_remove = stitch_cylinders(tree=tree)
         # Some newly created branch parts do not have any meshes associated with them
-        for key in keys_to_remove:
-            tree.remove_key(key)
+        #for key in keys_to_remove:
+        #    tree.remove_key(key)
 
         # Now that the cylinders/skeleton have been processed, build the junctions
         calculate_skeleton_junctions(tree=tree)
@@ -134,8 +134,8 @@ def main():
             # meta_data["tree"] = tree  # Need to fix
             # meta_data["tree_mapping"] = mapping
             meta_data["color_mapping"] = color_to_part
-            with open(metadata_path, "w") as f:
-                json.dump(meta_data, f, indent=4)
+            # with open(metadata_path, "w") as f:
+            #     json.dump(meta_data, f, indent=4)
             logger.info(f"Wrote meta data to {metadata_path}")
 
         del scene

@@ -68,7 +68,8 @@ def _stitch_cylinder(skel: SkeletonComponent, cyls: list, col_plant_type: tuple,
     for vi in range(0, len(cyl["vertices"]) // 2):
         n_split = len(cyl["vertices"]) // 2
         s_div = 1.0 / (n_split - 1.0)
-        mesh_component["vertices"].append(cyl["vertices"][2 * vi])
+        # Take the second ring, not the first
+        mesh_component["vertices"].append(cyl["vertices"][2 * vi + 1])
         mesh_component["vertex_colors"].append(col_plant_type)
         mesh_component["textures"].append((vi * s_div, v_coord))
         mesh_component["uv_textures"].append((vi * s_div, v_coord))

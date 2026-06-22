@@ -16,7 +16,7 @@ TREE_BASE_DIR = Path(__file__).resolve().parents[1] / "tree_models" / "base_tree
 if TREE_BASE_DIR not in sys.path:
     sys.path.append(str(TREE_BASE_DIR))
 
-from lpy_treesim.lpy_functions.lpy_helper_functions import start_each_common, end_each_common, resolve_attr
+from lpy_treesim.lpy_functions.lpy_helper_functions import resolve_attr
 
 # -----------------------------------------------------------------------------
 # EXTERNALLY CONFIGURABLE PATHS
@@ -70,19 +70,12 @@ map_name_instance = {main_trunk.name: main_trunk}
 # L-Py callbacks delegate to the Python helpers so architectures share logic.
 def StartEach(lstring):
   """Proxy to shared tying preparation logic."""
-  if tree_sim.current_iteration >= simulation_config.derivation_length - 2:
-    # Simulation ending - generate the cylinders
-    print("Starting geometry")
-    tree_sim.generate_geometry = True
-  start_each_common(lstring, branch_hierarchy, tree_sim)
+  tree_sim.start_iteration(lstring, branch_hierarchy)
 
 
 def EndEach(lstring):
   """Proxy to shared tying/pruning orchestration logic."""
-  return end_each_common(lstring,
-                         branch_hierarchy,
-                         tree_sim,
-                         getIterationNb)
+  tree_sim.end_iteration(lstring, branch_hierarchy, getIterationNb)
 
 # =============================================================================
 # L-SYSTEM GRAMMAR DEFINITION
@@ -102,15 +95,19 @@ module Attractors     # Trellis support structure that guides branch growth
 module grow_object(branch_name)    # Growing plant parts (trunk, branches, spurs) with length/thickness and hierarchy dict
 module bud_site(branch_name)       # Adding a bud site along a branch
 module bud_bud(bud_name)             # Dormant buds that can break to produce new branches with hierarchy dict
-module add_branch(branch_name)     # Adds a trunk/branch/spur
-module BudStart(bud_ptr)         # Starting point of a bud
-module WoodStart(branch_ptr)     # Starting point of wood segments (used for tying operations)
-# Geometry creation
+module add_branch(branch_name)     # Adds a trunk/branch
+module add_spur(spur_name)         # Adds a spur
+module BudStart(bud_name)         # Starting point of a bud
+module WoodStart(branch_ptr, branch_name)     # Starting point of wood segments (used for tying operations)
+module SpurStart(sour_name)         # Starting point of a spur
+# Geometry creation - lower case are producers, upper case are production
 module IStartBranch(branch_name)
 module IMakeCylinders(branch_name, start_dist, end_dist, b_generate)
 module IEndBranch(branch_name)
 module make_cylinder(branch_name)
+module make_bud_cylinder(bud_name)
 module IStartBud(bud_name)
+module IMakeBudCylinder(bud_name)
 # -----------------------------------------------------------------------------
 # GLOBAL L-SYSTEM PARAMETERS
 # -----------------------------------------------------------------------------
@@ -144,12 +141,19 @@ make_cylinder(branch_name):
   else:
     nproduce make_cylinder(branch_name)
 
+make_bud_cylinder(bud_name):
+  bud = map_name_instance[bud_name]
+  if tree_sim.generate_geometry:
+    produce IMakeBudCylinder(bud_name)
+  else:
+    produce make_bud_cylinder(bud_name)
+
 # Put a branch/trunk in the string
 add_branch(branch_name):
   branch = map_name_instance[branch_name]
   nproduce[
   # This just places a marker in the string so we can cut it out later when pruning/adding a guide curve
-  nproduce WoodStart(ParameterSet(type=branch))
+  nproduce WoodStart(ParameterSet(type=branch, name=branch.name))
   # Set the positions and vectors - needs to be in the interpretation model, not here
   nproduce IStartBranch(branch_name)
   nproduce [
@@ -162,6 +166,56 @@ add_branch(branch_name):
   nproduce IEndBranch(branch_name)
   produce]
 
+# Put a spur in the string - similar to add_branch, but no need to edit
+add_spur(spur_name):
+  spur = map_name_instance[spur_name]
+  nproduce[
+  # Mark the point in the spur
+  nproduce SpurStart(spur_name)
+  # Set the positions and vectors - needs to be in the interpretation model, not here
+  nproduce IStartBranch(spur_name)
+  nproduce [
+  # Put in square brackets so the turtle resets correctly
+  nproduce make_cylinder(spur_name)
+  nproduce ]
+  # This is the main recursive call; it will keep calling itself until the max branch length is reached
+  nproduce grow_object(spur_name)
+  # This is suppose to capture the end location of the branch; warning that it's not always accurate
+  nproduce IEndBranch(spur_name)
+  produce]
+
+# BUD PRODUCTION RULE
+# Controls bud break and branch initiation
+# Determines when buds activate to produce new branches
+bud_bud(bud_name):
+  if tree_sim.end_bud_growth:
+    produce *
+  bud = map_name_instance[bud_name]
+  if not bud.is_bud_break():
+    # Didn't break - leave the bud site here
+    produce bud_bud(bud_name)
+  # Bud break condition met - create new branch and/or spur
+  new_branch = bud.create_branch()
+  new_spur = bud.create_spur()
+  if new_branch is None and new_spur is None:
+      # Branch creation failed - terminate (this should not happen)
+      print(f"base_lpy Error: Bud {bud_name} no new branch or spur")
+      produce *
+  # The orientation is 90 degrees until we know what the branch type is; this rotates back
+  nproduce &(90 - bud.bud_angle_from_parent)
+  # Register new branch and/or spur in parent-child relationship tracking
+  if new_branch is not None:
+    branch_hierarchy[new_branch.name] = []  # Initialize empty children list for new branch
+    branch_hierarchy[bud.name].append(new_branch)  # Add to parent's children
+    map_name_instance[new_branch.name] = new_branch  # Name to instance
+    # All the lpy stuff
+    nproduce add_branch(new_branch.name)
+  if new_spur is not None:
+    branch_hierarchy[new_spur.name] = []  # Initialize empty children list for new branch
+    branch_hierarchy[bud.name].append(new_spur)  # Add to parent's children
+    map_name_instance[new_spur.name] = new_spur  # Name to instance
+    # All the lpy stuff
+    nproduce add_spur(new_spur.name)
 
 # BUD SITE PRODUCTION RULE
 # Controls placing bud sites along a branch
@@ -183,11 +237,14 @@ bud_site(branch_name):
   nproduce IMakeCylinders(parent_branch.name, dist_last_bud, new_bud.dist_along, False)
   nproduce[
   # This just places a marker in the string so we can cut it out later when pruning/adding a guide curve
-  nproduce BudStart(ParameterSet(type=new_bud))
+  nproduce BudStart(ParameterSet(name=new_bud.name))
   # Change the angle
-  nproduce /(new_bud.bud_angle_around)^(new_bud.bud_angle_from_parent)
-  # This gets the bud location information
+  nproduce /(new_bud.bud_angle_around)^(90)
+  # This gets the bud location information and creates the cylinder
+  nproduce [
   nproduce IStartBud(new_bud.name)
+  nproduce make_bud_cylinder(new_bud.name)
+  nproduce ]
   # This is the call that will see if we need to bud
   nproduce bud_bud(new_bud.name)
   produce ]
@@ -198,6 +255,9 @@ bud_site(branch_name):
 #  1) Adding buds
 #  2) Adding
 grow_object(branch_name):
+  # Quit calling grow
+  if tree_sim.end_growth:
+    nproduce *
   branch = map_name_instance[branch_name]
   if branch.growth.length > 1.1 * branch.growth.prune_length:
     # Maximum length reached - stop growing this segment. Will be pruned anyways
@@ -248,23 +308,6 @@ IEndBranch(branch_name):
   nproduce GetPos(branch.location.end)
   nproduce GetHead(branch.location.end_dir)
   nproduce GetLeft(branch.location.end_left_dir)
-#INode(plant_segment, start_dist, end_dist):
-#growth_length = end_dist - start_dist
-#start_diameter = 1.0
-#end_diameter = 1.0
-#if plant_segment.growth.length > 0.0:
-#  start_diameter = plant_segment.growth.get_diameter(start_dist / plant_segment.growth.length)
-#  end_diameter = plant_segment.growth.get_diameter(end_dist / plant_segment.growth.length)
-#n_cylinders = int(growth_length / tree_sim.config.cylinder_length)
-#if n_cylinders < 1:
-#  n_cylinders = 1
-#step_along = growth_length / n_cylinders
-#delta_t = 1.0 / n_cylinders
-# At each cylinder, advance the turtle along step_along and change the diameter
-#for i in range(n_cylinders):
-#  t = i * delta_t
-#  diameter = (1.0 - t) * start_diameter + t * end_diameter
-#  nproduce _(diameter) F(step_along)
 
 IMakeCylinders(branch_name, start_dist, end_dist, b_generate):
   branch = map_name_instance[branch_name]
@@ -285,6 +328,7 @@ IMakeCylinders(branch_name, start_dist, end_dist, b_generate):
     else:
       nproduce f(growth_length)
 
+
 IStartBud(bud_name):
   bud = map_name_instance[bud_name]
   nproduce EndGuide
@@ -292,6 +336,10 @@ IStartBud(bud_name):
   nproduce GetHead(bud.start_dir)
   r, g, b = color_manager.get_unique_color(bud.name)
   nproduce SetColor(r, g, b)
+
+
+IMakeBudCylinder(bud_name):
+  bud = map_name_instance[bud_name]
   nproduce _(bud.start_diameter())
   nproduce F(bud.draw_length(), bud.end_diameter())
 

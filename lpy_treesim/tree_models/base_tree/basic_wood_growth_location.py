@@ -72,15 +72,22 @@ class GrowthState:
             print(f"Warning: Growth, did not set mean length growth per year")
             self.mean_length_growth_per_year = [(1.0 - self.vigour_level) * 0.5 + self.vigour_level * 1.5]
 
+        for mlg in self.mean_length_growth_per_year:
+            if mlg < 0.0:
+                print(f"Error: mean langth growth per year negative {mlg}")
+        if self.length <= 0.0:
+            # Make sure it's grown a bit
+            self.length = self.mean_length_growth_per_iteration()
+
         # Based on vigor level. Diameter ratio is used in the growth step to set the starting thickness of the branch
         self.set_diameter_ratio()
 
     def set_diameter_ratio(self):
         """Calculate the target diameter based on the vigor level and expected growth for the age_in_years and current length
            Only call on age_in_years boundaries """
-        low_ratio = 0.01 / 1.0
-        ideal_ratio = 0.025 / 1.0
-        high_ratio = 3.5 / 1.0
+        low_ratio = 0.01
+        ideal_ratio = 0.025
+        high_ratio = 0.035
         if self.vigour_level < 0.5:
             t = self.vigour_level * 2.0
             self.target_diameter_ratio = (1 - t) * low_ratio + t * ideal_ratio
@@ -99,15 +106,11 @@ class GrowthState:
 
     def get_start_diameter(self):
         """ The diameter, based on the ratio """
-        return self.target_diameter_ratio * self.prune_length
+        return self.target_diameter_ratio * self.length_without_pruning
 
     def get_end_diameter(self):
         """ The diameter, based on the ratio """
-        end_diameter = self.target_diameter_ratio * self.taper
-        # Now account for cutting off the end
-        if self.length < self.prune_length:
-            end_diameter *= self.length / self.prune_length
-        return end_diameter
+        return self.target_diameter_ratio * self.length_without_pruning * self.taper
 
     def get_diameter(self, t: float = 0.5):
         """ Linear scale at the moment"""
@@ -116,5 +119,9 @@ class GrowthState:
     def get_length_increment(self):
         # Generate a growth per iteration
         mean_length_growth = self.mean_length_growth_per_iteration()
+        if mean_length_growth < 0.0:
+            print("oops")
         length_incr = self.lpy_rng.normal(loc=mean_length_growth, scale=0.1 * mean_length_growth)
+        if length_incr < 0.00001:
+            length_incr = 0.00001
         return length_incr

@@ -19,9 +19,6 @@ Data kept for the skeleton (if available)
 
 """
 import numpy as np
-import shapely as shapely
-from openalea.phenomenal.calibration.transformations import vector_product
-from lpy_treesim.tree_generation.tree_structure import TreeStructure
 
 
 class JunctionComponent:
@@ -212,12 +209,3 @@ class SkeletonComponent:
             child = JunctionComponent()
             child.set_from_dict(child_dict)
             self.child_junctions.append(child)
-
-
-def calculate_skeleton_junctions(tree: TreeStructure):
-    """ Once the cylinders have been stitched together, create the junctions from them"""
-    for junction_lists in (tree.trunk_junctions, tree.branch_junctions):
-        for junction in junction_lists:
-            parent_dict = tree.map_full_name_to_part[junction.parent_name]            
-            child_dict = tree.map_full_name_to_part[junction.child_name]
-            junction.set_attach(parent_dict["skel"], parent_dict["mesh"], child_dict["skel"])

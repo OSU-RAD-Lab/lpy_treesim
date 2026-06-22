@@ -11,16 +11,28 @@ and implement architecture-specific methods like point generation.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-import numpy as np
 from scipy.optimize import linear_sum_assignment
 from lpy_treesim.tie_prune.wire_support import Support
 from lpy_treesim.lpy_functions.lpy_sring_prune_edit_fns import cut_from
 from lpy_treesim.tie_prune.tying import TyingState
 from lpy_treesim.tree_models.base_tree.bud_site import BudSite
-from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 from lpy_treesim.lpy_functions.lpy_geometry_fns import create_bezier_curve
+from openalea.plantgl.all import (
+    NurbsCurve,
+    Vector3,
+    Vector4,
+    Point4Array,
+    Point2Array,
+    Point3Array,
+    Polyline2D,
+    BezierCurve,
+    BezierCurve2D,
+)
+from openalea.lpy import Lsystem, newmodule
+import numpy as np
+from typing import Callable
 from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
+from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 
 
 class TreeSimulationBase(ABC):
@@ -29,7 +41,7 @@ class TreeSimulationBase(ABC):
 
     This class provides common algorithms for:
     - Energy-based optimization for branch-to-wire assignment
-    - Greedy assignment of branches to wires
+    - Assignment of branches to wires
     - Pruning operations for untied branches
     - Tying operations to modify L-System strings
 
@@ -60,10 +72,15 @@ class TreeSimulationBase(ABC):
         self.trunk_attractor = None
         self.branch_attractor = None
 
+        self.generate_attractor_grids()
+
+        # These control when to stop letting buds turn into spurs/branches, and then generate geomety
         self.current_iteration: int = 0  # Set in start_common
 
+        # These are set in the start iteration method
+        self.end_bud_growth: bool = False
+        self.end_growth: bool = False
         self.generate_geometry: bool = False  # Set to True when ready for lstring to have geom
-        self.generate_attractor_grids()
 
     @abstractmethod
     def create_trunk_curve(self):
@@ -84,12 +101,82 @@ class TreeSimulationBase(ABC):
         """
         pass
 
-    def get_trunk_branches(self, trunk_branches: list[BudSite]):
+    def start_iteration(self, lstring, branch_hierarchy: dict):
+        """Shared pre-iteration tying preparation logic.
+        @param lstring - the actual lstring being generated
+        @param branch_hierarchy - the current branch hierarchy as a dictionary """
+
+        if self.current_iteration >= self.config.derivation_length - 3:
+            # First, freeze bud growth
+            print("ENDING budding")
+            self.end_bud_growth = True
+
+        if self.current_iteration >= self.config.derivation_length - 2:
+            # First, freeze bud growth
+            print("ENDING growth")
+            self.end_growth = True
+
+        if self.current_iteration >= self.config.derivation_length - 1:
+            # Simulation ending - generate the cylinders by replacing make_cylinder with _ F
+            print("STARTING geometry")
+            self.generate_geometry = True
+
+        # If we haven't added the attractor for the main trunks, do so
+        for indx, trunk in enumerate(branch_hierarchy["root"]):
+            if not trunk.tying.wire_attach and len(self.trunk_attractor) > indx:
+                trunk.tying.wire_attach = self.trunk_attractor[indx]
+
+        return lstring
+
+    def end_iteration(self,
+                      lstring,
+                      branch_hierarchy : dict,
+                      get_iteration_number: Callable[[], int]):
+        """Shared post-iteration tying and pruning orchestration."""
+        sim_config = self.config
+
+        if sim_config.do_trunk_tying(self.current_iteration):
+            # Pin tree trunk one iteration before branches so vectors update correctly
+            for trunk in branch_hierarchy["root"]:
+                trunk.update_guide()
+
+        trunk_branches = self.get_trunk_branches(branch_hierarchy=branch_hierarchy)
+
+        if sim_config.do_branch_tying(self.current_iteration):
+            # Estimate of cost to tie branches to open wire attachments
+            energy_matrix, open_branches = self.get_energy_matrix(trunk_branches)
+
+            # Actually tie some of the branches to the wires
+            self.decide_guide(energy_matrix, open_branches)
+
+            # Update guide curve
+            for branch in trunk_branches:
+                branch.update_guide()
+
+            # This does the actual tying in the string - edits lstring in place
+            while self.tie(lstring):
+                pass
+
+        if sim_config.do_pruning(self.current_iteration):
+            while self.prune(lstring, branch_hierarchy):
+                pass
+
+        if sim_config.do_year_increment(self.current_iteration):
+            for items in branch_hierarchy.values():
+                for item in items:
+                    item.add_year()
+
+        self.current_iteration = get_iteration_number() + 1
+
+        return lstring
+
+    def get_trunk_branches(self, branch_hierarchy: dict) ->list[BasicWood]:
         """ Find all the buds that have branches growing from them"""
         branches = []
-        for bud_site in trunk_branches:
-            if bud_site.branch_child:
-                branches.append(bud_site.branch_child)
+        for trunks in branch_hierarchy["root"]:
+            for bud_site in branch_hierarchy[trunks.name]:
+                if bud_site.branch_child:
+                    branches.append(bud_site.branch_child)
         return branches
 
     def get_energy_matrix(self, branches: list[BasicWood]):

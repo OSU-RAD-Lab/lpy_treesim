@@ -43,10 +43,8 @@ class SimulationConfig(ABC):
     # L-System Parameters
     n_years:int = 6  # for a total of num_iter_per_year * n_year derivation steps
 
-    # Growth Parameters
-    tolerance: float = 1e-5  # Tolerance for comparison between floats
-
-    cylinder_length: float = 0.03                # Generate cylinders every inch or so
+    # Generate cylinders every inch or so
+    cylinder_length: float = 0.03
 
     # Visualization Parameters
     attractor_point_width: int = 10  # Width of attractor points in visualization

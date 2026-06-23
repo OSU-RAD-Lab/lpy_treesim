@@ -4,8 +4,9 @@ Defines type of tying
 from dataclasses import dataclass
 from enum import Enum
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 from lpy_treesim.tree_models.base_tree.basic_wood_growth_location import LocationState
-from openalea.plantgl.all import Vector3
+from openalea.plantgl.all import Vector3, Vector4
 
 
 @dataclass
@@ -27,11 +28,20 @@ class TyingState:
         TIE_ALONG_FIRST = "tie_along_first"
         TIE_ACROSS = "tie_across"
 
+    # Shouldn't have to change these, but making variables just in case
+    n_pts_tie_down: int = 8
+    n_pts_per_tie: int = 4
+
     tie_needs_updating: bool = False  # Set to false when guide curve updated, true when branch changes/new guide point added
     wire_attach: WireBranchAttach = None  # These are the list of points to tie to
     last_tie_index: int = -1          # Branch has been tied to all of the points up to this index
+    # Potential support structure info - used to create guide_point spacing
+    #  These should be specified in the tree wood configuration files because they are trunk/branch dependent
+    tie_start_dist: float = 0.46  # 18 inches Expected distance from the base of the trunk/branch to the first tie point
+    tie_spacing: float = 0.46     # 18 inches Spacing between tie points
+
     # Guide points are relative to branch's base coordinate system
-    guide_points: list[tuple] = None  # Current set of guide points (control points of Bezier curve)
+    guide_points: list[Vector4] = None  # Current set of guide points (control points of Bezier curve)
     tie_type: TyingType = TyingType.NO_TIE  # One of tying_type
 
     @property
@@ -43,32 +53,85 @@ class TyingState:
         if self.guide_points is None:
             self.guide_points = []
 
-    def set_initial_guide_points(self,
-                                 x_range=(-2, 2),
-                                 y_range=(-2, 2),
-                                 total_length=10.0,
-                                 rng: np.random.Generator=None):
-    """ Create Bezier curve guide points using wire spacing as a guide.
-    The guide points are in local coordinates; the intent is to have guide points spaced by wire spacing.
-    z is the heading direction, x and y are noise in and out/left-right """
-    if rng is None:
-        rng = np.random.default_rng()
-    if self.wire_attach:
-        spacing =
-    # Generate control points with progressive z-coordinates
-    z_values = np.linspace(0.0, total_length, num_control_points)
-    control_points = []
+    def create_initial_guide_curve(self,
+                                   expected_length: float,
+                                   curve_x_range: tuple,
+                                   curve_y_range: tuple,
+                                   lpy_rng: np.random.Generator):
+        """If not tying, just a curve with some noise in x and y and evenly spaced points. Otherwise,
+        Set up so that first n points are movable (deform when tied) and there are 3 points between
+        tie points"""
+        self.guide_points = []
+        num_control_points = int(expected_length / 0.2)
+        if num_control_points < 6:
+            num_control_points = 6
+        if self.tie_type == TyingState.TyingType.NO_TIE:
+            z_values = np.linspace(0.0, expected_length, num_control_points)
+        else:
+            n_tie_regions = int((expected_length - self.tie_start_dist) / self.tie_spacing)
+            # number of tie regions should be correct if the tie spacing distance and prune length are set correctly
+            if n_tie_regions < 6:
+                n_tie_regions = 6  # Just in case not enough
+            z_values = np.linspace(0.0, self.tie_start_dist, self.n_pts_tie_down)
+            spacing_values = np.linspace(0.0, self.tie_spacing, self.n_pts_per_tie+1)
+            for indx in range(0, n_tie_regions):
+                spacing_values_shifted = spacing_values + z_values[-1]
+                z_values = np.concatenate((z_values, spacing_values_shifted[1:]))
+            # Add one more - last tied down point
+            stupid_numpy = np.zeros((z_values.shape[0] + 1, ))
+            stupid_numpy[0:-1] = z_values
+            stupid_numpy[-1] = z_values[-1] + spacing_values[1]
+            z_values = stupid_numpy
 
-    for z_value in z_values:
-        x_coord = rng.uniform(x_range[0], x_range[1])
-        y_coord = rng.uniform(y_range[0], y_range[1])
-        control_points.append(Vector4(x_coord, y_coord, z_value, 1))
+        # start at origin
+        self.guide_points.append(Vector4(0.0, 0.0, 0.0, 1))
+        # Take out that z value
+        z_values = z_values[1:]
+        for z_value in z_values:
+            x_coord = lpy_rng.uniform(curve_x_range[0], curve_x_range[1])
+            y_coord = lpy_rng.uniform(curve_y_range[0], curve_y_range[1])
+            self.guide_points.append(Vector4(x_coord, y_coord, z_value, 1))
+        if self.tie_type == TyingState.TyingType.NO_TIE:
+            return
 
-    # Create PlantGL Bezier curve
-    control_point_array = Point4Array(control_points)
-    return BezierCurve(control_point_array)
+        # Smooth out the points inbetween (the extra points)
+        #  Pin points are at
+        #         n_pts_tie_down
+        #         every n_pts_per_tie after that (which is why there's one extra)
+        n_pts_smooth = self.n_pts_tie_down
+        indx_start = 0
+        while indx_start < len(self.guide_points) - 1:
+            pt_start = self.guide_points[indx_start]
+            pt_mid = self.guide_points[indx_start + n_pts_smooth // 2]
+            pt_end = self.guide_points[indx_start + n_pts_smooth]
+            # print(f"start {pt_start} mid {pt_mid} end {pt_end}")
+            mat_solve_a = np.ones((3, 3))
+            mat_solve_b = np.zeros((3, 2))
+            for indx, pt in enumerate((pt_start, pt_mid, pt_end)):
+                mat_solve_a[indx, 0] = pt[2] * pt[2]  # the t value
+                mat_solve_a[indx, 1] = pt[2]  # the t value
+                mat_solve_b[indx, 0] = pt[0]
+                mat_solve_b[indx, 1] = pt[1]
+            ls = np.linalg.lstsq(mat_solve_a, mat_solve_b)
+            x = ls[0]
+            for indx in range(0, n_pts_smooth):
+                z = self.guide_points[indx_start + indx][2]
+                pt_x = x[0, 0] * z * z + x[1, 0] * z + x[2, 0]
+                pt_y = x[0, 1] * z * z + x[1, 1] * z + x[2, 1]
 
-    def _convert_guide_points_to_global(self, pt_origin: Vector3, heading: Vector3, left: Vector3 ):
+                # print(f" Before {self.guide_points[indx_start + indx]}")
+                self.guide_points[indx_start + indx][0] = pt_x
+                self.guide_points[indx_start + indx][1] = pt_y
+                # print(f" After {self.guide_points[indx_start + indx]}")
+            # Now smooth out between tie points
+            indx_start += n_pts_smooth
+            n_pts_smooth = self.n_pts_per_tie
+            # print("\n")
+
+        # for pt in self.guide_points:
+        #     print(f"{pt}")
+
+    def _convert_guide_points_to_global(self, pt_origin: Vector3, heading: Vector3, left: Vector3):
         """ Convert guide points from base curve position to global"""
         gp_as_np = np.array(self.guide_points)
         rot_mat = np.identity(3)
@@ -79,7 +142,42 @@ class TyingState:
             for ic in range(0, 3):
                 gp_as_np[ir, ic] -= pt_origin[ic]
                 gp_as_np[ir, :] = rot_mat @ gp_as_np[ir, :]
-        return gp_as_np
+        return rot_mat, gp_as_np
+
+    def _bend_to_wire(self, pt_origin: Vector3, heading: Vector3, left: Vector3):
+        """
+        Convert points to global coords, then do a pivot around each point in turn to incrementally align
+        the nth point with the wire
+        Note: need to re-do if the initial point/vector change
+        """
+        rot_mat, gp_as_np = self._convert_guide_points_to_global(pt_origin=pt_origin, heading=heading, left=left)
+        start_indx = 0
+        n_spacing = self.n_pts_tie_down
+        for tie_point in range(0, self.wire_attach.attractor_pts.shape[0]):
+            # Pivoting around indx point to bring the next tie point to the next wire point
+            for indx in range(1, n_spacing):
+                vec_to_tie_point = gp_as_np[start_indx + n_spacing - 1, :] - gp_as_np[start_indx, 0]
+                vec_to_wire_point = self.wire_attach.attractor_pts[tie_point, :] - gp_as_np[start_indx, 0]
+                vec_tie_2 = np.zeros((2, 1))
+                vec_wire_2 = np.zeros((2, 1))
+                vec_tie_2[1] = vec_to_tie_point[2]
+                vec_wire_2[1] = vec_to_wire_point[2]
+                angs = []
+                for icoord in range(0, 2):
+                    vec_tie_2[0] = vec_to_tie_point[icoord]
+                    vec_wire_2[0] = vec_to_wire_point[icoord]
+                    vec_tie_2 = vec_tie_2 / np.linalg.norm(vec_tie_2)
+                    vec_wire_2 = vec_wire_2 / np.linalg.norm(vec_wire_2)
+
+                    ang = np.acos(np.dot(vec_tie_2, vec_wire_2))
+                    angs.append(ang)
+                perc_along = indx / (n_spacing - 1.0)
+                mat_rot = R.from_euler('yx', np.array(angs)).as_matrix()
+                for pt_indx in range(indx + 1, gp_as_np.shape[0]):
+                    pt = gp_as_np[pt_indx, :] - gp_as_np[indx, :]
+                    pt_rot = mat_rot @ pt
+                    pt_back = pt_rot + gp_as_np[indx, :]
+                    gp_as_np[pt_indx, :] = pt_back
 
     def _lengths_guide_pts(self, gps: np.array):
         """ Spacing between guide points"""
@@ -106,12 +204,13 @@ class TyingState:
         for indx in range(0, gps.shape[0]):
             if lengths_cntrl_pts[indx] < start_dist:
                 assignment.append((-1, 1.0))
-            elif lengths_cntrl_pts[indx]
 
 
         # Vector from branch start to next wire point
         wire_dir = self.wire_attach.attractor_dir
         print(f" indx {self.last_tie_index}", end="")
+        end_dir = np.ones((3, 1))
+        end_pt = np.ones((3, 1))
         if np.dot(wire_dir, end_dir) < 0.0:
             # Oops, branch growing in the wrong direction - set to next wire point to enable reasonable
             # bending at tie down

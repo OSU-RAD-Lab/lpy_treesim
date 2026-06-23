@@ -50,13 +50,24 @@ class BasicWoodConfig:
        returned true) then lpy inserts a parameter with the branch and the number of buds (set to zero)
        Should bud defines a segment length to be total"""
 
+    # Growth variables
     bud_spacing_range: tuple = (0.0254, 0.0508)  # 1-2 inches
     yearly_growth_range: list[tuple] = None      # eg (1, 24, 36) would be up to 1 age_in_years between 24 and 36 inches
     taper_amount: float = 0.5                    # How much to taper by
     phyllotaxis_angle: float = 144               # How to space buds around a branch
     bud_angle_probs: dict = None                # Bud angle relative to branch; angle may depend on type of bud
     bud_break_probs: tuple = (0.1, 0.3, 0.35)   # EG , will turn vegetative with 0.1 prob, fruiting w 0.3 - 0.1
+
+    # Curve parameters for L-System growth guides
+    #   Since growth curves are always in the heading direction (0,0,1) wiggle in x and y but straight in z
+    curve_x_range: tuple = (-0.25, 0.25)  # X noise bounds for Bezier curve control points
+    curve_y_range: tuple = (-0.25, 0.25)  # Y noise bounds for Bezier curve control points
+
+    # Tying and pruning variables
     tie_type: TyingState.TyingType = TyingState.TyingType.NO_TIE # How to tie this branch type to support
+    tie_start_dist: float = 0.46                # (18 inches) Expected distance from the base of the trunk/branch to first tie point
+    tie_spacing: float = 0.46                   # (18 inches) Spacing of tie points
+
     prune_length: float = 1000.0                 # If you want to have the branch pruned after a certain length...
     prunable: bool = True
 
@@ -66,15 +77,6 @@ class BasicWoodConfig:
 
     # Store the prototype configs here
     configs_dict: dict = None,
-
-    # Unique color for each plant part
-    color: tuple = (128, 128, 128)
-
-    # Curve parameters for L-System growth guides
-    #   Since growth curves are always in the heading direction (0,0,1) wiggle in x and y but straight in z
-    curve_x_range: tuple = (-0.25, 0.25)  # X bounds for Bezier curve control points
-    curve_y_range: tuple = (-0.25, 0.25)  # Y bounds for Bezier curve control points
-    curve_z_range: tuple = (1.0, 2.0)     # Z bounds for Bezier curve control points
 
     def __post_init__(self):
         """Validate geometric parameters for consistent growth behavior."""

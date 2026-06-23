@@ -7,6 +7,7 @@ import copy
 import numpy as np
 from openalea.plantgl.scenegraph import BezierCurve
 from openalea.plantgl.scenegraph.cspline import CSpline
+from openalea.plantgl.all import Point4Array
 
 from lpy_treesim.lpy_functions.lpy_geometry_fns import create_bezier_curve
 from lpy_treesim.tree_models.base_tree.basic_wood_growth_location import GrowthState, LocationState
@@ -37,7 +38,13 @@ class BasicWood(ABC):
         self.location = LocationState()
 
         # Tying status - contains what type of tying and attractor points, plus guide points
-        self.tying = TyingState(tie_type=config.tie_type)
+        self.tying = TyingState(tie_type=config.tie_type,
+                                tie_start_dist=config.tie_start_dist,
+                                tie_spacing=config.tie_spacing)
+        self.tying.create_initial_guide_curve(expected_length=config.prune_length,
+                                              curve_x_range=config.curve_x_range,
+                                              curve_y_range=config.curve_y_range,
+                                              lpy_rng=config.lpy_rng)
 
         # Track cut y/n
         self.cut = False
@@ -186,10 +193,8 @@ class BasicWood(ABC):
     def initial_growth_curve(self):
         """ If not over-ridden later by tying, generate a growth curve.
         Note: This is relative to the starting direction of the wood object - so z is always 'out' """
-        return create_bezier_curve(num_control_points=6,
-                                   x_range=self.config.curve_x_range,
-                                   y_range=self.config.curve_y_range,
-                                   total_length=self.growth.prune_length)
+        control_point_array = Point4Array(self.tying.guide_points)
+        return BezierCurve(control_point_array)
 
     def contour_curve(self):
         # If you want a non-circular cross section... use lpy_geometry functions to make a contour

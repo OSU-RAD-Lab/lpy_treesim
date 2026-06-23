@@ -1,7 +1,15 @@
+"""
+UFO tree architectures
+  Main trunk is bent over and tied to the first wire
+  Primary support branches grow vertically and are tied along the remaining wires
+  Tertiary branches/spurs grow horizontally out of primary support branches
+  Uses default spur
+"""
+import numpy as np
 from lpy_treesim.tie_prune.tying import TyingState
 from lpy_treesim.tree_models.base_tree.bud_site import BudSite
 from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicSpur, BasicBranch, BasicTrunk
-from lpy_treesim.lpy_functions.lpy_helper_functions import *
+from lpy_treesim.tree_models.base_tree.basic_wood_config import BasicWoodConfig
 from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvention
 from lpy_treesim.tie_prune.tie_prune_simulation_base import SimulationConfig
 
@@ -71,7 +79,6 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                   taper_amount=0.01,  # Ends in a point
                                   curve_x_range=(-0.02, 0.02),
                                   curve_y_range=(-0.02, 0.02),
-                                  color=TreeNamingConvention.semantic_color("spur"),
                                   num_iter_per_year=sim_config.num_iter_per_year,
                                   lpy_rng=lpy_rng)
 
@@ -83,7 +90,6 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                          bud_break_probs=(0.05, 0.5, 0.55),
                                          curve_x_range=(-0.1, 0.1),
                                          curve_y_range=(-0.1, 0.1),
-                                         color=TreeNamingConvention.semantic_color("branch"),
                                          num_iter_per_year=sim_config.num_iter_per_year,
                                          lpy_rng=lpy_rng)
 
@@ -95,9 +101,10 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                             bud_angle_probs=bud_angle_probs,
                                             bud_break_probs=(0.2, 0.6, 0.8),   # Most buds break as fruiting
                                             tie_type=TyingState.TyingType.TIE_ACROSS,
+                                            tie_start_dist=0.46,  # 18 inches from first wire
+                                            tie_spacing=0.45,     # 18 inches between wires
                                             curve_x_range=(-0.2, 0.2),
                                             curve_y_range=(-0.2, 0.2),
-                                            color=TreeNamingConvention.semantic_color("branch"),
                                             num_iter_per_year=sim_config.num_iter_per_year,
                                             lpy_rng=lpy_rng)
 
@@ -111,7 +118,8 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                    tie_type=TyingState.TyingType.TIE_ALONG,
                                    curve_x_range=(-0.2, 0.2),
                                    curve_y_range=(-0.2, 0.2),
-                                   color=TreeNamingConvention.semantic_color("trunk"),
+                                   tie_start_dist=0.46,  # 20 inches from ground to first wire
+                                   tie_spacing=0.3,      # 12 inches between wires
                                    num_iter_per_year=sim_config.num_iter_per_year,
                                    lpy_rng=lpy_rng)
 

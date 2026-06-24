@@ -63,30 +63,29 @@ class SimulationConfig(ABC):
 
     @property
     def derivation_length(self):
-        return 20
+        return 2 * self.num_iter_per_year + 3
         return self.n_years * self.num_iter_per_year + 3
 
     def do_trunk_tying(self, current_iteration: int):
-        # Tie the iteration before branch tying so shape propagates correctly
-        return False
-        if current_iteration % (self.num_iter_per_year - 1) == 0:
+        # Since the tying is just a guide curve that won't change, do once
+        if current_iteration == 2:
             return True
         return False
 
     def do_branch_tying(self, current_iteration: int):
         # Tie the iteration before branch tying so shape propagates correctly
-        if current_iteration % (self.num_iter_per_year) == 0:
-            return True
+        if current_iteration % self.num_iter_per_year == (self.num_iter_per_year - 1):
+            return False
         return False
 
     def do_pruning(self, current_iteration: int):
         # Prune the iteration after tying (and at 3/4 of growth if doing summer pruning)
-        if current_iteration % (self.num_iter_per_year + 1) == 0:
-            return True
+        if current_iteration > 0 and current_iteration % self.num_iter_per_year == 0:
+            return False
         if self.prune_summer:
             prune_iteration = 3 * self.num_iter_per_year // 4
             if current_iteration % prune_iteration == 0:
-                return True
+                return False
         return False
 
     def do_year_increment(self, current_iteration: int):

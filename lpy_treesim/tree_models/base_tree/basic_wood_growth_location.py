@@ -78,6 +78,7 @@ class GrowthState:
         if self.length <= 0.0:
             # Make sure it's grown a bit
             self.length = self.mean_length_growth_per_iteration()
+            self.length_without_pruning = self.length
 
         # Based on vigor level. Diameter ratio is used in the growth step to set the starting thickness of the branch
         self.set_diameter_ratio()
@@ -94,10 +95,11 @@ class GrowthState:
         else:
             t = (self.vigour_level - 0.5) * 2.0
             self.target_diameter_ratio = (1 - t) * ideal_ratio + t * high_ratio
+        assert self.target_diameter_ratio > 0.0
 
     def length_growth_per_year(self):
         """ How much the branch should grow in one year, based on it's current age"""
-        if self.age_in_years > len(self.mean_length_growth_per_year):
+        if self.age_in_years >= len(self.mean_length_growth_per_year):
             return self.mean_length_growth_per_year[-1]
         return self.mean_length_growth_per_year[self.age_in_years]
 

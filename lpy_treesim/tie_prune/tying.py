@@ -62,11 +62,8 @@ class TyingState:
         Set up so that first n points are movable (deform when tied) and there are 3 points between
         tie points"""
         self.guide_points = []
-        num_control_points = int(expected_length / 0.2)
-        if num_control_points < 6:
-            num_control_points = 6
         if self.tie_type == TyingState.TyingType.NO_TIE:
-            z_values = np.linspace(0.0, expected_length, num_control_points)
+            z_values = np.linspace(0.0, expected_length, 6)
         else:
             n_tie_regions = int((expected_length - self.tie_start_dist) / self.tie_spacing)
             # number of tie regions should be correct if the tie spacing distance and prune length are set correctly
@@ -90,6 +87,8 @@ class TyingState:
         for z_value in z_values:
             x_coord = lpy_rng.uniform(curve_x_range[0], curve_x_range[1])
             y_coord = lpy_rng.uniform(curve_y_range[0], curve_y_range[1])
+            x_coord = 0
+            y_coord = 0
             self.guide_points.append(Vector4(x_coord, y_coord, z_value, 1))
         if self.tie_type == TyingState.TyingType.NO_TIE:
             return
@@ -135,19 +134,47 @@ class TyingState:
         """ Convert guide points from base curve position to global"""
         gp_as_np = np.array(self.guide_points)
         rot_mat = np.identity(3)
-        rot_mat[0, :] = np.array(heading)
+        # Heading goes in z, left goes in y, x is the other one
         rot_mat[1, :] = np.array(left)
-        rot_mat[2, :] = np.cross(rot_mat[0, :], rot_mat[1, :])
+        rot_mat[2, :] = np.array(heading)
+        rot_mat[0, :] = np.cross(rot_mat[1, :], rot_mat[2, :])
         for ir in range(gp_as_np.shape[0]):
             for ic in range(0, 3):
-                gp_as_np[ir, ic] -= pt_origin[ic]
-                gp_as_np[ir, :] = rot_mat @ gp_as_np[ir, :]
+                # Guide curves start at 0,0,0 - move to branch start point in space
+                gp_as_np[ir, ic] += pt_origin[ic]
+            gp_as_np[ir, 0:3] = rot_mat @ gp_as_np[ir, 0:3]
+
+        vec = gp_as_np[1, :] - gp_as_np[0, :]
+        vec = vec / np.linalg.norm(vec)
+        print(f"vec {vec} heading {heading}")
         return rot_mat, gp_as_np
+
+    def _get_angs_and_scl(self, start_pt, next_guide_pt, next_wire_pt):
+        # Pivoting around indx point to bring the next tie point to the next wire point
+        vec_to_tie_point = next_guide_pt - start_pt
+        vec_to_wire_point = next_wire_pt - start_pt
+
+        scl = np.sqrt(np.linalg.norm(vec_to_tie_point) / np.linalg.norm(vec_to_wire_point))
+        vec_tie_2 = np.zeros((2,))
+        vec_wire_2 = np.zeros((2,))
+        # y value for the two is the same - z component
+        vec_tie_2[1] = vec_to_tie_point[2]
+        vec_wire_2[1] = vec_to_wire_point[2]
+        angs = []
+        for icoord in range(0, 2):
+            vec_tie_2[0] = vec_to_tie_point[icoord]
+            vec_wire_2[0] = vec_to_wire_point[icoord]
+            vec_tie_2 = vec_tie_2 / np.linalg.norm(vec_tie_2)
+            vec_wire_2 = vec_wire_2 / np.linalg.norm(vec_wire_2)
+
+            ang = np.acos(np.dot(vec_tie_2, vec_wire_2))
+            angs.append(-ang)
+        return angs, scl
 
     def _bend_to_wire(self, pt_origin: Vector3, heading: Vector3, left: Vector3):
         """
         Convert points to global coords, then do a pivot around each point in turn to incrementally align
-        the nth point with the wire
+        the nth point with the wire guide point
         Note: need to re-do if the initial point/vector change
         """
         rot_mat, gp_as_np = self._convert_guide_points_to_global(pt_origin=pt_origin, heading=heading, left=left)
@@ -155,29 +182,44 @@ class TyingState:
         n_spacing = self.n_pts_tie_down
         for tie_point in range(0, self.wire_attach.attractor_pts.shape[0]):
             # Pivoting around indx point to bring the next tie point to the next wire point
-            for indx in range(1, n_spacing):
-                vec_to_tie_point = gp_as_np[start_indx + n_spacing - 1, :] - gp_as_np[start_indx, 0]
-                vec_to_wire_point = self.wire_attach.attractor_pts[tie_point, :] - gp_as_np[start_indx, 0]
-                vec_tie_2 = np.zeros((2, 1))
-                vec_wire_2 = np.zeros((2, 1))
-                vec_tie_2[1] = vec_to_tie_point[2]
-                vec_wire_2[1] = vec_to_wire_point[2]
-                angs = []
-                for icoord in range(0, 2):
-                    vec_tie_2[0] = vec_to_tie_point[icoord]
-                    vec_wire_2[0] = vec_to_wire_point[icoord]
-                    vec_tie_2 = vec_tie_2 / np.linalg.norm(vec_tie_2)
-                    vec_wire_2 = vec_wire_2 / np.linalg.norm(vec_wire_2)
+            angs, scl = self._get_angs_and_scl(start_pt=gp_as_np[start_indx, 0:3],
+                                               next_guide_pt=gp_as_np[start_indx + n_spacing, 0:3],
+                                               next_wire_pt=self.wire_attach.attractor_pts[tie_point, 0:3])
+            print(f"Tie point {self.wire_attach.attractor_pts[tie_point, :]} guide_point {gp_as_np[start_indx + n_spacing - 1, :]}")
+            print(f"Angs {angs} scl {scl}")
+            # Now rotate/scale all of the guide curve to the right, using some percentage of the rotate scale up to the
+            # next index point
+            angs = np.array(angs)
+            mat_scl = np.identity(3)
+            mat_scl[0, 0] = scl
+            mat_scl[1, 1] = scl
+            mat_scl[2, 2] = scl
+            mat_rot = np.identity(3)
+            # Move ALL the points after this one by the target amount
+            for pt_indx in range(start_indx+1, gp_as_np.shape[0]):
+                if pt_indx - start_indx < n_spacing:
+                    perc_along = (pt_indx - start_indx) / (n_spacing - 1.0)
+                    ang_perc = angs * perc_along
+                    mat_rot = R.from_euler('yz', ang_perc).as_matrix()
+                # Subtract the current point (the one we're rotating around)
+                pt = gp_as_np[pt_indx, 0:3] - gp_as_np[start_indx, 0:3]
+                # Do the rotation
+                pt_rot = mat_scl @ mat_rot @ pt
+                # Translate back out
+                pt_back = pt_rot + gp_as_np[start_indx, 0:3]
+                gp_as_np[pt_indx, 0:3] = pt_back
 
-                    ang = np.acos(np.dot(vec_tie_2, vec_wire_2))
-                    angs.append(ang)
-                perc_along = indx / (n_spacing - 1.0)
-                mat_rot = R.from_euler('yx', np.array(angs)).as_matrix()
-                for pt_indx in range(indx + 1, gp_as_np.shape[0]):
-                    pt = gp_as_np[pt_indx, :] - gp_as_np[indx, :]
-                    pt_rot = mat_rot @ pt
-                    pt_back = pt_rot + gp_as_np[indx, :]
-                    gp_as_np[pt_indx, :] = pt_back
+            print(f"New guide point loc {gp_as_np[start_indx + n_spacing, 0:3]}")
+            start_indx += n_spacing
+            n_spacing = self.n_pts_per_tie
+        # Convert the guide points back to local coordinate system
+        self.guide_points = []
+        for icoord in range(0, 3):
+            gp_as_np[:, icoord] -= pt_origin[icoord]
+        rot_mat_back = rot_mat.transpose()
+        for indx in range(0, gp_as_np.shape[0]):
+            rot_vec = rot_mat_back @ gp_as_np[indx, 0:3]
+            self.guide_points.append(Vector4(rot_vec[0], rot_vec[1], rot_vec[2], 1.0))
 
     def _lengths_guide_pts(self, gps: np.array):
         """ Spacing between guide points"""

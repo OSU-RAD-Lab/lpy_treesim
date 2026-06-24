@@ -118,7 +118,8 @@ module IMakeBudCylinder(bud_name)
 # The initial L-System string that begins the simulation.
 # Starts with the trellis attractors, sets up the trunk guide curve,
 # and initializes the trunk growth with proper orientation and hierarchy dict.
-Axiom: Attractors(trellis_support)&(main_trunk.angle_wrt_ground())add_branch(main_trunk.name)
+#  Pitches the trunk left/right in the plane of growth (i.e., changes x, not y)
+Axiom: Attractors(trellis_support)^(main_trunk.angle_wrt_ground())add_branch(main_trunk.name)
 
 # -----------------------------------------------------------------------------
 # DERIVATION PARAMETERS
@@ -324,8 +325,12 @@ IMakeCylinders(branch_name, start_dist, end_dist, b_generate):
     t = i * delta_t
     if b_generate:
       diameter = (1.0 - t) * start_diameter + t * end_diameter
+      if diameter <= 0.0:
+        print(f"Bad diameter {branch_name} {diameter}")
       nproduce _(diameter) F(step_along)
     else:
+      if growth_length <= 0.0:
+        print(f"Bad growth length {branch_name} {growth_length}")
       nproduce f(growth_length)
 
 
@@ -340,6 +345,8 @@ IStartBud(bud_name):
 
 IMakeBudCylinder(bud_name):
   bud = map_name_instance[bud_name]
+  if bud.start_diameter() <= 0.0 or bud.end_diameter() <= 0.0:
+    print(f"Bad bud {bud_name} {bud.start_diameter()}, {bud.end_diameter()}")
   nproduce _(bud.start_diameter())
   nproduce F(bud.draw_length(), bud.end_diameter())
 

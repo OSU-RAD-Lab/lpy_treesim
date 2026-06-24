@@ -134,8 +134,8 @@ def main():
             # meta_data["tree"] = tree  # Need to fix
             # meta_data["tree_mapping"] = mapping
             meta_data["color_mapping"] = color_to_part
-            # with open(metadata_path, "w") as f:
-            #     json.dump(meta_data, f, indent=4)
+            with open(metadata_path, "w") as f:
+                json.dump(meta_data, f, indent=4)
             logger.info(f"Wrote meta data to {metadata_path}")
 
         del scene

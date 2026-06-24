@@ -127,13 +127,14 @@ class TreeBuilder:
             lstring = self.__lsystem.derive(lstring, iteration, 1)
 
             print(f"Iteration {iteration}")
-            # self.make_string_readable(str(lstring))
+            #self.make_string_readable(str(lstring))
 
             # DO NOT TAKE OUT THIS LINE - or everything will stop working
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
             interpreted_string = self.__lsystem.interpret(lstring)
 
-            self.make_string_readable(str(interpreted_string))
+            if iteration == self.__lsystem.derivationLength - 1:
+                self.make_string_readable(str(interpreted_string))
             if self.b_interactive:
                 scene =  self.__lsystem.sceneInterpretation(interpreted_string)
                 Viewer.display(scene)

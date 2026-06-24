@@ -202,60 +202,63 @@ def plant_gl_scene_to_vertices_and_faces(scene, tree_mapping: dict, color_mappin
             continue
 
         p = d.result
-        if isinstance(p, plantgl.scenegraph._pglsg.PointSet):
+        if not isinstance(p, plantgl.scenegraph._pglsg.QuadSet):
             continue
 
-        # The vertices and faces from the cylinder
-        pts = p.pointList
-        face = p.indexList
-        n = len(p.pointList)
-        if n == 0:
-            print(f"Warning: Empty cylinder")
-            continue
+        try:
+            # The vertices and faces from the cylinder
+            pts = p.pointList
+            face = p.indexList
+            n = len(p.pointList)
+            if n == 0:
+                print(f"Warning: Empty cylinder")
+                continue
 
 
-        # Use this trick to get the tree component part back
-        color = item.appearance.diffuseColor()
+            # Use this trick to get the tree component part back
+            color = item.appearance.diffuseColor()
 
-        # A bit roundabout - but use the color to get the lpy name, and the lpy name to get the tree part
-        r, g, b = color
-        unique_color = (r, g, b)
-        hierarchy_name = color_mapping.color_to_name[unique_color]
-        if "bud" in hierarchy_name:
-            tree_part_dict = {}
-        else:
-            tree_part_dict = tree_mapping[hierarchy_name]
+            # A bit roundabout - but use the color to get the lpy name, and the lpy name to get the tree part
+            r, g, b = color
+            unique_color = (r, g, b)
+            hierarchy_name = color_mapping.color_to_name[unique_color]
+            if "bud" in hierarchy_name:
+                tree_part_dict = {}
+            else:
+                tree_part_dict = tree_mapping[hierarchy_name]
 
-        # Store the points and the faces
-        mesh_component = {"vertices":[], "faces":[]}
-        for v_id, pt in enumerate(pts):
-            # pt_swap_y_z = [pt[0], pt[2], pt[1]]
-            mesh_component["vertices"].append(pt)
-        for j in face:
-            flatten_f = list(map(lambda x: x, j))
-            mesh_component["faces"].append(flatten_f)
+            # Store the points and the faces
+            mesh_component = {"vertices":[], "faces":[]}
+            for v_id, pt in enumerate(pts):
+                # pt_swap_y_z = [pt[0], pt[2], pt[1]]
+                mesh_component["vertices"].append(pt)
+            for j in face:
+                flatten_f = list(map(lambda x: x, j))
+                mesh_component["faces"].append(flatten_f)
 
-        if n != 16:
-            # Unless someone changes it, the default radial resolution of the cylinders should be 16
-            print(f"Diff number of vs {n}")
+            if n != 16:
+                # Unless someone changes it, the default radial resolution of the cylinders should be 16
+                raise ValueError(f"Diff number of vs {n}")
 
-        if "bud" in hierarchy_name:
-            bud_color = TreeNamingConvention.semantic_color("bud")
-            mesh_component["textures"] = []
-            mesh_component["uv_textures"] = []
-            mesh_component["vertex_colors"] = []
-            mesh_component["face_colors"] = []
-            for indx in range(0, len(mesh_component["vertices"])):
-                dt = (indx % n) / n
-                mesh_component["textures"].append((float(indx // n), dt))
-                mesh_component["uv_textures"].append((float(indx // n), dt))
-                mesh_component["vertex_colors"].append(bud_color)
-            for indx in range(0, len(mesh_component["faces"])):
-                mesh_component["face_colors"].append(bud_color)
-            bud_sites.append(mesh_component)
-        else:
-            # Most of the plant parts are made of multiple cylinders which we'll stitch together later
-            tree_part_dict["mesh_cyl"].append(mesh_component)
+            if "bud" in hierarchy_name:
+                bud_color = TreeNamingConvention.semantic_color("bud")
+                mesh_component["textures"] = []
+                mesh_component["uv_textures"] = []
+                mesh_component["vertex_colors"] = []
+                mesh_component["face_colors"] = []
+                for indx in range(0, len(mesh_component["vertices"])):
+                    dt = (indx % n) / n
+                    mesh_component["textures"].append((float(indx // n), dt))
+                    mesh_component["uv_textures"].append((float(indx // n), dt))
+                    mesh_component["vertex_colors"].append(bud_color)
+                for indx in range(0, len(mesh_component["faces"])):
+                    mesh_component["face_colors"].append(bud_color)
+                bud_sites.append(mesh_component)
+            else:
+                # Most of the plant parts are made of multiple cylinders which we'll stitch together later
+                tree_part_dict["mesh_cyl"].append(mesh_component)
+        except:
+            pass
     return bud_sites
 
 

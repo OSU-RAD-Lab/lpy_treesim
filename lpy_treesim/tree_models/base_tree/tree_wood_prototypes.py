@@ -41,10 +41,6 @@ class BasicWood(ABC):
         self.tying = TyingState(tie_type=config.tie_type,
                                 tie_start_dist=config.tie_start_dist,
                                 tie_spacing=config.tie_spacing)
-        self.tying.create_initial_guide_curve(expected_length=config.prune_length,
-                                              curve_x_range=config.curve_x_range,
-                                              curve_y_range=config.curve_y_range,
-                                              lpy_rng=config.lpy_rng)
 
         # Track cut y/n
         self.cut = False
@@ -59,6 +55,7 @@ class BasicWood(ABC):
         # Use the vigor setting plus some noise to establish growth rate for this branch
         mgl = []
         start_year = 0
+        len_max = 0.0
         for mgl_item in self.config.yearly_growth_range:
             for yr in range(start_year, mgl_item[0]):
                 mean_range = (1.0 - vigor) * mgl_item[1] + vigor * mgl_item[2]
@@ -69,7 +66,13 @@ class BasicWood(ABC):
                 if mean_value > mgl_item[2]:
                     mean_value = mgl_item[2]
                 mgl.append(mean_value)
+                len_max += mean_value
                 start_year += 1
+
+        self.tying.create_initial_guide_curve(expected_length=len_max,
+                                              curve_x_range=config.curve_x_range,
+                                              curve_y_range=config.curve_y_range,
+                                              lpy_rng=config.lpy_rng)
 
         # Parameters controlling growth
         self.growth = GrowthState(vigour_level=vigor,
@@ -114,6 +117,7 @@ class BasicWood(ABC):
             min_length_bud_site = self.config.bud_spacing_range[1]
 
         len_from_last = self.growth_since_last_bud()
+        return False
         if min_length_bud_site < len_from_last:
             return True
         return False
@@ -216,6 +220,12 @@ class BasicWood(ABC):
             return
 
         self.logger.info(f"Updating guide {self.name} {self.tying.last_tie_index}")
+        self.tying._bend_to_wire(pt_origin=self.location.start, heading=self.location.start_dir, left=self.location.start_left_dir)
+        self.logger.info(f"Done updating guide {self.name} {self.tying.last_tie_index} {self.tying.guide_points[-1]}")
+        control_point_array = Point4Array(self.tying.guide_points)
+        self.growth_curve = BezierCurve(control_point_array)
+
+        return
         # Ran out of tie points
         if self.tying.last_tie_index >= self.tying.wire_attach.attractor_pts.shape[1]:
             self.logger.info(f"  Off end")

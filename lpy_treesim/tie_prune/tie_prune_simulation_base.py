@@ -12,23 +12,12 @@ and implement architecture-specific methods like point generation.
 
 from abc import ABC, abstractmethod
 from scipy.optimize import linear_sum_assignment
+
 from lpy_treesim.tie_prune.wire_support import Support
 from lpy_treesim.lpy_functions.lpy_sring_prune_edit_fns import cut_from
 from lpy_treesim.tie_prune.tying import TyingState
 from lpy_treesim.tree_models.base_tree.bud_site import BudSite
-from lpy_treesim.lpy_functions.lpy_geometry_fns import create_bezier_curve
-from openalea.plantgl.all import (
-    NurbsCurve,
-    Vector3,
-    Vector4,
-    Point4Array,
-    Point2Array,
-    Point3Array,
-    Polyline2D,
-    BezierCurve,
-    BezierCurve2D,
-)
-from openalea.lpy import Lsystem, newmodule
+from openalea.plantgl.all import Vector4, Point4Array, BezierCurve
 import numpy as np
 from typing import Callable
 from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
@@ -83,12 +72,6 @@ class TreeSimulationBase(ABC):
         self.generate_geometry: bool = False  # Set to True when ready for lstring to have geom
 
     @abstractmethod
-    def create_trunk_curve(self):
-        """ Create an initial growth curve for the tree trunk. Defaults to straight up"""
-        curve = create_bezier_curve(x_range = (-1, 1), y_range = (-1, 1), z_range = (0, 10), rng=self.config.lpy_rng)
-        return curve
-
-    @abstractmethod
     def generate_attractor_grids(self):
         """
         Generate 3D points for the trellis wire structure.
@@ -138,6 +121,8 @@ class TreeSimulationBase(ABC):
         if sim_config.do_trunk_tying(self.current_iteration):
             # Pin tree trunk one iteration before branches so vectors update correctly
             for trunk in branch_hierarchy["root"]:
+                # Note: The bezier curve in the string will be updated the next time the lstring
+                # is interpolated
                 trunk.update_guide()
 
         trunk_branches = self.get_trunk_branches(branch_hierarchy=branch_hierarchy)

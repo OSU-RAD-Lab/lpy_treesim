@@ -68,21 +68,3 @@ class UFOSimulation(TreeSimulationBase):
         self.branch_attractor = self.support.make_atractor_grid(tie_type=TyingState.TyingType.TIE_ACROSS, n_along_x=6)
 
         return self.support
-
-    def create_trunk_curve(self):
-        """ Create an initial growth curve that is at a 45 degree angle (which is how trees are planted)"""
-        control_pts = []
-        n_pts = 6
-        angle = np.pi / 4.0
-        # Assume one age_in_years before first tie, should grow 24-36 inches, so make the guide curve at least 3 feet long (1 m)
-        curve_length = 1.0
-        delta_step = curve_length / n_pts
-        for n in range(0, n_pts):
-            dt = (n+1) * delta_step
-            x = dt * np.sin(angle) + self.config.lpy_rng.uniform(-0.1, 0.1)
-            y = self.config.lpy_rng.uniform(-0.1, 0.1)
-            z = dt * np.cos(angle)
-            control_pts.append(Vector4(x, y, z, 1))
-        control_point_array = Point4Array(control_pts)
-        curve = BezierCurve(control_point_array)
-        return curve

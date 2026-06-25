@@ -38,12 +38,12 @@ def cut_from(pruning_position, lstring, lsystem_path=None):
     Returns:
         Modified L-System string with cut marker inserted
     """
-    # Insert cut marker (%) after the pruning position
-    lstring.insertAt(pruning_position + 1, newmodule("%"))
+    # Insert cut marker (%) before the [] containing WoodStart
+    lstring.insertAt(pruning_position - 1, newmodule("%"))
     return lstring
 
 
-def cut_using_string_manipulation(pruning_position, lstring, lsystem_path=None):
+def cut_using_string_manipulation(pruning_position, lstring):
     """
     Remove a complete branch segment from the L-System string.
 
@@ -62,8 +62,7 @@ def cut_using_string_manipulation(pruning_position, lstring, lsystem_path=None):
     """
     bracket_balance = 0
     current_position = pruning_position
-    # Skip the pruning position itself
-    current_position += 1
+    # This symbol should be the starting [
     search_position = pruning_position + 1
     total_length = len(lstring)
 

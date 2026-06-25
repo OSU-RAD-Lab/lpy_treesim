@@ -69,7 +69,7 @@ class BasicWoodConfig:
     tie_spacing: float = 0.46                   # (18 inches) Spacing of tie points
 
     prune_length: float = 1000.0                 # If you want to have the branch pruned after a certain length...
-    prunable: bool = True
+    remove_at_age: bool = False                 # If true then any branches older than simulation config age will be removed
 
     # Random number to use - this is here for repeatability
     lpy_rng: np.random.Generator = None

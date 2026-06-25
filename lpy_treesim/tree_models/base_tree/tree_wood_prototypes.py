@@ -42,9 +42,6 @@ class BasicWood(ABC):
                                 tie_start_dist=config.tie_start_dist,
                                 tie_spacing=config.tie_spacing)
 
-        # Track cut y/n
-        self.cut = False
-
         # Growth Variables  - generate variables stochastically
         vigor = self.config.lpy_rng.normal(0.5, 0.2)
         if vigor < 0.0:
@@ -117,7 +114,6 @@ class BasicWood(ABC):
             min_length_bud_site = self.config.bud_spacing_range[1]
 
         len_from_last = self.growth_since_last_bud()
-        return False
         if min_length_bud_site < len_from_last:
             return True
         return False
@@ -157,7 +153,7 @@ class BasicWood(ABC):
         self.growth.length += length_incr
         self.growth.length_without_pruning += length_incr
 
-    def prune_growth_length(self):
+    def prune_growth_length(self) -> list[str]:
         """ Call during pruning step to prune back long growth"""
         if self.growth.length_without_pruning > self.growth.prune_length:
             # Add a bit of noise to model pruning cut noise
@@ -166,14 +162,28 @@ class BasicWood(ABC):
                 target_length = 0.0001
 
             self.growth.length = target_length
-            prune_buds = []
-            for indx, bud in enumerate(self.bud_sites):
-                # These *SHOULD* be in length order
-                if bud.dist_along > target_length:
-                    prune_buds = self.bud_sites[indx:]
-                    del self.bud_sites[indx:]
-                    return prune_buds
-        return None
+            return self.prune(target_length)
+        return []
+
+    def prune(self, at_length: float) -> list[str]:
+        """ Prune some or all of the branch
+        Recursively delete bud sites
+        Return names of all the deleted objects (for removing from other data structures)"""
+        names = []
+        bud_keep = []
+        for bud in self.bud_sites:
+            if bud.dist_along < at_length:
+                bud_keep.append(bud)
+                continue
+            # Takes out the bud's children
+            names.extend(bud.prune())
+            # Need to remove this bud site as well
+            names.append(bud.name)
+            # Actually delete the bud
+            del bud
+        # These are the only ones we're keeping (if any)
+        self.bud_sites = bud_keep
+        return names
 
     def add_year(self):
         self.growth.age_in_years += 1
@@ -219,88 +229,17 @@ class BasicWood(ABC):
         if not self.tying.is_tied:
             return
 
-        self.logger.info(f"Updating guide {self.name} {self.tying.last_tie_index}")
+        if not self.tying.has_moved(start_pt=self.location.start, start_dir=self.location.start_dir):
+            return
+
+        print(f"Updating guide for {self.name}")
         self.tying._bend_to_wire(pt_origin=self.location.start, heading=self.location.start_dir, left=self.location.start_left_dir)
-        self.logger.info(f"Done updating guide {self.name} {self.tying.last_tie_index} {self.tying.guide_points[-1]}")
         control_point_array = Point4Array(self.tying.guide_points)
         self.growth_curve = BezierCurve(control_point_array)
 
-        return
-        # Ran out of tie points
-        if self.tying.last_tie_index >= self.tying.wire_attach.attractor_pts.shape[1]:
-            self.logger.info(f"  Off end")
-            return
-
-        # Case 1: We haven't started tying yet, so create a guide curve that goes from the end point
-        #         to the first tie point
-        # Case 2: We are still growing along the guide curve, haven't reached the end
-        # Case 3: We have grown past the last tie point and need to add to the guide curve
-        # Sets self.tying.guide_points and self.tying.guide_length
-        self.tying.tie_needs_updating = False
-        print(f"Branch {self.name}", end="")
-
-        if self.tying.last_tie_index == -1:
-            self.tying.start_guide_points(self.location)
-            # Flag that we need to update the guide curve in the LString
-            self.tying.tie_needs_updating = True
-        else:
-            # check location of end point wrt last tie point
-            # The last guide point will have been set to the last tie point
-            end_pt = np.array(self.location.end)
-            last_tie_pt = self.tying.wire_attach.attractor_pts[self.tying.last_tie_index]
-            dir_along = end_pt - last_tie_pt
-            past = np.dot(dir_along, self.tying.wire_attach.attractor_dir)
-            if past > 0.0:
-                self.tying.add_next_guide_points(self.location)
-                # Flag that we need to update the guide curve in the LString
-                self.tying.tie_needs_updating = True
-        # Note: actual guide curve will be updated at EndEach hook, not here
-        self.logger.info(f"Done updating guide {self.name} {self.tying.last_tie_index} {self.tying.guide_points[-1]}")
-
-    def tie_lstring(self, lstring, index):
-        """Insert a SetGuide(...) after position `index` in `lstring`.
-
-        - Removes any immediate following tokens whose .name is in ('&','/','SetGuide').
-        - Builds a CSpline from `self.tying.guide_points` and inserts the curve string and length.
-        Returns (lstring, removed_count).
-        """
-        # Nothing to do if we don't have new guide points
-        return lstring, 0
-        if not self.tying.tie_needs_updating:
-            return lstring, 0
-
-        # Build spline and get curve representation (may raise)
-        try:
-            spline = CSpline(self.tying.guide_points)
-            curve_repr = spline.curve(stride_factor=100)
-        except Exception as exc:
-            raise ValueError("Invalid spline from guide_points") from exc
-
-        # Defensive check for 'nan' in the curve representation (preserve original check intent)
-        if "nan" in str(curve_repr):
-            raise ValueError("Curve is NaN", self.tying.guide_points)
-
-        # Remove any immediate tokens after index that match the removal set
-        removal_names = {"&", "/", "SetGuide"}
-        insert_pos = index + 1
-        removed_count = 0
-
-        # Remove while the next token exists and matches
-        while insert_pos < len(lstring) and getattr(lstring[insert_pos], "name", None) in removal_names:
-            del lstring[insert_pos]
-            removed_count += 1
-
-        # Insert the new SetGuide token at the computed insert position
-        # Upper limit on following the guide curve is the number of wires currently crossed * spacing
-        # Once the turtle hits the set guide it will follow it for the length given; so give it the length
-        #   of the guide curve
-        tie_length = 1.1 * self.tying.last_tie_index * self.tying.wire_attach.spacing
-        lstring.insertAt(insert_pos, f"SetGuide({curve_repr}, {tie_length})")
-
-        # Flag that we've added the new guide curve
-        self.tying.tie_needs_updating = False
-
-        return lstring, removed_count
+        # If these don't change, then don't need to re-tie
+        self.tying.start_pt_tied = self.location.start
+        self.start_dir_tied = self.location.start_dir
 
 
 class BasicSpur(BasicWood):

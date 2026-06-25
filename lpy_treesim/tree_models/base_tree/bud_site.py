@@ -92,6 +92,23 @@ class BudSite(ABC):
             return self.spur_child
         return None
 
+    def prune(self) -> list[str]:
+        """ Mark as pruned and remove children"""
+        self.bud_state = BudSite.BudType.PRUNED
+        names = []
+        if self.spur_child:
+            names.extend(self.spur_child.prune(0.0))
+            names.append(self.spur_child.name)
+            del self.spur_child
+            self.spur_child = None
+        if self.branch_child:
+            names.extend(self.branch_child.prune(0.0))
+            names.append(self.branch_child.name)
+            self.branch_child.prune(0.0)
+            del self.branch_child
+            self.branch_child = None
+        return names
+
     def add_year(self):
         self.age_year += 1
 

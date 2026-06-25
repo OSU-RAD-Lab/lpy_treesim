@@ -11,13 +11,14 @@ and implement architecture-specific methods like point generation.
 """
 
 from abc import ABC, abstractmethod
+from openalea.lpy import Lsystem, newmodule
+
 from scipy.optimize import linear_sum_assignment
 
 from lpy_treesim.tie_prune.wire_support import Support
-from lpy_treesim.lpy_functions.lpy_sring_prune_edit_fns import cut_from
+from lpy_treesim.lpy_functions.lpy_sring_prune_edit_fns import cut_using_string_manipulation
 from lpy_treesim.tie_prune.tying import TyingState
 from lpy_treesim.tree_models.base_tree.bud_site import BudSite
-from openalea.plantgl.all import Vector4, Point4Array, BezierCurve
 import numpy as np
 from typing import Callable
 from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
@@ -129,22 +130,17 @@ class TreeSimulationBase(ABC):
 
         if sim_config.do_branch_tying(self.current_iteration):
             # Estimate of cost to tie branches to open wire attachments
-            energy_matrix, open_branches = self.get_energy_matrix(trunk_branches)
+            energy_matrix, wire_ids, open_branches = self.get_energy_matrix(trunk_branches)
 
             # Actually tie some of the branches to the wires
-            self.decide_guide(energy_matrix, open_branches)
+            self.decide_guide(energy_matrix=energy_matrix, wire_ids=wire_ids, branches=open_branches)
 
-            # Update guide curve
+            # Update guide curve - next time interpret lstring is called, it will use the new guide curve
             for branch in trunk_branches:
                 branch.update_guide()
 
-            # This does the actual tying in the string - edits lstring in place
-            while self.tie(lstring):
-                pass
-
         if sim_config.do_pruning(self.current_iteration):
-            while self.prune(lstring, branch_hierarchy):
-                pass
+            self.prune(lstring, branch_hierarchy)
 
         if sim_config.do_year_increment(self.current_iteration):
             for items in branch_hierarchy.values():
@@ -170,9 +166,9 @@ class TreeSimulationBase(ABC):
 
         This function computes an energy cost matrix where each entry represents the
         "cost" of assigning a specific branch to a specific wire in the trellis system.
-        The energy is based on the Euclidean distance from wire attachment points to
-        both the start and end points of each branch, weighted by the simulation's
-        distance weight parameter.
+        The energy is based on the Euclidean distance from the wire attachment point to
+        the start of each branch and the angle between the start of the branch and the tie
+        direction, weighted by the simulation's distance weight parameter.
 
         The algorithm uses a greedy optimization approach where branches are assigned
         to the lowest-energy available wire that hasn't reached capacity.
@@ -190,28 +186,31 @@ class TreeSimulationBase(ABC):
             # Skip branches that are already tied
             if not branch.tying.is_tied:
                 # And that haven't grown yet
-                if branch.growth.length > 0.0:
+                if branch.growth.length > 0.5 * self.support.spacing_wires:
                     open_branches.append(branch)
+
+        wire_ids = []
+        for wire_id, wire in enumerate(self.branch_attractor):
+            # Skip wires that already have a branch attached
+            if wire.branch_id == -1:
+                wire_ids.append(wire_id)
+
         num_branches = len(open_branches)
-        num_wires = len(self.branch_attractor)
+        num_wires = len(wire_ids)
 
         # Initialize energy matrix with infinite values (impossible assignments)
         energy_matrix = np.full((num_branches, num_wires), 10000.0)
 
         # Calculate energy costs for all valid branch-wire combinations
         for branch_idx, branch in enumerate(open_branches):
-            if branch.tying.is_tied:
-                continue
-
-            for wire_id, wire in enumerate(self.branch_attractor):
-                # Skip wires that already have a branch attached
-                if wire.branch_id != -1:
-                    continue
+            for wire_idx, wire_id in enumerate(wire_ids):
+                wire = self.branch_attractor[wire_id]
 
                 # Calculate weighted distance energy for this branch-wire pair
                 # Energy considers distance from wire to both branch endpoints
                 wire_points = np.array(wire.attractor_pts)
                 branch_start = np.array(branch.location.start)
+                branch_dir = np.array(branch.location.start_dir)
                 branch_end = np.array(branch.location.end)
 
                 # Don't care about z just if it aligns (x) and is not too far from the wire (y)
@@ -229,13 +228,23 @@ class TreeSimulationBase(ABC):
                     if end_energy < end_distance_energy:
                         end_distance_energy = end_energy
 
-                total_energy = (start_distance_energy + end_distance_energy) / 2.0
+                align = np.dot(branch_dir, wire.attractor_dir)
+                if branch.location.start[2] < self.config.start_height - self.config.spacing_wires * 0.5:
+                    print(f"Branch {branch.name} on trunk too far below wire ")
+                if align < 0.0:
+                    print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {wire.attractor_dir}")
+                    continue
+                if start_distance_energy > self.support.spacing_wires / 2.0 and end_distance_energy > self.support.spacing_wires / 2.0:
+                    print(f"Branch {branch.name} Too far away {start_distance_energy} {end_distance_energy}")
+                    continue
+                dist_energy = (start_distance_energy / self.support.spacing_wires + end_distance_energy / self.support.spacing_wires) / 2.0
+                total_energy = self.config.energy_distance_weight * dist_energy + align * self.config.energy_angle_weight
 
-                energy_matrix[branch_idx, wire_id] = total_energy
+                energy_matrix[branch_idx, wire_idx] = total_energy
 
-        return energy_matrix, open_branches
+        return energy_matrix, wire_ids, open_branches
 
-    def decide_guide(self, energy_matrix, branches):
+    def decide_guide(self, energy_matrix, wire_ids: list, branches):
         """
         Perform greedy assignment of branches to wires based on energy matrix.
 
@@ -249,6 +258,7 @@ class TreeSimulationBase(ABC):
 
         Args:
             energy_matrix: numpy.ndarray of shape (num_branches, num_wires) with energy costs
+            wire_ids: Ids of wires that can be tied
             branches: List of branch objects to be assigned
 
         Returns:
@@ -257,7 +267,7 @@ class TreeSimulationBase(ABC):
         num_branches, num_wires = energy_matrix.shape
 
         # Early return if no branches or wires to assign
-        if num_branches == 0 or num_wires == 0:
+        if len(branches) == 0 or len(wire_ids) == 0:
             return
 
         # Run the Hungarian algorithm
@@ -277,67 +287,7 @@ class TreeSimulationBase(ABC):
                 id = int(branch.name.split("_")[-1])
                 wire_attach.branch_id = id
 
-    def remove_children_from_hierarchy(self, branch_name, branch_hierarchy, parent_map):
-        """
-        Remove all children of a given branch from the hierarchy and parent map.
-
-        This function is used during pruning to ensure that when a branch is pruned,
-        all of its descendant branches are also removed from the branch hierarchy
-        and the parent mapping. This prevents dangling references to pruned branches.
-
-        Args:
-            branch_name: Name of the branch whose children are to be removed
-            branch_hierarchy: Dictionary mapping parent branch names to lists of child branches
-            parent_map: Dictionary mapping child branch names to their parent branch names
-        Returns:
-            None: Modifies branch_hierarchy and parent_map in-place
-        """
-        parent_name = parent_map.get(branch_name)
-        
-        if parent_name and parent_name in branch_hierarchy:
-            # Remove the branch from its parent's children list
-            children = branch_hierarchy[parent_name]
-            branch_hierarchy[parent_name] = [child for child in children if child.name != branch_name]
-        
-        # Recursively remove all children of the branch first
-        if branch_name in branch_hierarchy:
-            for child_branch in branch_hierarchy[branch_name]:
-                self.remove_children_from_hierarchy(child_branch.name, branch_hierarchy, parent_map)
-            del branch_hierarchy[branch_name]
-        
-        # Remove branch and its children from parent_map
-        if parent_map and branch_name in parent_map:
-            del parent_map[branch_name]
-
-    def prune_length(self, lstring, branch_hierarchy, parent_map=None):
-        """ This trims branches (not cuts them off) but if the cut-off bit has
-            buds then need to remove those branches. Call before tie-down to ensure that
-            you don't have to then cut off a tied-down branch..."""
-        for position, symbol in enumerate(lstring):
-            # Check if this is a WoodStart module (represents a branch)
-            if symbol.name == "WoodStart":
-                branch: BasicWood = symbol[0].type
-
-                # Check pruning criteria
-                buds = branch.prune_growth_length()
-                if buds is None:
-                    continue
-
-                for bud in buds:
-                    print(f"Pruning {bud.name}")
-                    # Remove the bud from the L-System string
-                    for bud_pos, symb in enumerate(lstring):
-                        if symb.name == "BudStart":
-                            bud_in_string: BudSite = symbol[0].type
-                            if bud_in_string.name == bud.name:
-                                lstring = cut_from(bud_pos, lstring)
-
-                    self.remove_children_from_hierarchy(bud, branch_hierarchy, parent_map)
-
-            return True
-        return False
-
-    def prune(self, lstring, branch_hierarchy, parent_map=None):
+    def prune(self, lstring, branch_hierarchy):
         """
         Prune old branches that exceed the age_in_iterations threshold and haven't been tied to wires.
 
@@ -372,74 +322,38 @@ class TreeSimulationBase(ABC):
             until no more pruning operations are possible. The cut_from() function handles
             the actual removal of the branch and any dependent substructures from the string.
         """
-        for position, symbol in enumerate(lstring):
-            # Check if this is a WoodStart module (represents a branch)
-            if symbol.name == "WoodStart":
-                branch: BasicWood = symbol[0].type
 
-                # Check pruning criteria
+        buds_to_prune = []
+        for branch_children in branch_hierarchy.values():
+            for bud in branch_children:
+                if not "bud" in bud.name:
+                    continue
+                if not bud.branch_child:
+                    continue
+                branch: BasicWood = bud.branch_child
                 age_exceeds_threshold = branch.growth.age_in_iterations > self.config.pruning_age_threshold
                 not_tied_to_wire = not branch.tying.is_tied
-                not_already_cut = not branch.cut
-                is_prunable = branch.config.prunable
+                is_prunable = branch.config.remove_at_age
 
                 # Prune if all criteria are met
-                if age_exceeds_threshold and not_tied_to_wire and not_already_cut and is_prunable:
-                    # Mark branch as cut to prevent re-processing
-                    branch.cut = True
+                if age_exceeds_threshold and not_tied_to_wire and is_prunable:
+                    buds_to_prune.append(bud)
 
-                    # Remove the branch from the L-System string
-                    lstring = cut_from(position, lstring)
-                    print(f"Pruning {branch.name}")
-                    
-                    # Remove branch and its children from hierarchy and color manager
-                    if parent_map is not None:
-                        self.remove_children_from_hierarchy(branch.name, branch_hierarchy, parent_map)
+        # Now delete the branches
+        names_to_x = []
+        for bud in buds_to_prune:
+            names_to_x.extend(bud.prune())
 
-                    return True
+        # Now remove the names from branch hierarchy
+        for name in names_to_x:
+            print(f"Deleting {name}")
+            del branch_hierarchy[name]
 
-        return False
-
-    def tie(self, lstring):
-        """
-        Perform tying operation on eligible branches in the L-System string.
-
-        This function searches through the L-System string for 'WoodStart' modules that
-        represent branches ready for tying to trellis wires. It identifies branches that:
-        1. Have tying properties (tying attribute exists)
-        2. Have a defined tie axis (tie_axis is not None)
-        3. Have not been tied yet (tie_needs_updating is False)
-        4. Have guide points available for wire attachment
-
-        When an eligible branch is found, it performs the tying operation by:
-        - Marking the branch as tied (tie_needs_updating = False)
-        - Adding the branch to the target wire
-        - Calling the branch's tie_lstring method to modify the L-System string
-
-        Args:
-            lstring: The current L-System string containing modules and their parameters
-
-        Returns:
-            bool: True if a tying operation was performed, False if no eligible branches found
-
-        Note:
-            This function processes one branch at a time and returns immediately after
-            tying a single branch. It should be called repeatedly (e.g., in a while loop)
-            until no more tying operations are possible.
-        """
-        string_readable = str(lstring).replace("]", "]\n")
-        print(f"Tying:\n{string_readable}\n")
+        # Now edit the string
         for position, symbol in enumerate(lstring):
-            # Check if this is a WoodStart module with tying capabilities
-            if symbol == "WoodStart":
-
-                branch = symbol[0].type
-
-                # lstring is a pointer, so this modifies the original as well
-                lstring, modifications_count = branch.tie_lstring(lstring, position)
-                if modifications_count > 0:
-                    string_readable = str(lstring).replace("]", "]\n")
-                    print(f"Tied{string_readable}\n\n")
-                    return True
-
-        return False
+            # Check if this is a WoodStart module (represents a branch)
+            if "Start" in symbol.name and symbol.name[0] != "I":
+                branch_name: str = symbol[0].name
+                if branch_name in names_to_x:
+                    lstring.insertAt(position - 1, newmodule("%"))
+                    position = position + 1

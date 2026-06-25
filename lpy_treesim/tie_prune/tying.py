@@ -32,9 +32,10 @@ class TyingState:
     n_pts_tie_down: int = 8
     n_pts_per_tie: int = 4
 
-    tie_needs_updating: bool = False  # Set to false when guide curve updated, true when branch changes/new guide point added
     wire_attach: WireBranchAttach = None  # These are the list of points to tie to
-    last_tie_index: int = -1          # Branch has been tied to all of the points up to this index
+    # Save the last starting point and direction of tying -if these change, need to re-do
+    start_pt_tied: tuple = (100, 100, 100)
+    start_dir_tied: tuple = (100, 100, 100)
     # Potential support structure info - used to create guide_point spacing
     #  These should be specified in the tree wood configuration files because they are trunk/branch dependent
     tie_start_dist: float = 0.46  # 18 inches Expected distance from the base of the trunk/branch to the first tie point
@@ -47,6 +48,15 @@ class TyingState:
     @property
     def is_tied(self):
         return self.wire_attach is not None
+
+    def has_moved(self, start_pt:tuple, start_dir: tuple):
+        """ Check against current"""
+        for indx in range(0, 3):
+            if not np.isclose(start_pt[indx], self.start_pt_tied[indx]):
+                return True
+            if not np.isclose(start_dir[indx], self.start_dir_tied[indx]):
+                return True
+        return False
 
     def __post_init__(self):
         """Initialize guide_points as empty list if not provided."""
@@ -87,14 +97,13 @@ class TyingState:
         for z_value in z_values:
             x_coord = lpy_rng.uniform(curve_x_range[0], curve_x_range[1])
             y_coord = lpy_rng.uniform(curve_y_range[0], curve_y_range[1])
-            x_coord = 0
-            y_coord = 0
             self.guide_points.append(Vector4(x_coord, y_coord, z_value, 1))
         if self.tie_type == TyingState.TyingType.NO_TIE:
             return
 
         # Smooth out the points inbetween (the extra points)
         #  Pin points are at
+        #         0
         #         n_pts_tie_down
         #         every n_pts_per_tie after that (which is why there's one extra)
         n_pts_smooth = self.n_pts_tie_down
@@ -149,26 +158,53 @@ class TyingState:
         print(f"vec {vec} heading {heading}")
         return rot_mat, gp_as_np
 
-    def _get_angs_and_scl(self, start_pt, next_guide_pt, next_wire_pt):
-        # Pivoting around indx point to bring the next tie point to the next wire point
-        vec_to_tie_point = next_guide_pt - start_pt
+    def _find_pt_on_wire(self, start_pt, next_guide_pt, next_wire_pt):
+        """ Rather than pin to the exact wire point, let it 'slide' along the wire"""
+        vec_to_guide_point = next_guide_pt - start_pt
         vec_to_wire_point = next_wire_pt - start_pt
+        dist_along_wire_guide = np.dot(vec_to_guide_point, self.wire_attach.attractor_dir)
+        dist_allow_slide = self.wire_attach.spacing * 0.5
+        d_slide = dist_allow_slide * np.tanh(dist_along_wire_guide)
+        d_slide = 0.0
+        return next_wire_pt + self.wire_attach.attractor_dir * d_slide
 
-        scl = np.sqrt(np.linalg.norm(vec_to_tie_point) / np.linalg.norm(vec_to_wire_point))
+    def _get_angs_and_scl(self, start_pt, next_guide_pt, next_wire_pt):
+        """ What are the rotation angles and scale needed to move the selected guide point to the next wire point?"""
+        vec_to_guide_point = next_guide_pt - start_pt
+        vec_to_wire_point = next_wire_pt - start_pt
+        print(f"Vec guide {vec_to_guide_point}, wire {vec_to_wire_point}")
+
+        len_to_wire = np.linalg.norm(vec_to_wire_point)
+        len_to_guide = np.linalg.norm(vec_to_guide_point)
+        scl = len_to_wire / len_to_guide
+        vec_to_guide_point *= scl
+        len_new_guide = np.linalg.norm(vec_to_guide_point)
+        print(f"Old length {len_to_guide} wanted {len_to_wire} now {len_new_guide}")
         vec_tie_2 = np.zeros((2,))
         vec_wire_2 = np.zeros((2,))
-        # y value for the two is the same - z component
-        vec_tie_2[1] = vec_to_tie_point[2]
+        # To determine the rotation around y (vector pointing out of the canopy), use the x and z coordinates
+        vec_tie_2[1] = vec_to_guide_point[2]
         vec_wire_2[1] = vec_to_wire_point[2]
         angs = []
         for icoord in range(0, 2):
-            vec_tie_2[0] = vec_to_tie_point[icoord]
+            vec_tie_2[0] = vec_to_guide_point[icoord]
             vec_wire_2[0] = vec_to_wire_point[icoord]
             vec_tie_2 = vec_tie_2 / np.linalg.norm(vec_tie_2)
             vec_wire_2 = vec_wire_2 / np.linalg.norm(vec_wire_2)
 
             ang = np.acos(np.dot(vec_tie_2, vec_wire_2))
-            angs.append(-ang)
+            d_cross = vec_tie_2[0] * vec_wire_2[1] - vec_tie_2[1] * vec_wire_2[0]
+            if d_cross < 0.0:
+                angs.append(ang)
+            else:
+                angs.append(-ang)
+            # To determine the rotation around z (vector pointing up), use the y and x coordinates
+            vec_tie_2[1] = vec_to_guide_point[0]
+            vec_wire_2[1] = vec_to_wire_point[0]
+
+        mat_rot = R.from_euler('yz', np.array(angs)).as_matrix()
+        vec_new_guide = mat_rot @ vec_to_guide_point
+        print(f"Vec guide new {vec_new_guide}")
         return angs, scl
 
     def _bend_to_wire(self, pt_origin: Vector3, heading: Vector3, left: Vector3):
@@ -180,21 +216,30 @@ class TyingState:
         rot_mat, gp_as_np = self._convert_guide_points_to_global(pt_origin=pt_origin, heading=heading, left=left)
         start_indx = 0
         n_spacing = self.n_pts_tie_down
+        indx_guide_pts = [start_indx]
         for tie_point in range(0, self.wire_attach.attractor_pts.shape[0]):
             # Pivoting around indx point to bring the next tie point to the next wire point
-            angs, scl = self._get_angs_and_scl(start_pt=gp_as_np[start_indx, 0:3],
-                                               next_guide_pt=gp_as_np[start_indx + n_spacing, 0:3],
-                                               next_wire_pt=self.wire_attach.attractor_pts[tie_point, 0:3])
-            print(f"Tie point {self.wire_attach.attractor_pts[tie_point, :]} guide_point {gp_as_np[start_indx + n_spacing - 1, :]}")
+            start_pt = gp_as_np[start_indx, 0:3]
+            next_guide_pt = gp_as_np[start_indx + n_spacing, 0:3]  # start of next tie down group
+            next_wire_pt = self.wire_attach.attractor_pts[tie_point, 0:3]
+            if self.tie_type == TyingState.TyingType.TIE_ACROSS:
+                next_wire_pt = self._find_pt_on_wire(start_pt=start_pt,
+                                                     next_guide_pt=next_guide_pt,
+                                                     next_wire_pt=next_wire_pt)
+            angs, scl = self._get_angs_and_scl(start_pt=start_pt,
+                                               next_guide_pt=next_guide_pt,
+                                               next_wire_pt=next_wire_pt)
+            print(f"Tie point start {start_pt} wire {next_wire_pt} guide_point {next_guide_pt}")
             print(f"Angs {angs} scl {scl}")
             # Now rotate/scale all of the guide curve to the right, using some percentage of the rotate scale up to the
             # next index point
             angs = np.array(angs)
+            # Scale all points uniformly
             mat_scl = np.identity(3)
             mat_scl[0, 0] = scl
             mat_scl[1, 1] = scl
             mat_scl[2, 2] = scl
-            mat_rot = np.identity(3)
+            mat_rot = R.from_euler('yz', angs).as_matrix()
             # Move ALL the points after this one by the target amount
             for pt_indx in range(start_indx+1, gp_as_np.shape[0]):
                 if pt_indx - start_indx < n_spacing:
@@ -202,16 +247,23 @@ class TyingState:
                     ang_perc = angs * perc_along
                     mat_rot = R.from_euler('yz', ang_perc).as_matrix()
                 # Subtract the current point (the one we're rotating around)
-                pt = gp_as_np[pt_indx, 0:3] - gp_as_np[start_indx, 0:3]
+                pt = gp_as_np[pt_indx, 0:3] - start_pt
                 # Do the rotation
                 pt_rot = mat_scl @ mat_rot @ pt
                 # Translate back out
-                pt_back = pt_rot + gp_as_np[start_indx, 0:3]
+                pt_back = pt_rot + start_pt
                 gp_as_np[pt_indx, 0:3] = pt_back
 
-            print(f"New guide point loc {gp_as_np[start_indx + n_spacing, 0:3]}")
+            # This *should* be the same as the next wire point
+            new_next_guide = gp_as_np[start_indx + n_spacing, 0:3]
+            vec_guide = new_next_guide - start_pt
+            vec_guide = vec_guide / np.linalg.norm(vec_guide)
+            vec_wire = next_wire_pt - start_pt
+            vec_wire = vec_wire / np.linalg.norm(vec_wire)
+            print(f"  Vector dot {np.dot(vec_guide, vec_wire)} New guide point loc {gp_as_np[start_indx + n_spacing, 0:3]}")
             start_indx += n_spacing
             n_spacing = self.n_pts_per_tie
+            indx_guide_pts.append(start_indx)
         # Convert the guide points back to local coordinate system
         self.guide_points = []
         for icoord in range(0, 3):
@@ -220,6 +272,11 @@ class TyingState:
         for indx in range(0, gp_as_np.shape[0]):
             rot_vec = rot_mat_back @ gp_as_np[indx, 0:3]
             self.guide_points.append(Vector4(rot_vec[0], rot_vec[1], rot_vec[2], 1.0))
+        print(f"Wire points\n{self.wire_attach.attractor_pts}")
+        print(f"Guide points", end="")
+        for indx in indx_guide_pts:
+            print(f"{self.guide_points[indx]} ", end="")
+        print("done")
 
     def _lengths_guide_pts(self, gps: np.array):
         """ Spacing between guide points"""

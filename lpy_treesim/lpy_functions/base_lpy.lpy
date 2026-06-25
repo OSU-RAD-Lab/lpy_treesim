@@ -172,7 +172,7 @@ add_spur(spur_name):
   spur = map_name_instance[spur_name]
   nproduce[
   # Mark the point in the spur
-  nproduce SpurStart(spur_name)
+  nproduce SpurStart(ParameterSet(type=spur, name=spur.name))
   # Set the positions and vectors - needs to be in the interpretation model, not here
   nproduce IStartBranch(spur_name)
   nproduce [
@@ -238,7 +238,7 @@ bud_site(branch_name):
   nproduce IMakeCylinders(parent_branch.name, dist_last_bud, new_bud.dist_along, False)
   nproduce[
   # This just places a marker in the string so we can cut it out later when pruning/adding a guide curve
-  nproduce BudStart(ParameterSet(name=new_bud.name))
+  nproduce BudStart(ParameterSet(type=new_bud, name=new_bud.name))
   # Change the angle
   nproduce /(new_bud.bud_angle_around)^(90)
   # This gets the bud location information and creates the cylinder

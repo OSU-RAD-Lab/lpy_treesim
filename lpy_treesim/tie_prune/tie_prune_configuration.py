@@ -24,6 +24,7 @@ class SimulationConfig(ABC):
 
     # Energy Parameters
     energy_distance_weight: float = 0.5  # Weight for distance in energy calculation
+    energy_angle_weight: float = 0.25  # Weight for distance in energy calculation
     energy_threshold: float = 1.0  # Maximum energy threshold for tying
 
     # Support parameters - override these to get wires at different heights
@@ -75,17 +76,17 @@ class SimulationConfig(ABC):
     def do_branch_tying(self, current_iteration: int):
         # Tie the iteration before branch tying so shape propagates correctly
         if current_iteration % self.num_iter_per_year == (self.num_iter_per_year - 1):
-            return False
+            return True
         return False
 
     def do_pruning(self, current_iteration: int):
         # Prune the iteration after tying (and at 3/4 of growth if doing summer pruning)
         if current_iteration > 0 and current_iteration % self.num_iter_per_year == 0:
-            return False
+            return True
         if self.prune_summer:
             prune_iteration = 3 * self.num_iter_per_year // 4
             if current_iteration % prune_iteration == 0:
-                return False
+                return True
         return False
 
     def do_year_increment(self, current_iteration: int):

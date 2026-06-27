@@ -123,25 +123,24 @@ class TreeBuilder:
             Viewer.start()
 
         for iteration in range(self.__lsystem.derivationLength):
+            print(f"Iteration {iteration}")
             # One iteration - replace symbols
             lstring = self.__lsystem.derive(lstring, iteration, 1)
-
-            print(f"Iteration {iteration}")
-            self.make_string_readable(str(lstring))
+            #self.make_string_readable(str(lstring))
 
             if "%" in str(lstring):
-                print("Cutting")
-                lstring = self.__lsystem.derive(lstring, iteration, 1)
+                print("PRUNING cuts found in string")
 
             # DO NOT TAKE OUT THIS LINE - or everything will stop working
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
             interpreted_string = self.__lsystem.interpret(lstring)
 
-            if iteration == self.__lsystem.derivationLength - 1:
-                self.make_string_readable(str(interpreted_string))
+            #if iteration == self.__lsystem.derivationLength - 1:
+            #    self.make_string_readable(str(interpreted_string))
             if self.b_interactive:
                 scene =  self.__lsystem.sceneInterpretation(interpreted_string)
                 Viewer.display(scene)
+
                 input("Press Enter to continue...")
 
         if self.b_interactive:

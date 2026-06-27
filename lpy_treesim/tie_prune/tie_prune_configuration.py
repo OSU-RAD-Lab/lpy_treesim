@@ -24,7 +24,7 @@ class SimulationConfig(ABC):
 
     # Energy Parameters
     energy_distance_weight: float = 0.5  # Weight for distance in energy calculation
-    energy_angle_weight: float = 0.25  # Weight for distance in energy calculation
+    energy_angle_weight: float = 0.5  # Weight for distance in energy calculation
     energy_threshold: float = 1.0  # Maximum energy threshold for tying
 
     # Support parameters - override these to get wires at different heights
@@ -39,7 +39,7 @@ class SimulationConfig(ABC):
     x_right: float = 1.0
 
     # Pruning Parameters
-    pruning_age_threshold: int = 6  # Age threshold for pruning untied branches
+    pruning_age_threshold: int = num_iter_per_year  # Age threshold for pruning untied branches
 
     # L-System Parameters
     n_years:int = 6  # for a total of num_iter_per_year * n_year derivation steps

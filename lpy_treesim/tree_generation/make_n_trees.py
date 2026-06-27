@@ -5,8 +5,6 @@ from pathlib import Path
 import secrets
 import os as os
 import logging
-from PyQt5.QtWidgets import QApplication
-import sys
 
 from lpy_treesim.tree_generation.tree_builder_lpy import TreeBuilder
 from lpy_treesim.tree_generation.file_naming_config import FileNamingConfig
@@ -50,10 +48,6 @@ def main():
     naming = FileNamingConfig(namespace=args.namespace, tree_type=args.tree_name)
     # ensure_output_dir(args.output_dir)
 
-    if args.interactive:
-        app = QApplication.instance()
-        if not app:
-            app = QApplication(sys.argv)
     stage_context = []
     if args.stage_dir is not None:
         from pxr import Ar, Usd

@@ -151,10 +151,11 @@ class TyingState:
         rot_mat[2, :] = np.array(heading)
         rot_mat[0, :] = np.cross(rot_mat[1, :], rot_mat[2, :])
         for ir in range(gp_as_np.shape[0]):
+            # Rotate around origin (first point in the guide points should be 0,0,0)
+            gp_as_np[ir, 0:3] = rot_mat @ gp_as_np[ir, 0:3]
             for ic in range(0, 3):
                 # Guide curves start at 0,0,0 - move to branch start point in space
                 gp_as_np[ir, ic] += pt_origin[ic]
-            gp_as_np[ir, 0:3] = rot_mat @ gp_as_np[ir, 0:3]
 
         vec = gp_as_np[1, :] - gp_as_np[0, :]
         vec = vec / np.linalg.norm(vec)
@@ -277,7 +278,7 @@ class TyingState:
         for indx in range(0, gp_as_np.shape[0]):
             # Put back at the branch location, but use global orientation
             # LPy will add a @R to reset orientation to the default
-            pt = gp_as_np[indx, 0:3] + np.array(pt_origin)
+            pt = gp_as_np[indx, 0:3] - np.array(pt_origin)
             self.guide_points.append(Vector4(pt[0], pt[1], pt[2], 1.0))
         """
         # Convert the guide points back to local coordinate system

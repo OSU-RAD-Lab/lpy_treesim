@@ -92,3 +92,11 @@ class BasicWoodConfig:
             self.bud_angle_probs = {BudSite.BudType.VEGETATIVE: (15, 35),
                                     BudSite.BudType.FRUITING: (30, 50),
                                     BudSite.BudType.MIXED: (15, 50)}
+
+    def noisy_prune_length(self):
+        noisy_len = self.lpy_rng.normal(self.prune_length, self.bud_spacing_range[0])
+        if noisy_len < self.bud_spacing_range[0]:
+            noisy_len = self.bud_spacing_range[0]
+        if noisy_len - self.prune_length > self.bud_spacing_range[1]:
+            noisy_len = self.prune_length + self.bud_spacing_range[1]
+        return noisy_len

@@ -147,8 +147,8 @@ BudStart(bud_name):
   if bud_name in branch_hierarchy:
     produce BudStart(bud_name)
   else:
-    # Remove - will be cut by WoodStart Cut symbol
-    produce *
+    # Remove - cut symbol
+    produce %
 
 WoodStart(branch_name):
   if branch_name in branch_hierarchy:
@@ -180,7 +180,9 @@ make_bud_cylinder(bud_name):
     produce *
   bud = map_name_instance[bud_name]
   if tree_sim.generate_geometry:
-    produce IMakeBudCylinder(bud_name)
+    nproduce [
+    nproduce IMakeBudCylinder(bud_name)
+    nproduce ]
   else:
     produce make_bud_cylinder(bud_name)
 
@@ -285,10 +287,8 @@ bud_site(branch_name):
   # Change the angle
   nproduce /(new_bud.bud_angle_around)^(90)
   # This gets the bud location information and creates the cylinder
-  nproduce [
   nproduce IStartBud(new_bud.name)
   nproduce make_bud_cylinder(new_bud.name)
-  nproduce ]
   # This is the call that will see if we need to bud
   nproduce bud_bud(new_bud.name)
   produce ]
@@ -305,7 +305,7 @@ grow_object(branch_name):
   if not branch_name in map_name_instance:
     produce *
   branch = map_name_instance[branch_name]
-  if branch.growth.length > 1.1 * branch.growth.prune_length:
+  if branch.growth.length > 1.1 * branch.config.prune_length:
     # Maximum length reached - stop growing this segment. Will be pruned anyways
     produce *
   else:
@@ -314,12 +314,8 @@ grow_object(branch_name):
     branch.grow()
     # Update physical representation
     # Produce bud (after all cylinders in this growth step)
-    for generated in branch.pre_bud_rule():
-      nproduce new(generated[0], *generated[1])
     if branch.is_add_bud_site():
         nproduce bud_site(branch_name)
-        for generated in branch.post_bud_rule():
-          nproduce new(generated[0], *generated[1])
   # Continue growing
   produce grow_object(branch_name)
 
@@ -352,8 +348,8 @@ IStartBranch(branch_name):
     if branch.tying.is_tied:
       # Resets the orientation to be x, y, z axes
       nproduce @R
-      print(f"Tied: Guide {branch_name} {branch.growth_curve}")
-    nproduce SetGuide(branch.growth_curve, branch.growth.prune_length)
+      print(f"Tied: Guide {branch.growth.length}{branch_name} {branch.growth_curve}")
+    nproduce SetGuide(branch.growth_curve, branch.growth_curve.getLength())
 
 IEndBranch(branch_name):
   if not branch_name in map_name_instance:
@@ -393,7 +389,6 @@ IStartBud(bud_name):
   if not bud_name in map_name_instance:
     produce *
   bud = map_name_instance[bud_name]
-  nproduce EndGuide
   nproduce GetPos(bud.start_loc)
   nproduce GetHead(bud.start_dir)
   r, g, b = color_manager.get_unique_color(bud.name)
@@ -406,6 +401,7 @@ IMakeBudCylinder(bud_name):
   bud = map_name_instance[bud_name]
   if bud.start_diameter() <= 0.0 or bud.end_diameter() <= 0.0:
     print(f"Bad bud {bud_name} {bud.start_diameter()}, {bud.end_diameter()}")
+  nproduce EndGuide
   nproduce _(bud.start_diameter())
   nproduce F(bud.draw_length(), bud.end_diameter())
 
@@ -416,7 +412,6 @@ IMakeBudCylinder(bud_name):
 production:
 Attractors(trellis_support):
   # Display enabled attractor points as visual markers
-  trellis_support.check_valid()
   points_to_display = trellis_support.attractor_grid.get_enabled_points()
   if interactive and len(points_to_display) > 0:
     produce [,(3) @g(PointSet(points_to_display,width=simulation_config.attractor_point_width))]

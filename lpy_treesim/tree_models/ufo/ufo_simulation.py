@@ -64,7 +64,7 @@ class UFOSimulation(TreeSimulationBase):
         """
         # The trunk support
         #   Pin at 2 points along first wire
-        self.trunk_attractor = self.support.make_atractor_grid(tie_type=TyingState.TyingType.TIE_ALONG_FIRST, n_along_x=4)
-        self.branch_attractor = self.support.make_atractor_grid(tie_type=TyingState.TyingType.TIE_ACROSS, n_along_x=6)
-
-        return self.support
+        self.trunk_attractor = self.support.make_attractor_grid(tie_type=TyingState.TyingType.TIE_ALONG_FIRST, n_along_x=4)
+        self.branch_attractor = self.support.make_attractor_grid(tie_type=TyingState.TyingType.TIE_ACROSS,
+                                                                 n_along_x=6,
+                                                                 start_x=self.trunk_attractor[0].attractor_pts[0][0])

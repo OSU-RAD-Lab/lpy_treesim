@@ -34,8 +34,8 @@ class BudSite(ABC):
     bud_angle_from_parent: float = 90.0
 
     # These are filled in when the string is interpreted
-    start_loc: Vector3 = Vector3(0, 0, 0)
-    start_dir: Vector3 = Vector3(0, 0, 0)
+    start_loc: Vector3 = None
+    start_dir: Vector3 = None
 
     # Unique name for bud site - parent name + bud and id
     name: str = ""
@@ -54,6 +54,13 @@ class BudSite(ABC):
 
     # Random number to use - this is here for repeatability
     lpy_rng: np.random.Generator = None
+
+    def __post_init__(self):
+        """Initialize Vector3 points if not provided."""
+        if self.start_loc is None:
+            self.start_loc = Vector3(0, 0, 0)
+        if self.start_dir is None:
+            self.start_dir = Vector3(1.0, 0, 0)
 
     def is_dormant_or_pruned(self):
         return self.bud_state is BudSite.BudType.DORMANT or self.bud_state is BudSite.BudType.PRUNED

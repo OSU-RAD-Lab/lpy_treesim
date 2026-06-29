@@ -11,7 +11,7 @@ from openalea.plantgl.all import Point3Grid, Vector3
 @dataclass
 class Wire:
     # All wires are (currently) horizontal, only keep height and in-out amount (if wires are at an angle)
-    #   Keep a unique id for each wire and a list of attached branches and their attachment points
+    #   Keep a unique id for each wire. The class WireBranchAttach will hold actual attachment points
     id: int = -1
     height: float = 0.0
     in_out: float = 0.0
@@ -53,23 +53,23 @@ class Support:
         self.x_left = x_left
         self.x_right = x_right
 
+        # For visualization only - every time make_attractor_grid is called it will add its points here
         self.attractor_grids = []
         self.attractor_grid = Point3Grid((1, 1, 1), list(points))
 
-    def check_valid(self):
-        return True
-
-    def make_atractor_grid(self,
-                           tie_type: TyingState.TyingType = TyingState.TyingType.TIE_ALONG,
-                           n_along_x: int = 1,
-                           dx_single: float = 0.0):
+    def make_attractor_grid(self,
+                            tie_type: TyingState.TyingType = TyingState.TyingType.TIE_ALONG,
+                            n_along_x: int = 1,
+                            dx_single: float = 0.0,
+                            start_x: float = -1.0):
         """ Organize by branch/trunk, eg, branch[1] has to be tied to points 1,2,3,
             Each row is the pin points for one branch
             Can call multiple times, eg, once to get trunk once to get side branches"""
 
         tie_downs = []
         width = max(abs(self.x_left), abs(self.x_right))
-        start_x = width / (n_along_x + 1.0)
+        if start_x == -1.0:
+            start_x = width / (n_along_x + 1.0)
         if tie_type == TyingState.TyingType.TIE_ALONG or tie_type == TyingState.TyingType.TIE_ALONG_FIRST:
             # Generate tie points along x, one for each wire (or only first wire)
             for wire in self.wires:
@@ -117,9 +117,9 @@ class Support:
             tie_down.spacing = float(np.linalg.norm(tie_down.attractor_dir))
             tie_down.attractor_dir /= tie_down.spacing
 
-            # Add points to deisplay
+            # Add points to display
             for pt in tie_down.attractor_pts:
                 pt_vec = Vector3(pt[0], pt[1], pt[2])
                 self.attractor_grid.add_point(pt_vec)
         self.attractor_grids.append(tie_downs)
-        return self.attractor_grids[-1]
+        return tie_downs

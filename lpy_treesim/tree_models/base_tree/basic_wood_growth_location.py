@@ -1,5 +1,10 @@
 """
-Defines the abstract class BasicWood along with helper classes LocationState, GrowthState, InfoState and TyingState
+Defines the growth and location classes used in BasicWood
+
+LocationState tracks start and end locations (set in base_lpy.lpy during the interpretation step, see IStartBranch,
+   IEndBranch, GetPos, GetHead, GetLeft calls
+GrowthState tracks the length of the branch and how much to grow each year. Each branch has an overall vigor level
+   that controls overall growth. Growth ranges are set in the branch/spur config files (see BasicWoodConfig).
 """
 
 from openalea.plantgl.all import Vector3
@@ -12,12 +17,13 @@ class LocationState:
     """Location tracking for a wood object: start point & direction, end point and direction
     These values are filled in from the string during the interpretation stage"""
 
-    start: Vector3 = None      # Vector3
-    start_dir: Vector3 = None  # Vector3
-    start_left_dir: Vector3 = None  # Vector3
-    end: Vector3 = None        # Vector3
-    end_dir: Vector3 = None    # Vector3
-    end_left_dir: Vector3 = None # Vector3
+    # See LPy's turtle frame (heading, left, up)
+    start: Vector3 = None
+    start_dir: Vector3 = None
+    start_left_dir: Vector3 = None
+    end: Vector3 = None
+    end_dir: Vector3 = None
+    end_left_dir: Vector3 = None
 
     def __post_init__(self):
         """Initialize Vector3 points if not provided."""
@@ -40,7 +46,7 @@ class GrowthState:
     """Growth parameters for a wood object. These will be set when constructed but with
        some noise, depending on the overall vigor level assigned to the branch"""
 
-    # Set these
+    # Set this
     vigour_level: float = 0.5  # Between 0 and 1
 
     # Random number to use - this is here for repeatability
@@ -48,17 +54,17 @@ class GrowthState:
     lpy_rng: np.random.Generator = None
     num_iter_per_year: int = -1
 
+    # See config file for prune_length
     length: float = 0.0
     length_without_pruning: float = 0.0  # For diameter calculation - how much the branch grew altogether
-    prune_length: float = 1.0            # Prune back to this length if need be
 
     # These will be set to values based on vigour and default
     #   Note: Only need to set diameter at the beginning of the branch; the tapering will be handled
     #   in the cylinder generation.
     mean_length_growth_per_year: list[float] = None
     diameter: float = 0.001
-    target_diameter_ratio = 0.025 / 1.0   # Ideal
-    taper: float = 0.1                    # Percentage of diameter to taper to
+    target_diameter_ratio = 0.025 / 1.0   # Ideal ratio of diameter to length
+    taper: float = 0.1                    # Percentage of diameter to taper to. Don't make too small (< 0.01)
 
     # For tracking growth; controls which length/bud spacing to use
     age_in_years: int = 0         # Incremented by one after end of growth/tie/prune cycle
@@ -76,16 +82,16 @@ class GrowthState:
             if mlg < 0.0:
                 print(f"Error: mean langth growth per year negative {mlg}")
         if self.length <= 0.0:
-            # Make sure it's grown a bit
+            # Make sure it's grown a bit at creation
             self.length = self.mean_length_growth_per_iteration()
             self.length_without_pruning = self.length
 
         # Based on vigor level. Diameter ratio is used in the growth step to set the starting thickness of the branch
-        self.set_diameter_ratio()
+        self._set_diameter_ratio()
 
-    def set_diameter_ratio(self):
+    def _set_diameter_ratio(self):
         """Calculate the target diameter based on the vigor level and expected growth for the age_in_years and current length
-           Only call on age_in_years boundaries """
+           Called in init() method """
         low_ratio = 0.01
         ideal_ratio = 0.025
         high_ratio = 0.035
@@ -98,13 +104,23 @@ class GrowthState:
         assert self.target_diameter_ratio > 0.0
 
     def length_growth_per_year(self):
-        """ How much the branch should grow in one year, based on it's current age"""
+        """ How much the branch should grow in one year, based on its current age"""
         if self.age_in_years >= len(self.mean_length_growth_per_year):
             return self.mean_length_growth_per_year[-1]
         return self.mean_length_growth_per_year[self.age_in_years]
 
     def mean_length_growth_per_iteration(self):
         return self.length_growth_per_year() / self.num_iter_per_year
+
+    def get_length_increment(self):
+        # Generate a growth per iteration
+        mean_length_growth = self.mean_length_growth_per_iteration()
+        if mean_length_growth < 0.0:
+            print("oops")
+        length_incr = self.lpy_rng.normal(loc=mean_length_growth, scale=0.1 * mean_length_growth)
+        if length_incr < 0.00001:
+            length_incr = 0.00001
+        return length_incr
 
     def get_start_diameter(self):
         """ The diameter, based on the ratio """
@@ -117,13 +133,3 @@ class GrowthState:
     def get_diameter(self, t: float = 0.5):
         """ Linear scale at the moment"""
         return (1.0 - t) * self.get_start_diameter() + t * self.get_end_diameter()
-
-    def get_length_increment(self):
-        # Generate a growth per iteration
-        mean_length_growth = self.mean_length_growth_per_iteration()
-        if mean_length_growth < 0.0:
-            print("oops")
-        length_incr = self.lpy_rng.normal(loc=mean_length_growth, scale=0.1 * mean_length_growth)
-        if length_incr < 0.00001:
-            length_incr = 0.00001
-        return length_incr

@@ -45,7 +45,7 @@ class ENVYSimulation(TreeSimulationBase):
             The support class
         """
         # The trunk support
-        self.trunk_attractor = self.support.make_atractor_grid(tie_type=TyingState.TyingType.TIE_ACROSS, n_along_x=1)
-        self.branch_attractor = self.support.make_atractor_grid(tie_type=TyingState.TyingType.TIE_ALONG, n_along_x=3)
+        self.trunk_attractor = self.support.make_attractor_grid(tie_type=TyingState.TyingType.TIE_ACROSS, n_along_x=1)
+        self.branch_attractor = self.support.make_attractor_grid(tie_type=TyingState.TyingType.TIE_ALONG, n_along_x=3)
 
         return self.support

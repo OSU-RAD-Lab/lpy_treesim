@@ -10,7 +10,6 @@ from lpy_treesim.tie_prune.tying import TyingState
 from lpy_treesim.tree_models.base_tree.bud_site import BudSite
 from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicSpur, BasicBranch, BasicTrunk
 from lpy_treesim.tree_models.base_tree.basic_wood_config import BasicWoodConfig
-from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvention
 from lpy_treesim.tie_prune.tie_prune_simulation_base import SimulationConfig
 
 
@@ -63,7 +62,7 @@ class Trunk(BasicTrunk):
 def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: SimulationConfig = None):
     """ For cherries, we have the trunk which generates vertical leaders (side branches that turn into
          vertical leaders). Each vertical leader generates side branches fairly regularly; these side
-         branches are mostly spurs (just fruiting sites) with the occaisionally grow too much branch.
+         branches are mostly spurs (just fruiting sites) but occaisionally grow too much branch.
         Side branches can generate more side branches, although with diminishing growth rates"""
 
     if lpy_rng is None:

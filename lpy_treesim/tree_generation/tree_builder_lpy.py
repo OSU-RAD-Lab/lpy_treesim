@@ -135,8 +135,8 @@ class TreeBuilder:
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
             interpreted_string = self.__lsystem.interpret(lstring)
 
-            #if iteration == self.__lsystem.derivationLength - 1:
-            #    self.make_string_readable(str(interpreted_string))
+            # if iteration % self.__lsystem.derivationLength == 28:
+            #     self.make_string_readable(str(interpreted_string))
             if self.b_interactive:
                 scene =  self.__lsystem.sceneInterpretation(interpreted_string)
                 Viewer.display(scene)
@@ -181,7 +181,7 @@ class TreeBuilder:
                 junction.child_name = child_name
                 junction.t_along = bud.dist_along
                 junction.radius = parent_lpy.growth.get_diameter(bud.dist_along)
-                junction.pt_attach = bud.start_loc
+                junction.pt_attach = (bud.start_loc[0], bud.start_loc[1], bud.start_loc[2])
                 junction.ang_attach = bud.bud_angle_from_parent
                 new_junctions.append(junction)
                 parent_dict["skel"].child_junctions.append(junction)

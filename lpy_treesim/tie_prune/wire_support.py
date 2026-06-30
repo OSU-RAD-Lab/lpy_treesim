@@ -61,7 +61,8 @@ class Support:
                             tie_type: TyingState.TyingType = TyingState.TyingType.TIE_ALONG,
                             n_along_x: int = 1,
                             dx_single: float = 0.0,
-                            start_x: float = -1.0):
+                            start_x: float = -1.0,
+                            skip_first: bool = False):
         """ Organize by branch/trunk, eg, branch[1] has to be tied to points 1,2,3,
             Each row is the pin points for one branch
             Can call multiple times, eg, once to get trunk once to get side branches"""
@@ -106,7 +107,9 @@ class Support:
             for x in dx:
                 tie_down = WireBranchAttach()
                 attractor_pts = []
-                for wire in self.wires:
+                for wire_indx, wire in enumerate(self.wires):
+                    if wire_indx == 0 and skip_first:
+                        continue
                     attractor_pts.append((x, wire.in_out, wire.height))
                 tie_down.attractor_pts = np.array(attractor_pts)
                 tie_downs.append(tie_down)

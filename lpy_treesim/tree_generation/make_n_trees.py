@@ -88,11 +88,11 @@ def main():
         # Converts the scene to our tree structure.
         #   Mapping maps the unique ids from the lstring into our tree structure
         #   This ensures the branches etc are numbered sequentially
-        tree, lpy_to_tree_mapping = lsb.create_tree_structure()
+        tree, mapping_lpy, mapping_tree_structure = lsb.create_tree_structure()
 
         # Adds to each tree component the mesh cylinders created by lpy
         bud_sites = plant_gl_scene_to_vertices_and_faces(scene,
-                                                         tree_mapping=lpy_to_tree_mapping,
+                                                         tree_mapping=mapping_lpy,
                                                          color_mapping=lsb.color_manager)
 
         # Now stitch together all of the mesh components into tubes instead of discrete cylinders
@@ -103,7 +103,7 @@ def main():
         #    tree.remove_key(key)
 
         # Now that the cylinders/skeleton have been processed, build the junctions
-        calculate_skeleton_junctions(tree=tree)
+        #calculate_skeleton_junctions(tree=tree)
 
         # Write out mesh file formats
         if args.ply or args.obj:

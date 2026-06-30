@@ -29,13 +29,16 @@ from lpy_treesim.lpy_functions.lpy_helper_functions import resolve_attr
 # -----------------------------------------------------------------------------
 # Override these externs via Lsystem(..., variables) to point at a specific
 # architecture without editing this shared file.
+# The paths will be replaced by the paths to the tree_models.tree.tree_*
+# The next four values will be mapped to the ones defined in tree_builder_lpy.py
 extern(
-  color_manager = None,
   prototype_builder_path = "tree_models.Envy.Envy_prototypes.build_basicwood_prototypes",
   trunk_class_path = "tree_models.Envy.Envy_prototypes.Trunk",
   simulation_config_class_path = "tree_models.Envy.Envy_simulation.EnvySimulationConfig",
   simulation_class_path = "tree_models.Envy.Envy_simulation.EnvySimulation",
   branch_hierarchy = {},
+  map_name_instance = {},
+  color_manager = None,
   interactive = False,
   seed_value = None,
 )
@@ -43,7 +46,8 @@ extern(
 # Resolve extern-provided dotted paths so the rest of the script can operate on
 # concrete classes/functions exactly like the Envy/UFO drivers do.
 
-# Generator
+# Generator - use a shared random number generator for all random numbers so that building a tree from a specific
+#  seed value will always give the same tree
 lpy_rng = np.random.default_rng(seed=seed_value)
 
 # Wood and simulation classes
@@ -59,9 +63,8 @@ prototype_builder_fn = resolve_attr(prototype_builder_path)
 basicwood_prototypes = prototype_builder_fn(lpy_rng=lpy_rng, sim_config=simulation_config)
 Trunk = resolve_attr(trunk_class_path)
 
-# Create the main trunk
+# Create the main trunk(s)
 # TODO call as many times as there are trunks
-# Create a growth guide curve for the initial trunk development
 main_trunk = Trunk(basicwood_prototypes['trunk'])
 
 # Build trellis geometry and attractor grids.
@@ -71,7 +74,7 @@ trellis_support = tree_sim.support
 # Format: Name->list of bud children
 branch_hierarchy["root"] = [main_trunk]
 branch_hierarchy[main_trunk.name] = []
-map_name_instance = {main_trunk.name: main_trunk}
+map_name_instance[main_trunk.name] = main_trunk
 
 
 # L-Py callbacks delegate to the Python helpers so architectures share logic.

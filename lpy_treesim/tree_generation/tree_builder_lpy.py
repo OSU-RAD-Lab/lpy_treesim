@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 import sys
 from pathlib import Path
+
+import numpy as np
+
 from lpy_treesim import ColorManager
 import json
 from openalea.lpy import Lsystem
@@ -15,8 +18,9 @@ import logging
 
 class TreeBuilder:
     logger = logging.getLogger(__name__)
-    b_init = False
+    b_init_sys_path = False
 
+    # Where to find base_lpy.lpy, which is the one and only lpy file that defines the string generation
     BASE_LPY_PATH = Path(__file__).resolve().parents[1] / "lpy_functions" / "base_lpy.lpy"
 
     def __init__(self,
@@ -24,13 +28,14 @@ class TreeBuilder:
                  seed_value: int,
                  interactive: bool):
 
-        if not  TreeBuilder.b_init:
+        if not TreeBuilder.b_init_sys_path:
             # Ensure repository root is discoverable for prototype imports
             sys.path.insert(0, str(TreeBuilder.BASE_LPY_PATH.parents[0]))
-            TreeBuilder.b_init = True
+            TreeBuilder.b_init_sys_path = True
 
         # Store the branches as they're created
         self.branch_hierarchy = {}
+        self.map_name_instance = {}
 
         # For unique labeling of branch cylinders
         self.color_manager = ColorManager()
@@ -39,15 +44,15 @@ class TreeBuilder:
         self.b_interactive = interactive
 
         # Where to find the source code and start values for the trunk
+        # See extern_variables in base_lpy.lpy
         self.extern_vars = {
             "prototype_builder_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_prototypes.build_basicwood_prototypes",
             "trunk_class_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_prototypes.Trunk",
             "simulation_config_class_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_simulation.{tree_name.upper()}SimulationConfig",
             "simulation_class_path": f"lpy_treesim.tree_models.{tree_name}.{tree_name}_simulation.{tree_name.upper()}Simulation",
             "branch_hierarchy": self.branch_hierarchy,
+            "map_name_instance": self.map_name_instance,
             "color_manager": self.color_manager,
-            "axiom_pitch": 0.0,
-            "axiom_yaw": 0.0,
             "seed_value": seed_value,
             "interactive": self.b_interactive
         }
@@ -63,6 +68,7 @@ class TreeBuilder:
 
     @staticmethod
     def _replace_keyword(piece: str)->str:
+        """ For making strings readable - converts pointers to strings"""
         check_keywords = ["Support", "Bud", "Spur", "Trunk", "Branch"]
         for kw in check_keywords:
             if kw in piece:
@@ -72,6 +78,7 @@ class TreeBuilder:
 
     @staticmethod
     def _take_out_class_refs(piece_in: str)->str:
+        """ For making strings readable - converts <> instances to strings"""
         piece = piece_in
         while "<" in piece:
             piece_kw = ""
@@ -90,7 +97,8 @@ class TreeBuilder:
 
     @staticmethod
     def make_string_readable(lstring: str):
-
+        """ A not very good bit of code for indenting strings by brackets []
+        """
         str_break_left_bracket = lstring.split('[')
         indent = 0
         for before_bracket in str_break_left_bracket:
@@ -117,11 +125,15 @@ class TreeBuilder:
         """ Actually build the lpy string
         @param b_interactive - do you want to have to hit a key every iteration?"""
 
+        # First string - see base_lpy.lpy axiom module
         lstring = self.__lsystem.axiom
 
         if self.b_interactive:
+            """Suppose to bring up a window. Whether or not it does depends on OS"""
             Viewer.start()
 
+        # Iterate, replacing modules with new ones every iteration
+        #  Roughly 28 iterations per year, 3-5 years (depending on SimulationConfig parameters)
         for iteration in range(self.__lsystem.derivationLength):
             print(f"Iteration {iteration}")
             # One iteration - replace symbols
@@ -147,53 +159,115 @@ class TreeBuilder:
             Viewer.exit()
 
         # String and scene (which has geometry)
+        #   This string will have all the F() modules, which are the ones that actually produce geometry
         return lstring, self.__lsystem.sceneInterpretation(lstring)
+
+    def _add_junctions(self,
+                       mapping_tree_structure: dict,
+                       parent_dict: dict,
+                       parent_lpy: BasicWood,
+                       bud_sites: list[BudSite]):
+        """ Get all the junctions for this branch. Fills in the junction information"""
+        new_junctions = []
+        for bud_indx, bud in enumerate(bud_sites):
+            new_junction = JunctionComponent()
+            new_junction.t_along = bud.dist_along / parent_lpy.growth.length
+            new_junction.theta_around = bud.bud_angle_around
+            new_junction.pt_attach = self.convert_vec3_to_tuple(bud.start_loc)
+            if bud_indx < len(bud_sites) - 1:
+                vec_parent_dir = bud_sites[bud_indx + 1].start_loc - bud.start_loc
+                vec_parent_dir /= np.linalg.norm(vec_parent_dir)
+            else:
+                vec_parent_dir = parent_lpy.location.end_dir
+            new_junction.vec_along_parent = self.convert_vec3_to_tuple(vec_parent_dir)
+            new_junction.vec_branch = self.convert_vec3_to_tuple(bud.start_dir)
+            new_junction.ang_attach = bud.bud_angle_from_parent
+            new_junction.radius = parent_lpy.growth.get_diameter(bud.dist_along)
+            new_junction.parent_name = parent_dict["full_name"]
+            if bud.bud_state is BudSite.BudType.PRUNED:
+                new_junction.type = JunctionComponent.JunctionType.PRUNED
+            if bud.bud_state is BudSite.BudType.DORMANT:
+                new_junction.type = JunctionComponent.JunctionType.BUD
+            if bud.branch_child:
+                lpy_child_name = bud.branch_child.name
+                tree_child_name = mapping_tree_structure[lpy_child_name]["name"]
+                new_junction.child_branch_name = tree_child_name
+                new_junction.type = JunctionComponent.JunctionType.BRANCH
+            if bud.spur_child:
+                lpy_child_name = bud.spur_child.name
+                tree_child_name = mapping_tree_structure[lpy_child_name]["name"]
+                new_junction.child_spur_name = tree_child_name
+                if bud.branch_child:
+                    new_junction.type = JunctionComponent.JunctionType.BRANCH_AND_SPUR
+                else:
+                    new_junction.type = JunctionComponent.JunctionType.BRANCH
+
+            new_junctions.append(new_junction)
+
+        return new_junctions
 
     def _add_buds(self,
                   mapping_tree_structure: dict,
                   mapping_lpy: dict,
                   tree: TreeStructure,
                   parent_dict: dict,
-                  parent_lpy: BasicWood,
                   bud_sites: list[BudSite]):
-        new_junctions = []
+        """ Turning branch_hierarchy into TreeStructure data structure
+        This helper method loops over all the bud sites on a branch and adds the bud sites' branch/spur children
+        to the parent_dict structure"""
         trunk_id = TreeNamingConvention.get_trunk_id(parent_dict)
         parent_ids = tree.get_parent_id_list(parent_dict)
-        parent_name = parent_dict["name"]
         for bud in bud_sites:
-            child_add_name = []
             if bud.branch_child:
                 child_name = bud.branch_child.name
                 branch_dict = tree.new_branch(trunk_id=trunk_id, parent_ids=parent_ids)
                 mapping_tree_structure[child_name] = branch_dict
                 mapping_lpy[child_name] = bud.branch_child
-                child_add_name.append(branch_dict["name"])
             if bud.spur_child:
                 child_name = bud.spur_child.name
                 spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=parent_ids)
                 mapping_tree_structure[child_name] = spur_dict
                 mapping_lpy[child_name] = bud.spur_child
-                child_add_name.append(spur_dict["name"])
 
-            for child_name in child_add_name:
-                junction = JunctionComponent()
-                junction.parent_name = parent_name
-                junction.child_name = child_name
-                junction.t_along = bud.dist_along
-                junction.radius = parent_lpy.growth.get_diameter(bud.dist_along)
-                junction.pt_attach = (bud.start_loc[0], bud.start_loc[1], bud.start_loc[2])
-                junction.ang_attach = bud.bud_angle_from_parent
-                new_junctions.append(junction)
-                parent_dict["skel"].child_junctions.append(junction)
+    def _add_skeleton(self,
+                      branch_dict: dict,
+                      branch_lpy: BasicWood,
+                      bud_sites: list[BudSite]):
+        """ Adds the skeleton components to the tree structure"""
+        skel = SkeletonComponent(branch_dict["name"])
+        skel.start_pt = self.convert_vec3_to_tuple(branch_lpy.location.start)
+        skel.end_pt = self.convert_vec3_to_tuple(branch_lpy.location.end)
+        skel.length = branch_lpy.growth.length
 
-        return new_junctions
+        skel.centroids.append(self.convert_vec3_to_tuple(branch_lpy.location.start))
+        skel.radii.append(branch_lpy.growth.get_diameter(0.0))
+        skel.t_values.append(0.0)
+        for bud in bud_sites:
+            skel.centroids.append(bud.start_loc)
+            skel.radii.append(branch_lpy.growth.get_diameter(bud.dist_along))
+            skel.t_values.append(bud.dist_along / branch_lpy.growth.length)
+        skel.centroids.append(self.convert_vec3_to_tuple(branch_lpy.location.end))
+        skel.radii.append(branch_lpy.growth.get_diameter(branch_lpy.growth.length))
+        skel.t_values.append(1.0)
 
-    def create_tree_structure(self) -> (TreeStructure, dict):
+        """ TO FIX
+        skel.child_junctions = self._add_junctions(mapping_tree_structure={},
+                                                   parent_dict=branch_dict,
+                                                   parent_lpy=branch_lpy,
+                                                   bud_sites=bud_sites)
+                                                   """
+        branch_dict["skel"] = skel
+
+    def create_tree_structure(self) -> (TreeStructure, dict, dict):
+        """ Loop over the branch structure and make one Tree component for each structure.
+        Returns the tree structure and a mapping from the lpy names to the new tree structures"""
         tree = TreeStructure()
 
         mapping_tree_structure = {}
         mapping_lpy = {}
-        # This is organized as name -> list of buds
+        # Each item in the branch_hierarchy dictionary is organized as name -> list of buds
+        # This is relying on the fact that looping over the dictionary will happen in the order that the objects
+        #  were created (eg root, trunk, primary branches)
         for key_orig, child_list in self.branch_hierarchy.items():
             key = key_orig.lower().strip()
             if "root" in key:
@@ -204,28 +278,19 @@ class TreeBuilder:
                     mapping_tree_structure[trunk.name] = trunk_dict
                     mapping_lpy[trunk.name] = trunk
             elif "bud" in key:
+                # Skipping these because buds will be handled when processing each branch/trunk
                 continue
             else:
                 branch_dict = mapping_tree_structure[key_orig]
-                branch_lpy = mapping_lpy[key_orig]
-                nj = self._add_buds(mapping_tree_structure=mapping_tree_structure,
-                                    mapping_lpy=mapping_lpy,
-                                    tree=tree,
-                                    parent_dict=branch_dict,
-                                    parent_lpy=branch_lpy,
-                                    bud_sites=child_list)
-                if "trunk" in key:
-                    tree.trunk_junctions.extend(nj)
-                else:
-                    tree.branch_junctions.extend(nj)
+                branch_lpy = self.map_name_instance[key_orig]
+                self._add_buds(mapping_tree_structure=mapping_tree_structure,
+                               mapping_lpy=mapping_lpy,
+                               tree=tree,
+                               parent_dict=branch_dict,
+                               bud_sites=child_list)
+                self._add_skeleton(branch_dict=branch_dict, branch_lpy=branch_lpy, bud_sites=child_list)
 
-        # Fill in remaining skeleton components
-        for part_name, part_dict in mapping_tree_structure.items():
-            lpy_part = mapping_lpy[part_name]
-            part_dict["skel"].start_pt = self.convert_vec3_to_tuple(lpy_part.location.start)
-            part_dict["skel"].start_vec = self.convert_vec3_to_tuple(lpy_part.location.start_dir)
-            part_dict["skel"].end_pt = self.convert_vec3_to_tuple(lpy_part.location.end)
-        return tree, mapping_tree_structure
+        return tree, mapping_lpy, mapping_tree_structure
 
     def export_hierarchy_dict(self) -> dict:
         named_hierarchy = {}
@@ -250,11 +315,7 @@ class TreeBuilder:
     
     def get_metadata(self) -> dict:
         """Export metadata based on label settings. Includes hierarchy and L-Py vars."""
-        export_dict = {
-            "seed_value": int(self.extern_vars["seed_value"]),
-            "axiom_pitch": float(self.extern_vars["axiom_pitch"]),
-            "axiom_yaw": float(self.extern_vars["axiom_yaw"]),
-        }
+        export_dict = {"seed_value": int(self.extern_vars["seed_value"])}
         # Hierarchy
         export_dict["hierarchy"] = self.export_hierarchy_dict()
         export_dict["branch_locations"] = self.export_branch_location_dict()

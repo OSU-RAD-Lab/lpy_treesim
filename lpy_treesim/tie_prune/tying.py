@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from lpy_treesim.tree_models.base_tree.basic_wood_growth_location import LocationState
 from openalea.plantgl.all import Vector3, Vector4
 
 
@@ -155,7 +154,7 @@ class TyingState:
         rot_mat[1, :] = np.array(left)
         rot_mat[2, :] = np.array(heading)
         rot_mat[0, :] = np.cross(rot_mat[1, :], rot_mat[2, :])
-        pt_curve_origin = gp_as_np[0, 0:3]
+        pt_curve_origin = np.copy(gp_as_np[0, 0:3])
         print(f"Pt origin: {pt_origin}, pt curve origin {pt_curve_origin}")
         for ir in range(gp_as_np.shape[0]):
             # Rotate around origin (first point in the guide points should be 0,0,0)
@@ -199,8 +198,10 @@ class TyingState:
         # len_new_guide = np.linalg.norm(vec_to_guide_point)
         # print(f"Old length {len_to_guide} wanted {len_to_wire} now {len_new_guide}")
 
+        # Vec to guide point is now length of vec to wire
         vec_to_guide_point = vec_to_guide_point / len_to_wire
         vec_to_wire_point = vec_to_wire_point / len_to_wire
+        print(f"Vec to guide point {vec_to_guide_point}, vec to wire {vec_to_wire_point}")
         dot = np.dot(vec_to_guide_point, vec_to_wire_point)
         # If already pointing in the same direction, don't rotate
         if np.isclose(dot, 1.0):
@@ -219,6 +220,9 @@ class TyingState:
         Note: need to re-do if the initial point/vector change
         """
         rot_mat, gp_as_np = self._convert_guide_points_to_global(pt_origin=pt_origin, heading=heading, left=left)
+        print("first eight")
+        for indx in range(0, self.n_pts_tie_down+1):
+            print(f"pre-move local {self.guide_points[indx]} global {gp_as_np[indx, 0:3]}")
         start_indx = 0
         n_spacing = self.n_pts_tie_down
         indx_guide_pts = [start_indx]
@@ -234,6 +238,7 @@ class TyingState:
             scl, vec, ang = self._get_angs_and_scl(start_pt=start_pt,
                                                    next_guide_pt=next_guide_pt,
                                                    next_wire_pt=next_wire_pt)
+            print(f"Scale {scl} vec {vec} ang {ang}")
             # print(f"Tie point start {start_pt} wire {next_wire_pt} guide_point {next_guide_pt}")
             # print(f"Scl {scl} Vec {vec}, ang {ang}")
             # Now rotate/scale all of the guide curve to the right, using some percentage of the rotate scale up to the
@@ -267,18 +272,25 @@ class TyingState:
             start_indx += n_spacing
             n_spacing = self.n_pts_per_tie
             indx_guide_pts.append(start_indx)
+        print("first eight")
+        for indx in range(0, self.n_pts_tie_down+1):
+            print(f"pre-move local {self.guide_points[indx]} moved {gp_as_np[indx, 0:3]}")
         self.guide_points = []
         for indx in range(0, gp_as_np.shape[0]):
             # Put back at the branch location, but use global orientation
             # LPy will add a @R to reset orientation to the default (see base_lpy.lpy I module)
             pt = gp_as_np[indx, 0:3] - np.array(pt_origin)
             self.guide_points.append(Vector4(pt[0], pt[1], pt[2], 1.0))
-        print(f"Guide points", end="")
-        print(f"{gp_as_np[0, 0:3]} ")
+        print(f"Curve start point: {pt_origin}\nFirst wire point: {self.wire_attach.attractor_pts[0]}")
+
+        print(f"Guide points to wire point alignment")
         np.set_printoptions(precision=2, suppress=True)
         for indx in range(0, self.wire_attach.attractor_pts.shape[0]):
             indx_guide = indx_guide_pts[indx+1]
-            print(f"{gp_as_np[indx_guide, 0:3]} {self.wire_attach.attractor_pts[indx]} {gp_as_np[indx_guide, 0:3] - pt_origin} {self.guide_points[indx_guide]}")
+            print(f"gp world {gp_as_np[indx_guide, 0:3]} wire {self.wire_attach.attractor_pts[indx]} gp local {gp_as_np[indx_guide, 0:3] - pt_origin} {self.guide_points[indx_guide]}")
+        print("first eight")
+        for indx in range(0, self.n_pts_tie_down+1):
+            print(f"global {gp_as_np[indx, 0:3]}, local {self.guide_points[indx]}")
         print("done")
 
     @staticmethod

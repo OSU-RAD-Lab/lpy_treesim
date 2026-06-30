@@ -19,21 +19,36 @@ Data kept for the skeleton (if available)
 
 """
 import numpy as np
+from enum import Enum
 
 
 class JunctionComponent:
+    class JunctionType(Enum):
+        PRUNED = "pruned"
+        BUD = "bud"
+        BRANCH = "branch"
+        SPUR = "spur"
+        BRANCH_AND_SPUR = "branch_and_spur"
+
     def __init__(self):
         self.t_along = 0.0
         self.theta_around = 0.0
         self.pt_attach = (0, 0, 0)
-        self.vec_attach = (0, 0, 0)
+        self.vec_along_parent = (0, 0, 0)
+        self.vec_branch = (0, 0, 0)
         self.ang_attach = 0.0   # Angle from dot product at attach point
         self.radius = 0.0
         self.parent_name = ""
-        self.child_name = ""
+        self.child_branch_name = ""
+        self.child_spur_name = ""
+        self.type: JunctionComponent.JunctionType = JunctionComponent.JunctionType.BUD
 
-    def set_attach(self, parent, parent_tree_part: dict, child):
-        """ Set the closest attachment point and the angle of the attachment"""
+    def set_attach(self, parent, vertices: list, child):
+        """ Set the closest attachment point and the angle of the attachment
+        This is for use if extracting from a mesh; not used anymore for LPy systems because the values can be set
+        directly from the saved values in the lpy string
+        @param parent/child should be of type SkeletonComponent
+        @param vertices should be an n array of vertices"""
         # Writing this rather pedantically - project the point onto the line segment and find the closest
         centers_as_np = np.array(parent.centroids)
         pt_start = np.array(child.start_pt)
@@ -72,11 +87,11 @@ class JunctionComponent:
         self.radius = float(radius_best)  
         
         # Now do theta
-        n_around = len(parent_tree_part["vertices"]) / centers_as_np.shape[0]
+        n_around = len(vertices) / centers_as_np.shape[0]
         n_around = int(n_around)
         # Just the vertices as indx
         mesh_vs_as_np = np.zeros((n_around+1, 3))
-        mesh_vs_as_np[0:-1, :] = np.array(parent_tree_part["vertices"][indx_best * n_around:(indx_best+1) * n_around])
+        mesh_vs_as_np[0:-1, :] = np.array(vertices[indx_best * n_around:(indx_best+1) * n_around])
         mesh_vs_as_np[-1, :] = mesh_vs_as_np[0, :]
         # Project onto this ring
         theta_best = 0.0
@@ -99,42 +114,49 @@ class JunctionComponent:
         # Convert to theta
         self.theta_around = float(theta_best)
 
-    def create_dict(self) ->dict:
+    def create_dict(self) -> dict:
         ret_dict = {"t_along": self.t_along,
                     "theta_around": self.theta_around,
                     "pt_attach": self.pt_attach,
-                    "vec_attach": self.vec_attach,
+                    "vec_along_parent": self.vec_along_parent,
+                    "vec_branch": self.vec_branch,
                     "ang_attach": self.ang_attach,
                     "radius": self.radius,
                     "parent_name": self.parent_name,
-                    "child_name": self.child_name}
+                    "child_branch_name": self.child_branch_name,
+                    "child_spur_name": self.child_spur_name,
+                    "type": self.type}
         return ret_dict
 
     def set_from_dict(self, in_dict: dict):
+        type = in_dict["type"]
         self.t_along = in_dict["t_along"]
         self.theta_around = in_dict["theta_around"]
         self.pt_attach = in_dict["pt_attach"]
-        self.vec_attach = in_dict["vec_attach"]
+        self.vec_along_parent = in_dict["vec_along_parent"]
+        self.vec_branch = in_dict["vec_branch"]
         self.ang_attach = in_dict["ang_attach"]
         self.radius = in_dict["radius"]
-        self.child_name = in_dict["child_name"]
+        self.child_branch_name = in_dict["child_branch_name"]
+        self.child_spur_name = in_dict["child_spur_name"]
         self.parent_name = in_dict["parent_name"]
+        self.type = JunctionComponent.JunctionType[type]
 
 
 class SkeletonComponent:
     def __init__(self, name:str):
         self.name = name
-        # Computed as cylinders are processed
+        # Computed from bud sites
         self.centroids = []
         self.radii = []
+        self.t_values = []
         # Set when parsing branch hierarchy
         self.start_pt = (0, 0, 0)
         self.start_vec = (1, 0, 0)
         self.end_pt = (0, 0, 0)
+        self.length = 0.0
         self.child_junctions = []
         # Computed after cylinders are processed
-        self.t_values = []
-        self.length = 0.0
 
     def add_cylinder(self, vs: list):
         

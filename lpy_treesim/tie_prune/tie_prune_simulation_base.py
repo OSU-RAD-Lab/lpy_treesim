@@ -272,6 +272,15 @@ class TreeSimulationBase(ABC):
                 # Energy considers distance from wire to both branch endpoints
                 wire_points = np.array(wire.attractor_pts)
 
+                vec_to_wire_pt = wire_points[0, 0:3] - branch_start
+                len_vec_to_wire = np.linalg.norm(vec_to_wire_pt)
+                if not np.isclose(len_vec_to_wire, 0.0):
+                    vec_to_wire_pt /= len_vec_to_wire
+                    align_growth = np.dot(branch_dir, vec_to_wire_pt)
+                    if align_growth < 0.45:
+                        print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {vec_to_wire_pt} wrong way")
+                        continue
+
                 align = np.dot(branch_dir, wire.attractor_dir)
                 if align < 0.0:
                     # Skip branches that are currently pointing away from the tie direction

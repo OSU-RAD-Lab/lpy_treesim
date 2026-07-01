@@ -168,6 +168,8 @@ class BasicWood(ABC):
             del bud
         # These are the only ones we're keeping (if any)
         self.bud_sites = bud_keep
+
+        self.growth.length = at_length
         return names
 
     def add_year(self):
@@ -233,6 +235,9 @@ class BasicSpur(BasicWood):
         if not name:
             self.name = f"Spur_{self.__class__.__count}"
         self.__class__.__count += 1
+
+        # Make spurs fatter than regular wood
+        self.growth.target_ratios = (0.02, 0.05, 0.07)
 
     def is_add_bud_site(self) -> bool:
         return False

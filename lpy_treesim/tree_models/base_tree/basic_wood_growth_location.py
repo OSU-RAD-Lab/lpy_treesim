@@ -65,10 +65,13 @@ class GrowthState:
     diameter: float = 0.001
     target_diameter_ratio = 0.025 / 1.0   # Ideal ratio of diameter to length
     taper: float = 0.1                    # Percentage of diameter to taper to. Don't make too small (< 0.01)
+    target_ratios: tuple[float, float, float] = (0.01, 0.025, 0.035)
 
     # For tracking growth; controls which length/bud spacing to use
     age_in_years: int = 0         # Incremented by one after end of growth/tie/prune cycle
     age_in_iterations: int = 0    # In iterations
+
+
 
     def __post_init__(self):
         if self.num_iter_per_year == -1:
@@ -92,9 +95,9 @@ class GrowthState:
     def _set_diameter_ratio(self):
         """Calculate the target diameter based on the vigor level and expected growth for the age_in_years and current length
            Called in init() method """
-        low_ratio = 0.01
-        ideal_ratio = 0.025
-        high_ratio = 0.035
+        low_ratio = self.target_ratios[0]
+        ideal_ratio = self.target_ratios[1]
+        high_ratio = self.target_ratios[2]
         if self.vigour_level < 0.5:
             t = self.vigour_level * 2.0
             self.target_diameter_ratio = (1 - t) * low_ratio + t * ideal_ratio

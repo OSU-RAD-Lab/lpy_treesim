@@ -351,7 +351,7 @@ IStartBranch(branch_name):
     if branch.tying.is_tied:
       # Resets the orientation to be x, y, z axes
       nproduce @R
-      print(f"Tied: Guide {branch.growth.length}{branch_name} {branch.growth_curve}")
+      # print(f"Tied: Guide {branch.growth.length}{branch_name} {branch.growth_curve}")
     nproduce SetGuide(branch.growth_curve, branch.growth_curve.getLength())
 
 IEndBranch(branch_name):
@@ -381,7 +381,7 @@ IMakeCylinders(branch_name, start_dist, end_dist, b_generate):
       diameter = (1.0 - t) * start_diameter + t * end_diameter
       if diameter <= 0.0:
         print(f"Bad diameter {branch_name} {diameter}")
-      nproduce _(diameter) F(step_along)
+      nproduce _(diameter / 2.0) F(step_along)
     else:
       if growth_length <= 0.0:
         print(f"Bad growth length {branch_name} {growth_length}")

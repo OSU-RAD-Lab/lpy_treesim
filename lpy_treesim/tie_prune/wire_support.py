@@ -52,10 +52,14 @@ class Support:
 
         self.x_left = x_left
         self.x_right = x_right
+        self.n_along_x = n_along_x
 
         # For visualization only - every time make_attractor_grid is called it will add its points here
         self.attractor_grids = []
         self.attractor_grid = Point3Grid((1, 1, 1), list(points))
+
+    def spacing_across_wire(self):
+        return (self.x_right - self.x_left) / self.n_along_x
 
     def make_attractor_grid(self,
                             tie_type: TyingState.TyingType = TyingState.TyingType.TIE_ALONG,

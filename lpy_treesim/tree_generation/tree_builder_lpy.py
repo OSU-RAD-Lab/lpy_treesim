@@ -121,6 +121,49 @@ class TreeBuilder:
                     print(f"]")
                     indent -= 2
 
+    def check_tree(self):
+        found_buds = []
+        found_branches = []
+        for branch_key, branch_buds in self.branch_hierarchy.items():
+            if "root" in branch_key:
+                continue
+            if not branch_key in self.map_name_instance:
+                print(f"Checking tree: No branch {branch_key} in map instance")
+                continue
+            if "bud" in branch_key:
+                continue
+            branch = self.map_name_instance[branch_key]
+            for bud in branch_buds:
+                found_buds.append(bud.name)
+                if bud.branch_child:
+                    found_branches.append(bud.branch_child.name)
+                if bud.spur_child:
+                    found_branches.append(bud.spur_child.name)
+                if bud.dist_along > branch.growth.length:
+                    print(f"Problem: {branch.name}, {bud.name}")
+        for bud_name in found_buds:
+            if not bud_name in self.branch_hierarchy:
+                print(f"Problem: {bud_name} is alive but not in hierarchy")
+        for branch_name in found_branches:
+            if not branch_name in self.branch_hierarchy:
+                print(f"Problem: {branch_name} is alive but not in hierarchy")
+
+    def check_string(self, lstring: str):
+        find_wood = lstring.split("WoodStart")
+        for string_bit in find_wood[1:]:
+            if not string_bit[0] == "(":
+                continue
+            name = string_bit[1:].split(")")[0]
+            if not name in self.branch_hierarchy:
+                print(f"Could not find name {name} in branch hierarchy")
+        find_spur = lstring.split("SpurStart")
+        for string_bit in find_spur[1:]:
+            if not string_bit[0] == "(":
+                continue
+            name = string_bit[1:].split(")")[0]
+            if not name in self.branch_hierarchy:
+                print(f"Could not find name {name} in branch hierarchy")
+
     def generate_tree(self):
         """ Actually build the lpy string
         @param b_interactive - do you want to have to hit a key every iteration?"""
@@ -134,6 +177,7 @@ class TreeBuilder:
 
         # Iterate, replacing modules with new ones every iteration
         #  Roughly 28 iterations per year, 3-5 years (depending on SimulationConfig parameters)
+        b_check_string = False
         for iteration in range(self.__lsystem.derivationLength):
             print(f"Iteration {iteration}")
             # One iteration - replace symbols
@@ -142,6 +186,11 @@ class TreeBuilder:
 
             if "%" in str(lstring):
                 print("PRUNING cuts found in string")
+                self.check_tree()
+                b_check_string = True
+            if b_check_string:
+                self.check_string(str(lstring))
+                b_check_string = False
 
             # DO NOT TAKE OUT THIS LINE - or everything will stop working
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
@@ -190,12 +239,14 @@ class TreeBuilder:
                 new_junction.type = JunctionComponent.JunctionType.BUD
             if bud.branch_child:
                 lpy_child_name = bud.branch_child.name
-                tree_child_name = mapping_tree_structure[lpy_child_name]["name"]
+                child_dict = mapping_tree_structure[lpy_child_name]
+                tree_child_name = child_dict["name"]
                 new_junction.child_branch_name = tree_child_name
                 new_junction.type = JunctionComponent.JunctionType.BRANCH
             if bud.spur_child:
                 lpy_child_name = bud.spur_child.name
-                tree_child_name = mapping_tree_structure[lpy_child_name]["name"]
+                child_dict = mapping_tree_structure[lpy_child_name]
+                tree_child_name = child_dict["name"]
                 new_junction.child_spur_name = tree_child_name
                 if bud.branch_child:
                     new_junction.type = JunctionComponent.JunctionType.BRANCH_AND_SPUR
@@ -219,17 +270,19 @@ class TreeBuilder:
         parent_ids = tree.get_parent_id_list(parent_dict)
         for bud in bud_sites:
             if bud.branch_child:
-                child_name = bud.branch_child.name
+                child_lpy_name: str = bud.branch_child.name
                 branch_dict = tree.new_branch(trunk_id=trunk_id, parent_ids=parent_ids)
-                mapping_tree_structure[child_name] = branch_dict
-                mapping_lpy[child_name] = bud.branch_child
+                mapping_tree_structure[child_lpy_name] = branch_dict
+                mapping_lpy[child_lpy_name] = bud.branch_child
             if bud.spur_child:
-                child_name = bud.spur_child.name
+                child_lpy_name: str = bud.spur_child.name
                 spur_dict = tree.new_spur(trunk_id=trunk_id, parent_and_branch_ids=parent_ids)
-                mapping_tree_structure[child_name] = spur_dict
-                mapping_lpy[child_name] = bud.spur_child
+                mapping_tree_structure[child_lpy_name] = spur_dict
+                mapping_lpy[child_lpy_name] = bud.spur_child
 
     def _add_skeleton(self,
+                      mapping_tree_structure: dict,
+                      mapping_lpy: dict,
                       branch_dict: dict,
                       branch_lpy: BasicWood,
                       bud_sites: list[BudSite]):
@@ -243,19 +296,17 @@ class TreeBuilder:
         skel.radii.append(branch_lpy.growth.get_diameter(0.0))
         skel.t_values.append(0.0)
         for bud in bud_sites:
-            skel.centroids.append(bud.start_loc)
+            skel.centroids.append(self.convert_vec3_to_tuple(bud.start_loc))
             skel.radii.append(branch_lpy.growth.get_diameter(bud.dist_along))
             skel.t_values.append(bud.dist_along / branch_lpy.growth.length)
         skel.centroids.append(self.convert_vec3_to_tuple(branch_lpy.location.end))
         skel.radii.append(branch_lpy.growth.get_diameter(branch_lpy.growth.length))
         skel.t_values.append(1.0)
 
-        """ TO FIX
-        skel.child_junctions = self._add_junctions(mapping_tree_structure={},
+        skel.child_junctions = self._add_junctions(mapping_tree_structure=mapping_tree_structure,
                                                    parent_dict=branch_dict,
                                                    parent_lpy=branch_lpy,
                                                    bud_sites=bud_sites)
-                                                   """
         branch_dict["skel"] = skel
 
     def create_tree_structure(self) -> (TreeStructure, dict, dict):
@@ -263,7 +314,9 @@ class TreeBuilder:
         Returns the tree structure and a mapping from the lpy names to the new tree structures"""
         tree = TreeStructure()
 
+        # Map lpy names to tree parts
         mapping_tree_structure = {}
+        # Map lpy names to Tree structure pointers
         mapping_lpy = {}
         # Each item in the branch_hierarchy dictionary is organized as name -> list of buds
         # This is relying on the fact that looping over the dictionary will happen in the order that the objects
@@ -273,22 +326,30 @@ class TreeBuilder:
             if "root" in key:
                 # Root - start adding trunks
                 root_dict = tree.new_root()
-                for trunk in child_list:
+                for trunk_lpy in child_list:
                     trunk_dict = tree.new_trunk()
-                    mapping_tree_structure[trunk.name] = trunk_dict
-                    mapping_lpy[trunk.name] = trunk
+                    mapping_tree_structure[trunk_lpy.name] = trunk_dict
+                    mapping_lpy[trunk_lpy.name] = trunk_lpy
             elif "bud" in key:
                 # Skipping these because buds will be handled when processing each branch/trunk
                 continue
             else:
+                # The dictionary elements are created when we process the parent, so we just have to get
+                # them back
                 branch_dict = mapping_tree_structure[key_orig]
                 branch_lpy = self.map_name_instance[key_orig]
+                # This creates and adds the tree components
                 self._add_buds(mapping_tree_structure=mapping_tree_structure,
                                mapping_lpy=mapping_lpy,
                                tree=tree,
                                parent_dict=branch_dict,
                                bud_sites=child_list)
-                self._add_skeleton(branch_dict=branch_dict, branch_lpy=branch_lpy, bud_sites=child_list)
+                # This creates the SkeletonComponent for the branch
+                self._add_skeleton(mapping_tree_structure=mapping_tree_structure,
+                                   mapping_lpy=mapping_lpy,
+                                   branch_dict=branch_dict,
+                                   branch_lpy=branch_lpy,
+                                   bud_sites=child_list)
 
         return tree, mapping_lpy, mapping_tree_structure
 

@@ -102,8 +102,8 @@ class TyingState:
             x_coord = lpy_rng.uniform(curve_x_range[0], curve_x_range[1])
             y_coord = lpy_rng.uniform(curve_y_range[0], curve_y_range[1])
             # Uncomment these if you want to take the noise out of branches (for debugging)
-            x_coord = 0
-            y_coord = 0
+            # x_coord = 0
+            # y_coord = 0
             self.guide_points.append(Vector4(x_coord, y_coord, z_value, 1))
         if self.tie_type == TyingState.TyingType.NO_TIE:
             return
@@ -151,11 +151,11 @@ class TyingState:
         gp_as_np = np.array(self.guide_points)
         rot_mat = np.identity(3)
         # Heading goes in z, left goes in y, x is the other one
-        rot_mat[1, :] = np.array(left)
-        rot_mat[2, :] = np.array(heading)
-        rot_mat[0, :] = np.cross(rot_mat[1, :], rot_mat[2, :])
+        rot_mat[:, 0] = np.array(left)
+        rot_mat[:, 2] = np.array(heading)
+        rot_mat[:, 1] = np.cross(rot_mat[0, :], rot_mat[2, :])
         pt_curve_origin = np.copy(gp_as_np[0, 0:3])
-        print(f"Pt origin: {pt_origin}, pt curve origin {pt_curve_origin}")
+        # print(f"Pt origin global: {pt_origin}, pt curve local origin {pt_curve_origin}")
         for ir in range(gp_as_np.shape[0]):
             # Rotate around origin (first point in the guide points should be 0,0,0)
             pt = gp_as_np[ir, 0:3] - pt_curve_origin
@@ -164,9 +164,14 @@ class TyingState:
                 # Guide curves start at 0,0,0 - move to branch start point in space
                 gp_as_np[ir, ic] += pt_origin[ic]
 
-        # vec = gp_as_np[1, :] - gp_as_np[0, :]
-        # vec = vec / np.linalg.norm(vec)
-        # print(f"Heading {heading}, guide points {vec}")
+        """
+        vec = gp_as_np[1, :] - gp_as_np[0, :]
+        vec = vec / np.linalg.norm(vec)
+        x = np.zeros((3, 1))
+        x[0] = 1
+        print(f"Heading {heading}, guide points {vec}")
+        print(f"Left {left}, guide points {(rot_mat @ x).transpose()}")
+        """
         return rot_mat, gp_as_np
 
     def _find_pt_on_wire(self, start_pt, next_guide_pt, next_wire_pt):
@@ -176,7 +181,7 @@ class TyingState:
         dist_allow_slide = self.wire_attach.spacing * 0.5
         d_slide = dist_allow_slide * np.tanh(dist_along_wire_guide)
         # Uncomment if you want to disable sliding (for debugging)
-        d_slide = 0.0
+        #d_slide = 0.0
         return next_wire_pt + self.wire_attach.attractor_dir * d_slide
 
     def _get_angs_and_scl(self, start_pt, next_guide_pt, next_wire_pt):
@@ -201,7 +206,7 @@ class TyingState:
         # Vec to guide point is now length of vec to wire
         vec_to_guide_point = vec_to_guide_point / len_to_wire
         vec_to_wire_point = vec_to_wire_point / len_to_wire
-        print(f"Vec to guide point {vec_to_guide_point}, vec to wire {vec_to_wire_point}")
+        # print(f"Vec to guide point {vec_to_guide_point}, vec to wire {vec_to_wire_point}")
         dot = np.dot(vec_to_guide_point, vec_to_wire_point)
         # If already pointing in the same direction, don't rotate
         if np.isclose(dot, 1.0):
@@ -220,9 +225,9 @@ class TyingState:
         Note: need to re-do if the initial point/vector change
         """
         rot_mat, gp_as_np = self._convert_guide_points_to_global(pt_origin=pt_origin, heading=heading, left=left)
-        print("first eight")
-        for indx in range(0, self.n_pts_tie_down+1):
-            print(f"pre-move local {self.guide_points[indx]} global {gp_as_np[indx, 0:3]}")
+        # print("Tie down control points in local coordinate system")
+        #for indx in range(0, self.n_pts_tie_down+1):
+        #    print(f"pre-move local {self.guide_points[indx]} global {gp_as_np[indx, 0:3]}")
         start_indx = 0
         n_spacing = self.n_pts_tie_down
         indx_guide_pts = [start_indx]
@@ -238,7 +243,7 @@ class TyingState:
             scl, vec, ang = self._get_angs_and_scl(start_pt=start_pt,
                                                    next_guide_pt=next_guide_pt,
                                                    next_wire_pt=next_wire_pt)
-            print(f"Scale {scl} vec {vec} ang {ang}")
+            # print(f"Scale {scl} vec {vec} ang {ang}")
             # print(f"Tie point start {start_pt} wire {next_wire_pt} guide_point {next_guide_pt}")
             # print(f"Scl {scl} Vec {vec}, ang {ang}")
             # Now rotate/scale all of the guide curve to the right, using some percentage of the rotate scale up to the
@@ -272,9 +277,9 @@ class TyingState:
             start_indx += n_spacing
             n_spacing = self.n_pts_per_tie
             indx_guide_pts.append(start_indx)
-        print("first eight")
-        for indx in range(0, self.n_pts_tie_down+1):
-            print(f"pre-move local {self.guide_points[indx]} moved {gp_as_np[indx, 0:3]}")
+        # print("first eight tied down")
+        # for indx in range(0, self.n_pts_tie_down+1):
+        #     print(f"pre-move local {self.guide_points[indx]} moved {gp_as_np[indx, 0:3]}")
         self.guide_points = []
         for indx in range(0, gp_as_np.shape[0]):
             # Put back at the branch location, but use global orientation
@@ -283,6 +288,7 @@ class TyingState:
             self.guide_points.append(Vector4(pt[0], pt[1], pt[2], 1.0))
         print(f"Curve start point: {pt_origin}\nFirst wire point: {self.wire_attach.attractor_pts[0]}")
 
+        """
         print(f"Guide points to wire point alignment")
         np.set_printoptions(precision=2, suppress=True)
         for indx in range(0, self.wire_attach.attractor_pts.shape[0]):
@@ -291,6 +297,7 @@ class TyingState:
         print("first eight")
         for indx in range(0, self.n_pts_tie_down+1):
             print(f"global {gp_as_np[indx, 0:3]}, local {self.guide_points[indx]}")
+        """
         print("done")
 
     @staticmethod

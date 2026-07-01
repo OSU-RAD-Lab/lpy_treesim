@@ -125,11 +125,10 @@ class JunctionComponent:
                     "parent_name": self.parent_name,
                     "child_branch_name": self.child_branch_name,
                     "child_spur_name": self.child_spur_name,
-                    "type": self.type}
+                    "type": str(self.type)}
         return ret_dict
 
     def set_from_dict(self, in_dict: dict):
-        type = in_dict["type"]
         self.t_along = in_dict["t_along"]
         self.theta_around = in_dict["theta_around"]
         self.pt_attach = in_dict["pt_attach"]
@@ -137,10 +136,11 @@ class JunctionComponent:
         self.vec_branch = in_dict["vec_branch"]
         self.ang_attach = in_dict["ang_attach"]
         self.radius = in_dict["radius"]
+        self.parent_name = in_dict["parent_name"]
         self.child_branch_name = in_dict["child_branch_name"]
         self.child_spur_name = in_dict["child_spur_name"]
-        self.parent_name = in_dict["parent_name"]
-        self.type = JunctionComponent.JunctionType[type]
+        # TODO: Fix this
+        self.type = JunctionComponent.JunctionType(in_dict["type"])
 
 
 class SkeletonComponent:
@@ -157,47 +157,6 @@ class SkeletonComponent:
         self.length = 0.0
         self.child_junctions = []
         # Computed after cylinders are processed
-
-    def add_cylinder(self, vs: list):
-        
-        vs_as_np = np.array(vs)
-        centroid = np.mean(vs_as_np, axis=0)
-        # Really annoying to cast to float, but otherwise json doesn't work
-        self.centroids.append((float(centroid[0]), float(centroid[1]), float(centroid[2])))
-        radius = float(np.linalg.norm(vs_as_np[0, :] - centroid[:]))
-        self.radii.append(radius)
-
-    def compute_t_values(self):
-        """ Call AFTER all cylinders have been added"""
-        # Really annoying to cast to float, but otherwise json doesn't work
-
-        centers_as_np = np.array(self.centroids)
-        self.start_pt = (float(centers_as_np[0, 0]), float(centers_as_np[0, 1]), float(centers_as_np[0, 2]))
-        self.end_pt = (float(centers_as_np[-1, 0]), float(centers_as_np[-1, 1]), float(centers_as_np[-1, 2]))
-
-        vec_to_first_pt = centers_as_np[1, :] - centers_as_np[0, :]
-        len_vec = np.linalg.norm(vec_to_first_pt)
-        if not np.isclose(len_vec, 0.0):
-            vec_to_first_pt = vec_to_first_pt / len_vec
-            self.start_vec = (float(vec_to_first_pt[0]), float(vec_to_first_pt[1]), float(vec_to_first_pt[2]))
-        else:
-            print(f"Warning, zero length vec {self.name}")
-
-        dists = np.zeros(len(self.centroids))
-        for indx in range(0, len(self.centroids) - 1):
-            start_pt = centers_as_np[indx, :]
-            end_pt = centers_as_np[indx + 1, :]
-            dist = np.linalg.norm(end_pt - start_pt)
-            dists[indx+1] = dist
-
-        self.length = float(np.sum(dists))
-        if self.length > 0.0:
-            dists = dists / self.length
-        self.t_values = []
-        dist_sum = dists[0]
-        for dist in dists[1:]:
-            self.t_values.append(float(dist_sum))
-            dist_sum += dist
 
     def add_junction(self, child_component: JunctionComponent):
         self.child_junctions.append(child_component)

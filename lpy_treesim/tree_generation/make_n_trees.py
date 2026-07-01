@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate and save multiple L-Py trees.")
     parser.add_argument("--num-trees", type=int, default=1, help="Number of trees to generate")
-    parser.add_argument("--stage-dir", type=Path, default=Path("/home/cindy/isaacsim/World"), help="Directory for top of Stage USD files")
-    parser.add_argument("--output-dir", type=Path, default=Path("/home/cindy/VSCode/data/lpy_trees/"), help="Directory for regular mesh outputs")
-    parser.add_argument("--tree-name", type=str, default="envy", help="Tree family to generate (UFO/Envy/etc.)")
+    parser.add_argument("--stage-dir", type=Path, default=None, help="Directory for top of Stage USD files")
+    parser.add_argument("--output-dir", type=Path, default=Path("./"), help="Directory for regular mesh outputs")
+    parser.add_argument("--tree-name", type=str, default="ufo", help="Tree family to generate (UFO/Envy/etc.)")
     parser.add_argument("--texture-name", type=str, default="apple", help="Use/make all textures with this name")
     parser.add_argument("--verbose", action="store_true", help="Print progress details")
     parser.add_argument("--interactive", action="store_true", help="Show tree growing")
@@ -31,7 +31,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--ply", action="store_false", help="Write out ply file format")
     parser.add_argument("--obj", action="store_false", help="Write out obj file format")
     parser.add_argument("--meta-data", action="store_false", help="Write out meta data")
-    parser.add_argument("--usda", action="store_false", help="Write out universal scene descriptor format")
+    parser.add_argument("--usda", action="store_true", help="Write out universal scene descriptor format")
     parser.add_argument("--make-textures", action="store_true", help="Create a new set of textures")
     args = parser.parse_args()
     if args.num_trees > (FileNamingConfig.MAX_TREES + 1) or args.num_trees < 1:
@@ -92,7 +92,7 @@ def main():
 
         # Adds to each tree component the mesh cylinders created by lpy
         bud_sites = plant_gl_scene_to_vertices_and_faces(scene,
-                                                         tree_mapping=mapping_lpy,
+                                                         mapping_tree_structure=mapping_tree_structure,
                                                          color_mapping=lsb.color_manager)
 
         # Now stitch together all of the mesh components into tubes instead of discrete cylinders
@@ -131,7 +131,6 @@ def main():
             metadata_path = args.output_dir / naming.metadata_filename(index)
             meta_data = lsb.get_metadata()
             meta_data["tree"] = tree.create_dict()
-            # meta_data["tree"] = tree  # Need to fix
             # meta_data["tree_mapping"] = mapping
             meta_data["color_mapping"] = color_to_part
             with open(metadata_path, "w") as f:

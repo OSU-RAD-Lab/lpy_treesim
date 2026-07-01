@@ -4,6 +4,14 @@ UFO tree architectures
   Primary support branches grow vertically and are tied along the remaining wires
   Tertiary branches/spurs grow horizontally out of primary support branches
   Uses default spur
+  TODOS:
+      Once all wires are filled, then should prune off all primary branches on trunk
+      Option 1: Pruning to 6 inches any branch that sticks out
+      Option 2: Take any vigorous branch that sticks out and remove it entirely
+      Get buds out of dormancy if they were pruned with some probability
+      Add fruiting sites moving up the branch and not producing fruit after 5 years
+      Add tropism
+      Add trimming off any bud sites that have multiple side branches
 """
 import numpy as np
 from lpy_treesim.tie_prune.tying import TyingState
@@ -75,7 +83,7 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
     # Create configs for cleaner prototype setup
     spur_config = BasicWoodConfig(bud_spacing_range=(0.001, 0.002),  # Use for spacing each age_in_years's fruit location
                                   yearly_growth_range=[(1, 0.1, 0.15), (3, 0.0025, 0.05)],  # Grows 1-2 inches per age_in_years
-                                  taper_amount=0.01,  # Ends in a point
+                                  taper_amount=0.3,  # Stubby
                                   curve_x_range=(-0.02, 0.02),
                                   curve_y_range=(-0.02, 0.02),
                                   num_iter_per_year=sim_config.num_iter_per_year,

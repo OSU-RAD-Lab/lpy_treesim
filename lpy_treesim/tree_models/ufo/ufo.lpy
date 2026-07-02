@@ -1,11 +1,9 @@
 from pathlib import Path
-from openalea.lpy import Lsystem
 from openalea.lpy import *
-from openalea.plantgl.all import *
 from lpy_treesim import ColorManager
 
-BASE_LPY_PATH = Path(__file__).resolve().parents[2] / "base_lpy.lpy"
 
+BASE_LPY_PATH = Path(__file__).resolve().parents[2] / "base_lpy.lpy"
 color_manager = ColorManager()
 
 vars = {
@@ -14,13 +12,9 @@ vars = {
     "simulation_config_class_path": "tree_models.UFO.UFO_simulation.UFOSimulationConfig",
     "simulation_class_path": "tree_models.UFO.UFO_simulation.UFOSimulation",
     "color_manager": color_manager,
-    "axiom_pitch": 270.0,
-    "axiom_yaw": 0.0,
 }
 
 lsystem = Lsystem(str(BASE_LPY_PATH), vars)
 
 for lstring in lsystem:
     lsystem.plot(lstring)
-
-# color_manager.export_mapping("ufo_color_mapping.json")

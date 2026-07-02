@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from lpy_treesim.tie_prune.tie_prune_simulation_base import SimulationConfig, TreeSimulationBase
 from lpy_treesim.tie_prune.wire_support import Support, TyingState
-import numpy as np
-from openalea.plantgl.all import BezierCurve, Vector4, Point4Array
 
 
 @dataclass
@@ -34,14 +32,6 @@ class UFOSimulationConfig(SimulationConfig):
     x_left: float = 0.0         # Start at the trunk center
     x_right: float = 1.8        # 5-6 ' to the right
     n_years:int = 6
-
-    # UFO-specific Point Generation
-    ufo_x_range: tuple = (0.65, 3)
-    ufo_x_spacing: float = 0.3
-    ufo_z_value: float = 1.4
-    ufo_y_value: float = 0
-
-    use_generalized_cylinders: bool = True
 
 
 class UFOSimulation(TreeSimulationBase):

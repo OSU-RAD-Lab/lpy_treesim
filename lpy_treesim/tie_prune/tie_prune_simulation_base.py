@@ -362,7 +362,7 @@ class TreeSimulationBase(ABC):
 
         for branch_indx, wire_indx in zip(row_ind, col_ind):
             if energy_matrix[branch_indx, wire_indx] < self.invalid_attractor_value:
-                print(f" Assigning branch {branches[branch_indx].name} to wire {self.support.wires[wire_indx]} {energy_matrix[branch_indx, wire_indx]}")
+                print(f" Assigning branch {branches[branch_indx].name} to wire {self.branch_attractor[wire_indx].attractor_pts[0]} {energy_matrix[branch_indx, wire_indx]}")
                 # Get the branch and wire objects
                 branch = branches[branch_indx]
                 wire_id = wire_ids[wire_indx]

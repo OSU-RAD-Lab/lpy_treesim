@@ -1,5 +1,5 @@
-from lpy_treesim.tie_prune.tie_prune_simulation_base import SimulationConfig, TreeSimulationBase
 from dataclasses import dataclass
+from lpy_treesim.tie_prune.tie_prune_simulation_base import SimulationConfig, TreeSimulationBase
 from lpy_treesim.tie_prune.wire_support import Support, TyingState
 
 
@@ -7,23 +7,14 @@ from lpy_treesim.tie_prune.wire_support import Support, TyingState
 class ENVYSimulationConfig(SimulationConfig):
     """Configuration for Envy trellis tree simulation parameters."""
 
-    # Override base defaults for Envy-specific values
-    num_iteration_tie: int = 5
-    num_iteration_prune: int = 8
-    pruning_age_threshold: int = 6
-    derivation_length: int = 64
-
     # Envy-specific Support Structure
-    support_trunk_wire_point = None
-    support_num_wires: int = 14
-
-    # Envy-specific Point Generation (V-trellis)
-    trellis_x_value: float = 0.45
-    trellis_z_start: float = 0.6
-    trellis_z_end: float = 3.4
-    trellis_z_spacing: float = 0.45
-
-    use_generalized_cylinders: bool = True
+    start_height: float = 0.6   # 24 inches
+    angle: float = 0.0
+    spacing_wires: float = 0.45 # 18 inches
+    num_wires: int = 7          # Make a bit taller than 5
+    x_left: float = -0.45       # 18 inches on either side
+    x_right: float = 0.45
+    n_years:int = 6
 
 
 class ENVYSimulation(TreeSimulationBase):
@@ -36,7 +27,7 @@ class ENVYSimulation(TreeSimulationBase):
 
     def generate_attractor_grids(self):
         """
-        Generate 3D points for the UFO trellis wire structure.
+        Generate 3D points for the Envy trellis wire structure.
 
         Trunk: Trunk is tied along the wires
         Branches: first level support branches are tied along the wires at evenly spaced points

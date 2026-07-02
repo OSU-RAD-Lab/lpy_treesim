@@ -66,6 +66,9 @@ class SimulationConfig(ABC):
     def derivation_length(self):
         return self.n_years * self.num_iter_per_year + 3
 
+    def width(self):
+        return self.x_right - self.x_left
+
     def do_trunk_tying(self, current_iteration: int):
         # Since the tying is just a guide curve that won't change, do once
         if current_iteration == 2:

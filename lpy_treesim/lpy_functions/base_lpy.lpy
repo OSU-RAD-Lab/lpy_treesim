@@ -385,7 +385,7 @@ IMakeCylinders(branch_name, start_dist, end_dist, b_generate):
     else:
       if growth_length <= 0.0:
         print(f"Bad growth length {branch_name} {growth_length}")
-      nproduce f(growth_length)
+      nproduce f(step_along)
 
 
 IStartBud(bud_name):

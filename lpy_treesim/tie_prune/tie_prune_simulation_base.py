@@ -464,14 +464,22 @@ class TreeSimulationBase(ABC):
         # Collect names of all trunks/branches/spurs to be pruned
         # This may indirecty prune bud sites/buds, but not directly
         names_to_x = []
+        branches_shortened = []
         for name, branch in map_names_to_branches.items():
             if "bud" in name:
                 continue
             noisy_len = branch.config.noisy_prune_length()
             if branch.growth.length > noisy_len:
                 names_to_x.extend(branch.prune(noisy_len))
+                branches_shortened.append(branch.name)
+                keep_list = []
+                for child in branch_hierarchy[name]:
+                    if child.name not in names_to_x:
+                        keep_list.append(child)
+                branch_hierarchy[name] = keep_list
 
-        print("")
+        print(f"Shortened: {branches_shortened}")
+        print(f"{names_to_x}")
         # Now remove any x'd buds etc from the hierarchy
         for name in names_to_x:
             del branch_hierarchy[name]

@@ -180,6 +180,11 @@ class TreeBuilder:
         b_check_string = False
         for iteration in range(self.__lsystem.derivationLength):
             print(f"Iteration {iteration}")
+
+            if b_check_string:
+                self.check_string(str(lstring))
+                b_check_string = False
+
             # One iteration - replace symbols
             lstring = self.__lsystem.derive(lstring, iteration, 1)
             #self.make_string_readable(str(lstring))
@@ -188,9 +193,6 @@ class TreeBuilder:
                 print("PRUNING cuts found in string")
                 self.check_tree()
                 b_check_string = True
-            if b_check_string:
-                self.check_string(str(lstring))
-                b_check_string = False
 
             # DO NOT TAKE OUT THIS LINE - or everything will stop working
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
@@ -209,6 +211,8 @@ class TreeBuilder:
 
         # String and scene (which has geometry)
         #   This string will have all the F() modules, which are the ones that actually produce geometry
+        self.check_string(str(lstring))
+        self.check_string(str(self.__lsystem.sceneInterpretation(lstring)))
         return lstring, self.__lsystem.sceneInterpretation(lstring)
 
     def _add_junctions(self,

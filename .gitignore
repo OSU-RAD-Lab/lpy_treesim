@@ -169,3 +169,8 @@ GEMINI.md
 *.obj
 log/*
 tests/tmp/
+
+
+
+
+.devcontainer/

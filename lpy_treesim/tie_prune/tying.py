@@ -1,3 +1,6 @@
+#supress file print statements
+print = lambda *args, **kwargs: None
+
 """
 Defines type of tying
 """

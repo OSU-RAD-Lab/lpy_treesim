@@ -65,9 +65,11 @@ def prune_primary(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: 
         del branch_hierarchy[name]
         del map_names_to_branches[name]
 
+    '''
     # In the next iteration WoodStart etc will be replaced with % and cut out
-    #print(f"Left: ")
+    print(f"Left: ")
     for key in map_names_to_branches.keys():
-        if "rimary" in key and "bud" not in key:
+        if "primary" in key and "bud" not in key:
             pass
-            #print(f"{key}")
+            print(f"{key}")
+    '''

@@ -1,3 +1,6 @@
+#supress file print statements
+print = lambda *args, **kwargs: None
+
 """
 General-purpose routines to turn the plantgl mesh structures into meshes
 Opting to force cylinders to be less than a certain size (see IMakeCylinders in base_lpy.lpy) and NOT to use generalized

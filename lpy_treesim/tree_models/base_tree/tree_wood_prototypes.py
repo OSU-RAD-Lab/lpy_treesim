@@ -1,3 +1,6 @@
+#supress print statements for this file
+print = lambda *args, **kwargs: None
+
 """
 Defines the abstract class BasicWood
 All wood (trunk, branches, spurs) inherit from this class

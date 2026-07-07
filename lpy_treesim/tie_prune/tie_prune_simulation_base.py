@@ -25,6 +25,8 @@ from typing import Callable
 from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
 from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 
+from lpy_treesim.tie_prune.pruning_algo.prune_tree import prune_tree
+
 
 class TreeSimulationBase(ABC):
     """
@@ -185,11 +187,8 @@ class TreeSimulationBase(ABC):
         # This happens at the end of every year one iteration after the branches are tied and (optionally) for
         #   summer pruning
         if sim_config.do_pruning(self.current_iteration):
-            # These edit branch_hierarchy and map_names_to_branches in place to remove the branches/spurs etc
-            # Take out old primary branches
-            self.prune_primary(branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
-            # Cut short any overly long branches
-            self.prune_length(branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+            # proceed to prune the tree
+            prune_tree(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
 
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):

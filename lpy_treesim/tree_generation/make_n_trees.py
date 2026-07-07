@@ -47,6 +47,7 @@ def main():
 
     naming = FileNamingConfig(namespace=args.namespace, tree_type=args.tree_name)
     # ensure_output_dir(args.output_dir)
+    os.makedirs(args.output_dir, exist_ok=True)
 
     stage_context = []
     if args.stage_dir is not None:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from lpy_treesim import ColorManager
+from lpy_treesim.utils.color_manager import ColorManager
 import json
 from openalea.lpy import Lsystem
 from openalea.plantgl.all import *

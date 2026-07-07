@@ -28,6 +28,7 @@ def prune_length(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: d
             continue
         noisy_len = branch.config.noisy_prune_length()
         if branch.growth.length > noisy_len:
+            
             names_to_x.extend(branch.prune(noisy_len))
             branches_shortened.append(branch.name)
             keep_list = []
@@ -36,8 +37,8 @@ def prune_length(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: d
                     keep_list.append(child)
             branch_hierarchy[name] = keep_list
 
-    print(f"Shortened: {branches_shortened}")
-    print(f"{names_to_x}")
+    #print(f"Shortened: {branches_shortened}")
+    #print(f"{names_to_x}")
     # Now remove any x'd buds etc from the hierarchy
     for name in names_to_x:
         del branch_hierarchy[name]

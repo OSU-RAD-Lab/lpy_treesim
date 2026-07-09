@@ -183,9 +183,9 @@ class TreeBuilder:
         #  Roughly 28 iterations per year, 3-5 years (depending on SimulationConfig parameters)
         b_check_string = False
         for iteration in range(self.__lsystem.derivationLength):
-            print = original_print
+            #print = original_print
             print(f"Iteration {iteration}")
-            print = lambda *args, **kwargs: None
+            #print = lambda *args, **kwargs: None
 
             if b_check_string:
                 self.check_string(str(lstring))

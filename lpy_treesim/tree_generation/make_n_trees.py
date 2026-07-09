@@ -20,13 +20,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-trees", type=int, default=1, help="Number of trees to generate")
     parser.add_argument("--stage-dir", type=Path, default=None, help="Directory for top of Stage USD files")
     parser.add_argument("--output-dir", type=Path, default=Path("./data/"), help="Directory for regular mesh outputs")
-    parser.add_argument("--tree-name", type=str, default="envy", help="Tree family to generate (UFO/Envy/etc.)")
+    parser.add_argument("--tree-name", type=str, default="ufo", help="Tree family to generate (UFO/Envy/etc.)")
     parser.add_argument("--texture-name", type=str, default="apple", help="Use/make all textures with this name")
     parser.add_argument("--verbose", action="store_true", help="Print progress details")
     parser.add_argument("--interactive", action="store_true", help="Show tree growing")
-    parser.add_argument(
-        "--dataset-seed", type=int, default=None, help="Optional deterministic seed for dataset generation"
-    )
+    parser.add_argument("--dataset-seed", type=int, default=None, help="Optional deterministic seed for dataset generation")
     parser.add_argument("--namespace", type=str, default="lpy", help="Prefix namespace for output filenames")
     parser.add_argument("--ply", action="store_false", help="Write out ply file format")
     parser.add_argument("--obj", action="store_false", help="Write out obj file format")
@@ -34,6 +32,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--usda", action="store_true", help="Write out universal scene descriptor format")
     parser.add_argument("--make-textures", action="store_true", help="Create a new set of textures")
     args = parser.parse_args()
+
     if args.num_trees > (FileNamingConfig.MAX_TREES + 1) or args.num_trees < 1:
         raise ValueError(f"num_trees={args.num_trees} is not in the range [1, {FileNamingConfig.MAX_TREES + 1}].")
     if args.dataset_seed is None:

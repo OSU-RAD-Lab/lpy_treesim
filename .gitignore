@@ -166,7 +166,7 @@ dataset*/
 .DS_Store
 GEMINI.md
 .vscode/
-*.obj
+#*.obj
 log/*
 tests/tmp/
 
@@ -174,4 +174,3 @@ tests/tmp/
 
 
 .devcontainer/
-data/

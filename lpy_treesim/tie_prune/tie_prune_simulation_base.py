@@ -29,6 +29,7 @@ from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
 from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 
 from lpy_treesim.tie_prune.pruning_algo.prune_tree import prune_tree
+from lpy_treesim.tie_prune.pruning_algo.prune_at_end import end_prune
 
 
 class TreeSimulationBase(ABC):
@@ -198,6 +199,9 @@ class TreeSimulationBase(ABC):
             for items in branch_hierarchy.values():
                 for item in items:
                     item.add_year()
+
+        if self.current_iteration == 169:
+            end_prune(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
 
         self.current_iteration = get_iteration_number() + 1
 

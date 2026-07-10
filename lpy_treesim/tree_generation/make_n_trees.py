@@ -126,6 +126,9 @@ def main():
                                 b_use_uv=b_use_uv)
             logger.info(f"Wrote mesh to {usd_path}")
 
+        for location in lsb.map_name_instance['marked_locations']:
+            print(location)
+
         if args.meta_data:
             import json
             metadata_path = args.output_dir / naming.metadata_filename(index)

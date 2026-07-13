@@ -271,7 +271,7 @@ class TreeSimulationBase(ABC):
                 continue
 
             if branch.tying.tie_type == TyingState.TyingType.TIE_ACROSS:
-                check_coord = 1  # UFO-style - check that x index is within 2/3 of tie spacing
+                check_coord = 0  # UFO-style - check that x index is within 2/3 of tie spacing
                 spacing = self.support.spacing_across_wire()
             else:
                 check_coord = 2  # Envy-style - check that z index is within 2/3 of wire spacing

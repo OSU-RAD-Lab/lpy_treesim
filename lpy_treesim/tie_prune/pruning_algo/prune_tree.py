@@ -1,6 +1,7 @@
 from lpy_treesim.tie_prune.pruning_algo.prune_random import prune_random
 from lpy_treesim.tie_prune.pruning_algo.prune_length import prune_length
 from lpy_treesim.tie_prune.pruning_algo.prune_primary import prune_primary
+from lpy_treesim.tie_prune.pruning_algo.prune_random import prune_random
 from lpy_treesim.tie_prune.pruning_algo.prune_dist import prune_dist
 from lpy_treesim.tie_prune.pruning_algo.three_d import run_three_d
 from lpy_treesim.tie_prune.pruning_algo.prune_at_end import end_prune

@@ -5,6 +5,7 @@ from pathlib import Path
 import secrets
 import os as os
 import logging
+import trimesh
 
 from lpy_treesim.tree_generation.tree_builder_lpy import TreeBuilder
 from lpy_treesim.tree_generation.file_naming_config import FileNamingConfig
@@ -125,9 +126,26 @@ def main():
                                 radii=radii, name_radii=name_radii,
                                 b_use_uv=b_use_uv)
             logger.info(f"Wrote mesh to {usd_path}")
+        
+        #Create path for marked locations file and load generated tree mesh
+        mod_path = str(args.output_dir)+"/lpy_ufo_00000_vc.obj" #mesh path
+        mesh_existing = trimesh.load(mod_path)
+        all_meshes = [mesh_existing]
 
+        #mark locations, with transparent sphere, specified in prune_at_end.py
         for location in lsb.map_name_instance['marked_locations']:
-            print(location)
+            #print(location)
+            marker = trimesh.creation.icosphere(subdivisions=2, radius=lsb.map_name_instance['radius'])
+            marker.visual.face_colors = [0, 255, 0, 35]
+            marker.visual = marker.visual.to_texture()
+            marker.visual.material.alphaMode = "BLEND"
+            marker.apply_translation(location)
+            all_meshes.append(marker)
+
+        #combine meshes and save file
+        combined_mesh = trimesh.util.concatenate(all_meshes)
+        combined_mesh.export(str(args.output_dir)+"/marked_location.obj")
+        
 
         if args.meta_data:
             import json

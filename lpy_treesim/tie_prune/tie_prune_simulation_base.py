@@ -193,7 +193,7 @@ class TreeSimulationBase(ABC):
         if sim_config.do_pruning(self.current_iteration):
             # proceed to prune the tree
             prune_tree(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
-
+        
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):
             for items in branch_hierarchy.values():
@@ -202,6 +202,8 @@ class TreeSimulationBase(ABC):
 
         if self.current_iteration == 169:
             end_prune(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+
+        #add data structure creation fuction here
 
         self.current_iteration = get_iteration_number() + 1
 

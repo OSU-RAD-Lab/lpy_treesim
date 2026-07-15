@@ -29,6 +29,8 @@ from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
 from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 
 from lpy_treesim.tie_prune.pruning_algo.prune_tree import prune_tree
+from lpy_treesim.tie_prune.pruning_algo.prune_at_end import end_prune
+from lpy_treesim.tie_prune.pruning_algo.three_d import run_three_d
 
 
 class TreeSimulationBase(ABC):
@@ -92,6 +94,10 @@ class TreeSimulationBase(ABC):
 
         # For energy guide
         self.invalid_attractor_value = 1000
+
+        # For marking file after tree generation
+        self.prune_loc = []
+        self.radius = []
 
     @abstractmethod
     def generate_attractor_grids(self):
@@ -192,6 +198,18 @@ class TreeSimulationBase(ABC):
         if sim_config.do_pruning(self.current_iteration):
             # proceed to prune the tree
             prune_tree(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+        
+        # Create spatial data structure
+        # TODO add fuction to manage in sim_config
+        if self.current_iteration == 166:
+            run_three_d(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+
+        # Pruning that is only done after the tree has been generated
+        if self.current_iteration == 166:
+            self.prune_loc, self.radius = end_prune(self,branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+            #Added this code just to try out. Stash the 3d visual in the dict to give it to make_n_trees
+            map_names_to_branches['prune_locations_for_3d'] = self.prune_loc
+            map_names_to_branches['prune_radius_for_3d'] = self.radius
 
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):
@@ -242,16 +260,12 @@ class TreeSimulationBase(ABC):
                     open_branches.append(branch)
                 else:
                     print(f"Skipping {branch.name}, {branch.location.start} too short {branch.growth.length}")
-            else:
-                print(f"Branch {branch.name} tied to wire")
 
         wire_ids = []
         for wire_id, wire in enumerate(self.branch_attractor):
             # Skip wires that already have a branch attached
             if wire.branch_id == -1:
                 wire_ids.append(wire_id)
-            else:
-                print(f"Wire {wire_id} tied to {wire.branch_id}")
 
         num_branches = len(open_branches)
         num_wires = len(wire_ids)
@@ -266,16 +280,14 @@ class TreeSimulationBase(ABC):
         for branch_idx, branch in enumerate(open_branches):
             branch_start = np.array(branch.location.start)
             branch_dir = np.array(branch.location.start_dir)
+            branch_end = np.array(branch.location.end)
             if branch_start[2] < min_start_height:
                 print(f"Branch {branch.name} on trunk {branch_start} too far below wire ")
                 continue
 
+            spacing = self.support.spacing_wires
             if branch.tying.tie_type == TyingState.TyingType.TIE_ACROSS:
-                check_coord = 0  # UFO-style - check that x index is within 2/3 of tie spacing
                 spacing = self.support.spacing_across_wire()
-            else:
-                check_coord = 2  # Envy-style - check that z index is within 2/3 of wire spacing
-                spacing = self.support.spacing_wires
 
             for wire_idx, wire_id in enumerate(wire_ids):
                 wire = self.branch_attractor[wire_id]
@@ -288,34 +300,51 @@ class TreeSimulationBase(ABC):
                 len_vec_to_wire = np.linalg.norm(vec_to_wire_pt)
                 if not np.isclose(len_vec_to_wire, 0.0):
                     vec_to_wire_pt /= len_vec_to_wire
-                else:
-                    vec_to_wire_pt = wire.attractor_dir
+                    align_growth = np.dot(branch_dir, vec_to_wire_pt)
+                    if align_growth < 0.45:
+                        print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {vec_to_wire_pt} wrong way")
+                        continue
 
-                align_growth = np.dot(branch_dir, vec_to_wire_pt)
-                if align_growth < 0.45:
-                    print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {vec_to_wire_pt} wrong way")
+                align = np.dot(branch_dir, wire.attractor_dir)
+                if align < 0.0:
+                    # Skip branches that are currently pointing away from the tie direction
+                    print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {wire.attractor_dir}")
                     continue
 
-                align_wire = np.dot(branch_dir, wire.attractor_dir)
-                if align_wire < 0.0:
-                    print(f"Branch {branch.name} dir {branch_dir}, wire dir {wire.attractor_dir} wrong way")
-                    continue
+                end_indx = 3
+                if branch.tying.tie_type == TyingState.TyingType.TIE_ACROSS:
+                    # Don't care about z just if it aligns (x) and is not too far from the wire (y)
+                    end_indx = 2
 
                 # Find the closest wire attachment point; for the start point it's probably the first wire point,
                 #   for the end point it may be one further along
                 # End point distance is an approximate measure of if the branch is growing in the direction of the wire
-                start_distance_energy = branch_start[check_coord] - wire_points[0, check_coord]
+                start_distance_energy = 1e30
+                end_distance_energy = 1e30
+                for row in range(0, wire_points.shape[0]):
+                    start_energy = 0.0
+                    end_energy = 0.0
+                    for icoord in range(0, end_indx):
+                        start_energy += np.fabs(branch_start[icoord] - wire_points[row, icoord])
+                        end_energy += np.fabs(branch_end[icoord] - wire_points[row, icoord])
+                    if start_energy < start_distance_energy:
+                        start_distance_energy = start_energy
+                    if end_energy < end_distance_energy:
+                        end_distance_energy = end_energy
 
-                if np.fabs(start_distance_energy) > 2.0 * spacing / 3.0:
-                    print(f"Branch {branch.name} Too far away {start_distance_energy} spacing {spacing}")
+                start_distance_energy /= end_indx
+                end_distance_energy /= end_indx
+                if start_distance_energy > spacing / 2.0 and end_distance_energy > spacing:
+                    print(f"Branch {branch.name} Too far away {start_distance_energy} {end_distance_energy}")
                     continue
-                print(f"Branch {branch.name} Start {branch_start}  wire {wire_points[0, :]} spacing {spacing}")
-                # Scale by spacing
-                dist_energy = np.fabs(start_distance_energy) / spacing
-                print(f" Dist {dist_energy} angle {align_growth}", end="")
+                print(f"Branch {branch.name} Start {branch_start} end {branch_end}\n          wire {wire_points[0, :]} spacing {spacing}")
+                print(f" Energy {start_distance_energy:0.3f} {end_distance_energy:0.3f}", end="")
+                # Weight the starting distance energy as more important than the ending one
+                dist_energy = 0.8 * start_distance_energy / spacing + 0.2 * end_distance_energy / spacing
+                print(f" Dist {dist_energy}", end="")
                 # Weight the distance versus the angle
                 #   Distance is scaled 0..1 based on wire spacing, align is dot product 0 to 1. 1 is better
-                total_energy = self.config.energy_distance_weight * dist_energy + align_growth * self.config.energy_angle_weight
+                total_energy = self.config.energy_distance_weight * dist_energy + align * self.config.energy_angle_weight
                 print(f" Total {total_energy}")
 
                 energy_matrix[branch_idx, wire_idx] = total_energy
@@ -352,11 +381,11 @@ class TreeSimulationBase(ABC):
         # Continue making assignments as long as energy matrix < 1000
 
         for branch_indx, wire_indx in zip(row_ind, col_ind):
-            wire_id = wire_ids[wire_indx]
             if energy_matrix[branch_indx, wire_indx] < self.invalid_attractor_value:
-                print(f" Assigning branch {branches[branch_indx].name} to wire {self.branch_attractor[wire_id].attractor_pts[0]} {energy_matrix[branch_indx, wire_indx]}")
+                print(f" Assigning branch {branches[branch_indx].name} to wire {self.branch_attractor[wire_indx].attractor_pts[0]} {energy_matrix[branch_indx, wire_indx]}")
                 # Get the branch and wire objects
                 branch = branches[branch_indx]
+                wire_id = wire_ids[wire_indx]
                 wire_attach = self.branch_attractor[wire_id]
 
                 # Perform the assignment

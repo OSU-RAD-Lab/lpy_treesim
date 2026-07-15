@@ -3,7 +3,7 @@ from math import sqrt
 
 #Set true for dignostic info (Errors still printed when False)
 PRINT = True
-RUN_ITERATIONS = False
+RUN_ITERATIONS = True
 
 def get_dist(L1, L2):
     return abs(sqrt((L1.x-L2.x)**2+(L1.y-L2.y)**2+(L1.z-L2.z)**2))
@@ -13,7 +13,6 @@ def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict
     if PRINT: print("[end_prune] Function Called, end_prune() running...")
     branches = []
     buds = []
-
     names_to_x = []
     prune_locations = []
     
@@ -75,7 +74,7 @@ def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict
             if dist < RADIUS:
                 print(f"[ERROR] NEW REFERANCE TOO CLOSE. Last Referance: {referance_branches[len(referance_branches)-1].name}")
         else:
-            referance = branches.pop(30)
+            referance = branches.pop(0)
             referance_branches.append(referance)
         
         if PRINT: print(f'[DEBUG] Referance: {referance.name}')

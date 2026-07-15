@@ -207,6 +207,9 @@ class TreeSimulationBase(ABC):
         # Pruning that is only done after the tree has been generated
         if self.current_iteration == 166:
             self.prune_loc, self.radius = end_prune(self,branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+            #Added this code just to try out. Stash the 3d visual in the dict to give it to make_n_trees
+            map_names_to_branches['prune_locations_for_3d'] = self.prune_loc
+            map_names_to_branches['prune_radius_for_3d'] = self.radius
 
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):

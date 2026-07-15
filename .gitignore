@@ -175,3 +175,4 @@ tests/tmp/
 
 .devcontainer/
 data/
+*.png

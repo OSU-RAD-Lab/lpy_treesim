@@ -113,7 +113,7 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
 
     trunk_config = BasicWoodConfig(bud_spacing_range=(0.0254, 0.0508),  # 1-2 inches
                                    # 24-36 inches per age_in_years, tapering off
-                                   yearly_growth_range=[(1, 0.6, 0.9), (2, 0.5, 0.7), (3, 0.15, 0.3), (4, 0.05, 0.15)],
+                                   yearly_growth_range=[(1, 0.6, 0.9), (4, 0.5, 0.7), (5, 0.15, 0.3), (6, 0.05, 0.15)],
                                    taper_amount=0.4,  # Not too skinny
                                    prune_length=1.1 * (sim_config.end_height()),
                                    bud_angle_probs=bud_angle_probs,

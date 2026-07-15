@@ -30,6 +30,7 @@ from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 
 from lpy_treesim.tie_prune.pruning_algo.prune_tree import prune_tree
 from lpy_treesim.tie_prune.pruning_algo.prune_at_end import end_prune
+from lpy_treesim.tie_prune.pruning_algo.three_d import run_three_d
 
 
 class TreeSimulationBase(ABC):
@@ -93,6 +94,10 @@ class TreeSimulationBase(ABC):
 
         # For energy guide
         self.invalid_attractor_value = 1000
+
+        # For marking file after tree generation
+        self.prune_loc = []
+        self.radius = []
 
     @abstractmethod
     def generate_attractor_grids(self):
@@ -194,16 +199,20 @@ class TreeSimulationBase(ABC):
             # proceed to prune the tree
             prune_tree(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
         
+        # Create spatial data structure
+        # TODO add fuction to manage in sim_config
+        if self.current_iteration == 166:
+            run_three_d(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+
+        # Pruning that is only done after the tree has been generated
+        if self.current_iteration == 166:
+            self.prune_loc, self.radius = end_prune(self,branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):
             for items in branch_hierarchy.values():
                 for item in items:
                     item.add_year()
-
-        if self.current_iteration == 169:
-            end_prune(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
-
-        #add data structure creation fuction here
 
         self.current_iteration = get_iteration_number() + 1
 

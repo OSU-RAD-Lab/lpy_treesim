@@ -10,9 +10,11 @@ def get_dist(L1, L2):
 
 # changed from (self, branch_hierarchy: dict, map_names_to_branches: dict):
 def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict):
-    buds = []
-    names_to_x = []
+    if PRINT: print("[end_prune] Function Called, end_prune() running...")
     branches = []
+    buds = []
+
+    names_to_x = []
     prune_locations = []
     
     for name, branch in map_names_to_branches.items():
@@ -23,9 +25,6 @@ def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict
             if "Side" in name: # "Tertiary" for envy and "Side" for ufo
                 branches.append(branch)
             if "Spur" in name:
-                branches.append(branch)
-            if "Primary" in name:
-                print("exists")
                 branches.append(branch)
     '''
     for bud in buds:
@@ -128,12 +127,8 @@ def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict
         else:
             print(f'[ERROR] Duplicate referance location')
 
-    map_names_to_branches['marked_locations'] = prune_locations
-    map_names_to_branches['radius'] = RADIUS - 0.005
-
     for name in names_to_x:
         del branch_hierarchy[name]
         del map_names_to_branches[name]
         
-    # Hand the locations back to prune_tree so the 3D plot can show what was cut
-    return prune_locations
+    return prune_locations, (RADIUS - 0.005)

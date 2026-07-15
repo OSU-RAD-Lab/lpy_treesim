@@ -2,16 +2,22 @@ import matplotlib.pyplot as plt
 from scipy.spatial import KDTree
 import numpy as np
 
-def run_three_d(prune_locations, k_neighbors=2, distance_threshold=0.1):
+def run_three_d(tree_sim_base, 
+                branch_hierarchy, 
+                map_names_to_branches, 
+                k_neighbors=2, 
+                distance_threshold=0.1):
     
-    # Safety check: bail out if the list is empty so matplotlib doesn't crash
-    if not prune_locations:
-        print("No prune locations provided to three_d.")
-        return
+    all_buds = []
+    for name, branch in map_names_to_branches.items():
+        if "bud" in name:
+            all_buds.append(branch)
+    if len(all_buds) == 0:
+        print('[ERROR] NO BUD OBJECTS')
 
     # Unpack our custom location objects into a raw numpy array. 
     # SciPy is strict and only accepts pure numbers.
-    coords = np.array([[loc.x, loc.y, loc.z] for loc in prune_locations])
+    coords = np.array([[loc.start_loc.x, loc.start_loc.y, loc.start_loc.z] for loc in all_buds])
     
     # Cap 'k' just in case we have fewer buds than the requested neighbor count
     k = min(k_neighbors, len(coords))
@@ -63,4 +69,4 @@ def run_three_d(prune_locations, k_neighbors=2, distance_threshold=0.1):
     plt.savefig("knn_evaluation.png", dpi=300, bbox_inches='tight')
     print("Saved 3D plot to knn_evaluation.png")
     
-    plt.show()
+    #plt.show()

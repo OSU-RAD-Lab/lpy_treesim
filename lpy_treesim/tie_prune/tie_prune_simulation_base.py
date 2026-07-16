@@ -32,6 +32,9 @@ from lpy_treesim.tie_prune.pruning_algo.prune_tree import prune_tree
 from lpy_treesim.tie_prune.pruning_algo.prune_at_end import end_prune
 from lpy_treesim.tie_prune.pruning_algo.three_d import run_three_d
 
+from pandas import DataFrame as DF
+from pathlib import Path
+
 
 class TreeSimulationBase(ABC):
     """
@@ -94,10 +97,6 @@ class TreeSimulationBase(ABC):
 
         # For energy guide
         self.invalid_attractor_value = 1000
-
-        # For marking file after tree generation
-        self.prune_loc = []
-        self.radius = []
 
     @abstractmethod
     def generate_attractor_grids(self):
@@ -205,11 +204,11 @@ class TreeSimulationBase(ABC):
             run_three_d(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
 
         # Pruning that is only done after the tree has been generated
+
         if self.current_iteration == 166:
-            self.prune_loc, self.radius = end_prune(self,branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
-            #Added this code just to try out. Stash the 3d visual in the dict to give it to make_n_trees
-            map_names_to_branches['prune_locations_for_3d'] = self.prune_loc
-            map_names_to_branches['prune_radius_for_3d'] = self.radius
+            df = end_prune(self,branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+            # Write marked locations to CSV
+            df.to_csv(Path(__file__).parent.resolve()/"marked_locations.csv", index_label="index", mode='w')
 
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):
@@ -229,7 +228,7 @@ class TreeSimulationBase(ABC):
                     branches.append(bud_site.branch_child)
         return branches
 
-    def get_energy_matrix(self, branches: list[BasicWood]) -> (np.array, list[int], list[BasicWood]):
+    def get_energy_matrix(self, branches: list[BasicWood]) -> tuple[np.array, list[int], list[BasicWood]]:
         """
         Calculate the energy matrix for optimal branch-to-wire assignment.
 

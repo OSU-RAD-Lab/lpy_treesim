@@ -1,20 +1,21 @@
-from itertools import combinations as combo
+import pandas as pd
 from math import sqrt
 
+
 #Set true for dignostic info (Errors still printed when False)
-PRINT = True
-RUN_ITERATIONS = True
+PRINT = False
+RUN_ITERATIONS = False
 
 def get_dist(L1, L2):
     return abs(sqrt((L1.x-L2.x)**2+(L1.y-L2.y)**2+(L1.z-L2.z)**2))
 
 # changed from (self, branch_hierarchy: dict, map_names_to_branches: dict):
 def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict):
+    df = pd.DataFrame(columns=['marked_x', 'marked_y', 'marked_z','radius'])
     if PRINT: print("[end_prune] Function Called, end_prune() running...")
     branches = []
     buds = []
     names_to_x = []
-    prune_locations = []
     
     for name, branch in map_names_to_branches.items():
         if "bud" in name:
@@ -30,7 +31,7 @@ def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict
         names_to_x.extend(bud.prune())
     '''
 
-    RADIUS = 0.4 #distance in meters
+    RADIUS = 5 #distance in meters
     removed = []
     referance_branches = []
     index = 0
@@ -74,7 +75,7 @@ def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict
             if dist < RADIUS:
                 print(f"[ERROR] NEW REFERANCE TOO CLOSE. Last Referance: {referance_branches[len(referance_branches)-1].name}")
         else:
-            referance = branches.pop(0)
+            referance = branches.pop(60)
             referance_branches.append(referance)
         
         if PRINT: print(f'[DEBUG] Referance: {referance.name}')
@@ -89,7 +90,7 @@ def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict
             dist = get_dist(referance.location.start, compare.location.start)
             if dist < RADIUS:
                 removed.append((compare.name, dist))
-                names_to_x.extend(compare.prune(0.001))
+                #names_to_x.extend(compare.prune(0.001))
                 '''
                 keep_list = []
                 for child in branch_hierarchy[name]:
@@ -121,13 +122,17 @@ def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict
         removed = []
 
     for branch in referance_branches:
-        if branch.location.start not in prune_locations:
-            prune_locations.append(branch.location.start)
+        
+        row_exists = (df.values == [branch.location.start.x, branch.location.start.y, branch.location.start.z, RADIUS]).all(axis=1).any()
+
+        if not row_exists:
+            new_row = pd.DataFrame([{'marked_x':branch.location.start.x, 'marked_y':branch.location.start.y, 'marked_z':branch.location.start.z,'radius':RADIUS}])
+            df = pd.concat([df, new_row], ignore_index=True)
         else:
             print(f'[ERROR] Duplicate referance location')
 
     for name in names_to_x:
         del branch_hierarchy[name]
         del map_names_to_branches[name]
-        
-    return prune_locations, (RADIUS - 0.005)
+
+    return df

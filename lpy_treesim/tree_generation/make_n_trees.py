@@ -6,6 +6,7 @@ import secrets
 import os as os
 import logging
 import trimesh
+import pandas as pd
 
 from lpy_treesim.tree_generation.tree_builder_lpy import TreeBuilder
 from lpy_treesim.tree_generation.file_naming_config import FileNamingConfig
@@ -126,32 +127,33 @@ def main():
                                 radii=radii, name_radii=name_radii,
                                 b_use_uv=b_use_uv)
             logger.info(f"Wrote mesh to {usd_path}")
-        # Added this change. Uncommented this code, was previously a multi line comment 
 
-        
-        #Create path for marked locations file and load generated tree mesh
-        # Added this code. This gets the base name and appends the file to _vc.obj so trimesh will find the file
+
+        # Create indicators, from marked locations, on the tree after 
+        # the tree has been generated
+    
+        # Create path for marked locations file and load generated tree mesh
+        # Added this code. This gets the base name and appends the file to _vc.obj 
+        # so trimesh will find the file
+        df = pd.read_csv(Path(__file__).parents[1].resolve() / "tie_prune" / "marked_locations.csv")
         mesh_name = naming.mesh_filename(index, file_type="") + "_vc.obj"
         mod_path = str(args.output_dir / mesh_name)
         mesh_existing = trimesh.load(mod_path)
         all_meshes = [mesh_existing]
-        # Added this code. Just pulls the visual data from the dict
-        prune_locations = lsb.map_name_instance.get('prune_locations_for_3d', [])
-        prune_radius = lsb.map_name_instance.get('prune_radius_for_3d', 0.4)
+        
         #mark locations, with transparent sphere, specified in prune_at_end.py
-        for location in prune_locations:
-            marker = trimesh.creation.icosphere(subdivisions=2, radius=prune_radius)
+        for x, y, z in zip(df['marked_x'], df['marked_y'], df['marked_z']):
+            marker = trimesh.creation.icosphere(subdivisions=2, radius=df['radius'].iloc[0])
             marker.visual.face_colors = [0, 255, 0, 35]
             marker.visual = marker.visual.to_texture()
             marker.visual.material.alphaMode = "BLEND"
-            marker.apply_translation(location)
+            marker.apply_translation((x, y, z))
             all_meshes.append(marker)
 
         #combine meshes and save file
         combined_mesh = trimesh.util.concatenate(all_meshes)
         combined_mesh.export(str(args.output_dir)+"/marked_location.obj")
-        
-        # Multi line comment ednded just above this line 
+
 
         if args.meta_data:
             import json

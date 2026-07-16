@@ -1,6 +1,9 @@
 from itertools import combinations as combo
 from math import sqrt
 
+# Not currently doing anything close to what I wanted it to do 
+# (keep commented out in prune_tree)
+
 def get_dist(L1, L2):
     return sqrt((L1.x-L2.x)**2+(L1.y-L2.y)**2+(L1.z-L2.z)**2)
 

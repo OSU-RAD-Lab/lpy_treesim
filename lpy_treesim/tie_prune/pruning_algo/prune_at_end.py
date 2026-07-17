@@ -4,6 +4,7 @@ from math import sqrt
 
 #Set true for dignostic info (Errors still printed when False)
 PRINT = False
+#Iterations are not working currently (refer)
 RUN_ITERATIONS = False
 
 def get_dist(L1, L2):

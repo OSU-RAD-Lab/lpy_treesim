@@ -135,20 +135,24 @@ def main():
         # Create path for marked locations file and load generated tree mesh
         # Added this code. This gets the base name and appends the file to _vc.obj 
         # so trimesh will find the file
-        df = pd.read_csv(Path(__file__).parents[1].resolve() / "tie_prune" / "marked_locations.csv")
         mesh_name = naming.mesh_filename(index, file_type="") + "_vc.obj"
         mod_path = str(args.output_dir / mesh_name)
         mesh_existing = trimesh.load(mod_path)
         all_meshes = [mesh_existing]
-        
-        #mark locations, with transparent sphere, specified in prune_at_end.py
-        for x, y, z in zip(df['marked_x'], df['marked_y'], df['marked_z']):
-            marker = trimesh.creation.icosphere(subdivisions=2, radius=df['radius'].iloc[0])
-            marker.visual.face_colors = [0, 255, 0, 35]
-            marker.visual = marker.visual.to_texture()
-            marker.visual.material.alphaMode = "BLEND"
-            marker.apply_translation((x, y, z))
-            all_meshes.append(marker)
+
+        try:
+            df = pd.read_csv(Path(__file__).parents[1].resolve() / "tie_prune" / "marked_locations.csv")
+            #mark locations, with transparent sphere, specified in prune_at_end.py
+            for x, y, z in zip(df['marked_x'], df['marked_y'], df['marked_z']):
+                marker = trimesh.creation.icosphere(subdivisions=2, radius=df['radius'].iloc[0])
+                marker.visual.face_colors = [0, 255, 0, 35]
+                marker.visual = marker.visual.to_texture()
+                marker.visual.material.alphaMode = "BLEND"
+                marker.apply_translation((x, y, z))
+                all_meshes.append(marker)
+                
+        except:
+            print(Path(__file__).parents[1].resolve() / "tie_prune" / "marked_locations.csv" "not found")
         #Added this code just playing around with it 
         # 1. Draw the Nodes (The Buds)
         try:

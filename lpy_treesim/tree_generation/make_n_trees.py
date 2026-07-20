@@ -149,6 +149,38 @@ def main():
             marker.visual.material.alphaMode = "BLEND"
             marker.apply_translation((x, y, z))
             all_meshes.append(marker)
+        #Added this code just playing around with it 
+        # 1. Draw the Nodes (The Buds)
+        try:
+            df_nodes = pd.read_csv("data/knn_nodes.csv")
+            for _, row in df_nodes.iterrows():
+                # Make a tiny sphere for the node
+                node = trimesh.creation.icosphere(subdivisions=2, radius=0.02)
+                
+                # Color it green if it's the reference, blue if it's a neighbor
+                if row['type'] == 'ref':
+                    node.visual.face_colors = [0, 255, 0, 255] 
+                else:
+                    node.visual.face_colors = [0, 0, 255, 255]
+                    
+                node.apply_translation((row['x'], row['y'], row['z']))
+                all_meshes.append(node)
+        except FileNotFoundError:
+            print("No knn_nodes.csv found. Skipping KD-Tree node visualization.")
+        
+        try:
+            df_edges = pd.read_csv("data/knn_edges.csv")
+            for _, row in df_edges.iterrows():
+                start_pt = [row['x1'], row['y1'], row['z1']]
+                end_pt = [row['x2'], row['y2'], row['z2']]
+                
+                # Create a thin 3D cylinder acting as a line connecting the two points
+                line = trimesh.creation.cylinder(radius=0.005, segment=[start_pt, end_pt])
+                line.visual.face_colors = [255, 0, 0, 150] # Semi-transparent red
+                all_meshes.append(line)
+        except FileNotFoundError:
+            print("No knn_edges.csv found. Skipping KD-Tree edge visualization.")
+        # End of my added additions 
 
         #combine meshes and save file
         combined_mesh = trimesh.util.concatenate(all_meshes)

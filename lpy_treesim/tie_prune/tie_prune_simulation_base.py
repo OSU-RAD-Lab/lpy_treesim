@@ -31,6 +31,9 @@ from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 from lpy_treesim.tie_prune.pruning_algo.prune_tree import prune_tree
 from lpy_treesim.tie_prune.pruning_algo.prune_at_end import end_prune
 from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import NeighborsDataStructure
+# Code below is being changed to importing radius_of_neighbors 
+# from lpy_treesim.tie_prune.pruning_algo.three_d import run_three_d
+from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors import run_three_d
 
 from pandas import DataFrame as DF
 from pathlib import Path
@@ -203,6 +206,8 @@ class TreeSimulationBase(ABC):
         if self.current_iteration == 166:
             current_tree = NeighborsDataStructure(map_names_to_branches=map_names_to_branches)
             current_tree.query_objects_within_r()
+            # import Radius of neighbors in order to target one specific bud 
+            run_three_d(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
 
         # Pruning that is only done after the tree has been generated
 

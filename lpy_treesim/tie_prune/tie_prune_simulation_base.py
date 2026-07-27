@@ -202,6 +202,36 @@ class TreeSimulationBase(ABC):
         # TODO add fuction to manage in sim_config
         if self.current_iteration == 166:
             current_tree = NeighborsDataStructure(map_names_to_branches=map_names_to_branches)
+            # Added this change
+            # 1. Get TCSA baseline (Updated to calculate Area)
+            tcsa = current_tree.get_tcsa(height_m=0.3)
+            
+            # 2. Get the list of primary limbs
+            primary_limbs = current_tree.get_primary_limbs()
+            
+            # 3. Calculate LCSA metrics (Updated to calculate Area)
+            limb_metrics = current_tree.get_lcsa_metrics(primary_limbs=primary_limbs, measurement_dist_m=0.025)
+            # Quick Prune Remove Later 
+            # valid_limbs_to_prune = limb_metrics.get("valid", [])
+            # valid_branch_names = [limb["name"] for limb in valid_limbs_to_prune]
+            
+            # names_to_x = []
+            # for branch_name, branch_children in branch_hierarchy.items():
+            #     if "trunk" not in branch_name:
+            #         continue
+                    
+            #     for bud in branch_children:
+            #         if "bud" not in bud.name or not bud.branch_child:
+            #             continue
+            #         if bud.branch_child.name in valid_branch_names:
+            #             print(f"Pruning valid limb: {bud.branch_child.name}")
+            #             names_to_x.extend(bud.prune())
+            # for name in names_to_x:
+            #     if name in branch_hierarchy:
+            #         del branch_hierarchy[name]
+            #     if name in map_names_to_branches:
+            #         del map_names_to_branches[name]
+            
             current_tree.query_objects_within_r()
             current_tree.make_plot()
             current_tree.mark_referance()

@@ -212,3 +212,97 @@ class NeighborsDataStructure:
         end_time = tm.perf_counter()
         i_delta = end_time - start_time
         print(f"{len(within_iter)} Neighbors found using iteration in {i_delta} sec")
+    def get_tcsa(self, height_m: float = 0.3) -> float:
+        """
+        Calculates the Trunk Cross-Sectional Area (TCSA) in cm² 
+        at a specific height.
+        """
+        trunk = None
+        for name, obj in self.map_names_to_branches.items():
+            if "trunk" in name.lower():
+                trunk = obj
+                break
+
+        if trunk is None:
+            print("Error: No trunk found in map_names_to_branches.")
+            return 0.0
+            
+        if trunk.growth.length < height_m:
+            print(f"Trunk ({trunk.growth.length:.3f}m) has not reached {height_m}m.")
+            return 0.0
+
+        t_ratio = height_m / trunk.growth.length
+        
+        diameter_at_height_m = trunk.growth.get_diameter(t=t_ratio)
+        
+        # Extract the radius in centimeters
+        radius_cm = (diameter_at_height_m / 2.0) * 100
+        
+        # Calculate Area: A = pi * r^2
+        tcsa_cm2 = np.pi * (radius_cm ** 2)
+        
+        print(f"\nMetrics: TCSA at {height_m}m is {tcsa_cm2:.4f} cm²")
+        return tcsa_cm2
+    def get_primary_limbs(self) -> list:
+        """
+        Scans the tree dictionary, isolates all primary wood limbs
+        and stores them in a list for the LCSA calculations.
+        """
+        primary_limbs = []
+        
+        # 1. Scan every piece of wood/node on the tree
+        for name, obj in self.map_names_to_branches.items():
+            
+            # 2. Filter for primary limbs, ensuring it has a growth attribute
+            if "primary" in name.lower() and hasattr(obj, "growth"):
+                primary_limbs.append((name, obj))
+                
+        # 3. Print the total count and the names of the limbs found
+        print(f"Metrics: Found {len(primary_limbs)} primary limbs.")
+        for limb_name, limb_obj in primary_limbs:
+            print(f" -> {limb_name} (Length: {limb_obj.growth.length:.2f}m)")
+            
+        return primary_limbs
+    def get_lcsa_metrics(self, primary_limbs: list, measurement_dist_m: float = 0.025) -> dict:
+        """
+        Calculates the Limb Cross-Sectional Area (LCSA) in cm² for primary limbs
+        at a specific distance from the trunk. 
+        """
+        valid_limbs = []
+        too_short_limbs = []
+        
+        for name, obj in primary_limbs:
+            length_m = obj.growth.length
+            
+            if length_m < measurement_dist_m:
+                too_short_limbs.append((name, obj))
+                continue
+                
+            t_ratio = measurement_dist_m / length_m
+            
+            diameter_m = obj.growth.get_diameter(t=t_ratio)
+            
+            # Extract the radius in centimeters
+            radius_cm = (diameter_m / 2.0) * 100
+            
+            # Calculate Area: A = pi * r^2
+            lcsa_cm2 = np.pi * (radius_cm ** 2)
+            
+            valid_limbs.append({
+                "name": name,
+                "object": obj,
+                "lcsa_cm2": lcsa_cm2
+            })
+            
+        print(f"\nMetrics: Limb LCSA AT {measurement_dist_m * 100}cm ")
+        print(f"Metrics: Valid Limbs Calculated: {len(valid_limbs)}")
+        for limb in valid_limbs:
+            print(f"  -> {limb['name']}: LCSA = {limb['lcsa_cm2']:.2f} cm²")
+            
+        if len(too_short_limbs) > 0:
+            print(f"\nLimbs Too Short (<{measurement_dist_m * 100}cm): {len(too_short_limbs)}")
+            for name, obj in too_short_limbs:
+                print(f"  -> {name} (Length: {obj.growth.length:.3f}m)")
+        print("\n")
+            
+        return {"valid": valid_limbs, "too_short": too_short_limbs}

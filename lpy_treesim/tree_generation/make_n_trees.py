@@ -22,7 +22,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-trees", type=int, default=1, help="Number of trees to generate")
     parser.add_argument("--stage-dir", type=Path, default=None, help="Directory for top of Stage USD files")
     parser.add_argument("--output-dir", type=Path, default=Path("./data/"), help="Directory for regular mesh outputs")
-    parser.add_argument("--tree-name", type=str, default="ufo", help="Tree family to generate (UFO/Envy/etc.)")
+    # Changed the line under this from ufo to envy 
+    parser.add_argument("--tree-name", type=str, default="envy", help="Tree family to generate (UFO/Envy/etc.)")
     parser.add_argument("--texture-name", type=str, default="apple", help="Use/make all textures with this name")
     parser.add_argument("--verbose", action="store_true", help="Print progress details")
     parser.add_argument("--interactive", action="store_true", help="Show tree growing")
@@ -159,13 +160,18 @@ def main():
             df_nodes = pd.read_csv("data/knn_nodes.csv")
             for _, row in df_nodes.iterrows():
                 # Make a tiny sphere for the node
+                #Changed radius from 0.2
                 node = trimesh.creation.icosphere(subdivisions=2, radius=0.02)
                 
-                # Color it green if it's the reference, blue if it's a neighbor
+                # Should make it transparent now 
                 if row['type'] == 'ref':
-                    node.visual.face_colors = [0, 255, 0, 255] 
+                    node.visual.face_colors = [0, 255, 0, 100] 
                 else:
-                    node.visual.face_colors = [0, 0, 255, 255]
+                    # Also Turquoise now
+                    node.visual.face_colors = [64, 224, 208, 100]
+                # Added this change to make sure it's transparent 
+                node.visual = node.visual.to_texture()
+                node.visual.material.alphamode = "BLEND"
                     
                 node.apply_translation((row['x'], row['y'], row['z']))
                 all_meshes.append(node)
@@ -180,7 +186,7 @@ def main():
                 
                 # Create a thin 3D cylinder acting as a line connecting the two points
                 line = trimesh.creation.cylinder(radius=0.005, segment=[start_pt, end_pt])
-                line.visual.face_colors = [255, 0, 0, 150] # Semi-transparent red
+                line.visual.face_colors = [139, 69, 19, 150] # Semi-transparent brown now
                 all_meshes.append(line)
         except FileNotFoundError:
             print("No knn_edges.csv found. Skipping KD-Tree edge visualization.")

@@ -196,58 +196,33 @@ class TreeSimulationBase(ABC):
         #   summer pruning
         if sim_config.do_pruning(self.current_iteration):
             # proceed to prune the tree
-            
+            if self.current_iteration == 167: #iteration to do pruing that only happens at end
+                end_prune(self,
+                          branch_hierarchy=branch_hierarchy,
+                          map_names_to_branches=map_names_to_branches)
+                '''
+                current_tree = NeighborsDataStructure(map_names_to_branches=map_names_to_branches)
+                current_tree.query_objects_within_r()
+                current_tree.make_plot()
+                current_tree.mark_referance()
+                '''
+                ltr = LtrHuristic(map_names_to_branches=map_names_to_branches)
+                # Added this change
+                # 1. Get TCSA baseline (Updated to calculate Area)
+                tcsa = ltr.get_tcsa(height_m=0.3)
+                
+                # 2. Get the list of primary limbs
+                primary_limbs = ltr.get_primary_limbs()
+                
+                # 3. Calculate LCSA metrics (Updated to calculate Area)
+                limb_metrics = ltr.get_lcsa_metrics(primary_limbs=primary_limbs, measurement_dist_m=0.025)
+
             # Pruning that happens every year (currently set to every 28 iterations)
-            prune_tree(self,
-                       branch_hierarchy=branch_hierarchy, 
-                       map_names_to_branches=map_names_to_branches)
-        
-        # Create spatial data structure
-        # TODO add fuction to manage in sim_config
-        if self.current_iteration == 166:
-            current_tree = NeighborsDataStructure(map_names_to_branches=map_names_to_branches)
-            current_tree.query_objects_within_r()
-            current_tree.make_plot()
-            current_tree.mark_referance()
+            else:
+                prune_tree(self,
+                           branch_hierarchy=branch_hierarchy, 
+                           map_names_to_branches=map_names_to_branches)
 
-            ltr = LtrHuristic(map_names_to_branches=map_names_to_branches)
-            # Added this change
-            # 1. Get TCSA baseline (Updated to calculate Area)
-            tcsa = ltr.get_tcsa(height_m=0.3)
-            
-            # 2. Get the list of primary limbs
-            primary_limbs = ltr.get_primary_limbs()
-            
-            # 3. Calculate LCSA metrics (Updated to calculate Area)
-            limb_metrics = ltr.get_lcsa_metrics(primary_limbs=primary_limbs, measurement_dist_m=0.025)
-            # Quick Prune Remove Later 
-            # valid_limbs_to_prune = limb_metrics.get("valid", [])
-            # valid_branch_names = [limb["name"] for limb in valid_limbs_to_prune]
-            
-            # names_to_x = []
-            # for branch_name, branch_children in branch_hierarchy.items():
-            #     if "trunk" not in branch_name:
-            #         continue
-                    
-            #     for bud in branch_children:
-            #         if "bud" not in bud.name or not bud.branch_child:
-            #             continue
-            #         if bud.branch_child.name in valid_branch_names:
-            #             print(f"Pruning valid limb: {bud.branch_child.name}")
-            #             names_to_x.extend(bud.prune())
-            # for name in names_to_x:
-            #     if name in branch_hierarchy:
-            #         del branch_hierarchy[name]
-            #     if name in map_names_to_branches:
-            #         del map_names_to_branches[name]
-            
- 
-
-        # Pruning that is only done after the tree has been generated
-        # TODO add fuction to manage in sim_config
-        if self.current_iteration == 166: # Iteration number 166 becuase 170 is the final iteration
-            # Pruning only done at the end of generation and not every year
-            end_prune(self,branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
 
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):

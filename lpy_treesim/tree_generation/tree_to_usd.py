@@ -257,7 +257,7 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
 
         name = f"cyl_{part_name}"
         if "spur" in part_name:
-            name = f"spur/{name}"
+            continue
         elif level != -1:
             name = f"Level{level}/{name}"
         else:
@@ -276,6 +276,9 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
             pt_end = Gf.Vec3d(skel.centroids[indx + 1])
             vec_axis = pt_end - pt_start
             height = vec_axis.GetLength()
+            if height <= 0.0:
+                print(f"Warning making usd skeleton: Height zero {part_name} {name}")
+                height = 0.001
             midpoint = pt_start + vec_axis * 0.5
 
             name = f"cyl_{indx}"

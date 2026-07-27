@@ -309,9 +309,15 @@ class TreeBuilder:
             skel.centroids.append(self.convert_vec3_to_tuple(bud.start_loc))
             skel.radii.append(branch_lpy.growth.get_diameter(bud.dist_along))
             skel.t_values.append(bud.dist_along / branch_lpy.growth.length)
-        skel.centroids.append(self.convert_vec3_to_tuple(branch_lpy.location.end))
-        skel.radii.append(branch_lpy.growth.get_diameter(branch_lpy.growth.length))
-        skel.t_values.append(1.0)
+
+        l = 0.0
+        for indx in range(0, 3):
+            l += (skel.centroids[-1][indx] - branch_lpy.location.end[indx]) ** 2
+
+        if not np.isclose(l, 0.0):
+            skel.centroids.append(self.convert_vec3_to_tuple(branch_lpy.location.end))
+            skel.radii.append(branch_lpy.growth.get_diameter(branch_lpy.growth.length))
+            skel.t_values.append(1.0)
 
         skel.child_junctions = self._add_junctions(mapping_tree_structure=mapping_tree_structure,
                                                    parent_dict=branch_dict,

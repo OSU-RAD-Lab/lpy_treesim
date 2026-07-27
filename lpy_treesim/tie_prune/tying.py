@@ -215,7 +215,7 @@ class TyingState:
         if np.isclose(dot, 1.0):
             return scl, vec_to_guide_point, 0.0
 
-        ang = np.acos(dot)
+        ang = np.arccos(dot)
         # Cross product - spin around this vector
         vec_cross = np.cross(vec_to_guide_point, vec_to_wire_point)
         vec_cross = vec_cross / np.linalg.norm(vec_cross)

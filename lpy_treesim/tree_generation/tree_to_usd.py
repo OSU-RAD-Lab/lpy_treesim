@@ -229,7 +229,7 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
             sphere = UsdGeom.Sphere.Define(stage, sphere_path)            
             sphere.CreateRadiusAttr(junction.radius * scl_factor)
             xformable = UsdGeom.Xformable(sphere)
-            #xformable.AddTranslateOp().Set(Gf.Vec3f(junction.pt_attach))
+            xformable.AddTranslateOp().Set(Gf.Vec3f(junction.pt_attach))
 
             # Add collision physics
             UsdPhysics.CollisionAPI.Apply(sphere.GetPrim())
@@ -279,7 +279,9 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
             midpoint = pt_start + vec_axis * 0.5
 
             name = f"cyl_{indx}"
-            cyl = UsdGeom.Cylinder.Define(stage, cyls_path.AppendChild(name))            
+            cyl = UsdGeom.Cylinder.Define(stage, cyls_path.AppendChild(name))
+            if skel.radii[indx] < 0.0:
+                print("Oops")
             cyl.CreateRadiusAttr(skel.radii[indx] * scl_factor)
             cyl.CreateHeightAttr(height)
             color_attr = cyl.CreateDisplayColorAttr()

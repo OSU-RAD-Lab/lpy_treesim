@@ -96,9 +96,9 @@ def make_mesh_from_components(mesh_usd, tree_parts : dict, b_use_uv=False):
     vs_texs = []
     # Not really sure we need to do this, but otherwise have trouble with the USD call
     if b_use_uv:
-        use_texs = mesh_parts["textures"]
-    else:
         use_texs = mesh_parts["uv_textures"]
+    else:
+        use_texs = mesh_parts["textures"]
     for pt, tex in zip(mesh_parts["vertices"], use_texs):
         # Fill in vertex/texture lists
         vs.append((pt[0], pt[1], pt[2]))

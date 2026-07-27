@@ -12,4 +12,4 @@ def prune_tree(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dic
     prune_length(tree_sim_base=tree_sim_base, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
 
     # randomly prune to test pruning (playground for testing/learning purposes - comment out for actual algorithm)
-    prune_random(tree_sim_base=tree_sim_base, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+    # prune_random(tree_sim_base=tree_sim_base, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)

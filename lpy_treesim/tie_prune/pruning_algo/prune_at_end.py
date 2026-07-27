@@ -1,139 +1,125 @@
+from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import NeighborsDataStructure
 import pandas as pd
-from math import sqrt
+from pathlib import Path
 
 
 #Set true for dignostic info (Errors still printed when False)
 PRINT = False
-#Iterations are not working currently (refer)
-RUN_ITERATIONS = False
-
-def get_dist(L1, L2):
-    return abs(sqrt((L1.x-L2.x)**2+(L1.y-L2.y)**2+(L1.z-L2.z)**2))
+RADIUS = 0.1
 
 # changed from (self, branch_hierarchy: dict, map_names_to_branches: dict):
-def end_prune(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict):
-    df = pd.DataFrame(columns=['marked_x', 'marked_y', 'marked_z','radius'])
-    if PRINT: print("[end_prune] Function Called, end_prune() running...")
-    branches = []
-    buds = []
-    names_to_x = []
+def end_prune(tree_sim_base, 
+              branch_hierarchy: dict, 
+              map_names_to_branches: dict):
     
-    for name, branch in map_names_to_branches.items():
+    df = pd.DataFrame(columns=['marked_x', 'marked_y', 'marked_z', 'radius', 'name'])
+    if PRINT: print("[end_prune] Function Called, end_prune() running...")
+   
+    names_to_x = []
+    check = []
+    pruned = []
+    names_to_check = []
+    referance_object = []
+
+    def prune(key_name,
+              query,
+              names_to_x=names_to_x, 
+              pruned=pruned,
+              check=check, 
+              map_names_to_branches=map_names_to_branches):
+        
+        names_to_x.extend(map_names_to_branches[key_name].prune())
+        pruned.append(key_name)
+        print(f'{key_name} pruned becuase of {query}')
+        for test in check[:]:
+            if test.name == key_name:
+                check.remove(test)
+    
+    for name, tree_object in map_names_to_branches.items():
         if "bud" in name:
-            if branch.branch_child == None:
-                buds.append(branch)
-        if "bud" not in name:
-            if "Side" in name: # "Tertiary" for envy and "Side" for ufo
-                branches.append(branch)
-            if "Spur" in name:
-                branches.append(branch)
-    '''
-    for bud in buds:
-        names_to_x.extend(bud.prune())
-    '''
-
-    RADIUS = 5 #distance in meters
-    removed = []
-    referance_branches = []
-    index = 0
-
-    while len(branches) != 0:
-        if len(referance_branches) > 0:
-            
-            if not RUN_ITERATIONS:
-                break
-            
-            end = False
-            for n in range(0,len(branches)-1):
-                dist1 = get_dist(branches[n].location.start, referance_branches[len(referance_branches)-1].location.start)     
-                #print(dist1)
-                if dist1 > (RADIUS*2):
-                    if len(referance_branches) > 1:
-                        for ref in referance_branches[:-1]:
-                            dist2 = get_dist(branches[n].location.start, ref.location.start)
-                            #print(dist2)
-                            if dist2 > (RADIUS*2):
-                                index = n
-                                print(f'[DEBUG] DIST TO NEW REFERANCE: {round(dist, 4)} ({branches[index].name})')
-                                end = True
-                                break
+            if tree_object.branch_child != None:
+                if tree_object.branch_child.growth.age_in_years == 0:
+                    if name not in names_to_check:
+                        check.append(tree_object)
+                        names_to_check.append(tree_object.name)
                     else:
-                        index = n
-                        end = True
-                        break   
-                if end == True:
+                        print('already in check list')
+            if tree_object.spur_child != None:
+                    if name not in names_to_check:
+                        check.append(tree_object)
+                        names_to_check.append(tree_object.name)
+                    else:
+                        print('already in check list')
+   
+    loop = True
+    while loop and (len(check)>0):
+
+        index = None
+        structure = check+referance_object
+        spur_buds_spatial = NeighborsDataStructure(None, structure) #Faster to rebuild??
+
+        if len(referance_object) > 0:
+            neighbors_total = {}
+            for ref in referance_object:
+                neighbors, number = spur_buds_spatial.query_objects_within_r(ref.name, 
+                                                                            radius=(2*RADIUS))
+                neighbors_total.update(neighbors)
+
+            #unique_neighbors = list(set(neighbors_total))
+            for n, test in enumerate(check):
+                if test.name not in list(neighbors_total.keys()):
+                    index = n
                     break
 
-            if end == False:
-                print(f'[ERROR] No referance branch found.')
+            if index == None:
+                print('no referance location found removing rest of check')
+                for remaining in check:
+                    names_to_x.extend(map_names_to_branches[remaining.name].prune())
+                loop = False
                 break
-                
-            referance = branches.pop(index)
-            referance_branches.append(referance)
 
-            #Debuging
-            dist = get_dist(referance.location.start, referance_branches[len(referance_branches)-1].location.start)
-            if dist < RADIUS:
-                print(f"[ERROR] NEW REFERANCE TOO CLOSE. Last Referance: {referance_branches[len(referance_branches)-1].name}")
         else:
-            referance = branches.pop(60)
-            referance_branches.append(referance)
-        
-        if PRINT: print(f'[DEBUG] Referance: {referance.name}')
-        #print(len(branches))
-        comparisons = branches
-        for compare in comparisons:
-            
-            #Debugging
-            if referance in comparisons:
-                print("[ERROR] referance should be removed")
+            index = 0
 
-            dist = get_dist(referance.location.start, compare.location.start)
-            if dist < RADIUS:
-                removed.append((compare.name, dist))
-                #names_to_x.extend(compare.prune(0.001))
-                '''
-                keep_list = []
-                for child in branch_hierarchy[name]:
-                    if child.name not in names_to_x:
-                        keep_list.append(child)
-                branch_hierarchy[name] = keep_list
-                '''
-                branches.remove(compare)
-                #print(len(branches))
-                #names_to_x.extend(referance.prune(0.001))
+        referance_object.append(check[index])
+        query = check[index].name
+        neighbors, number = spur_buds_spatial.query_objects_within_r(query, radius=RADIUS)
+        neighbors.pop(query, None)
+        check.pop(index)
 
-        '''
-        for bud in buds:
-            dist = get_dist(referance.location.start, bud.start_loc)
-            if dist < RADIUS:
-                removed.append((bud.name, dist))
-                names_to_x.extend(bud.prune())
-        '''
+        if number >= 1:
+            for key_name in list(neighbors.keys()):
+                if len(pruned) > 0:
+                    if name not in pruned:
+                        prune(key_name, query)
+                    else:
+                        print("[Error] Bud already removed")
 
-        if PRINT:
-            print(f"{len(removed)} neighbors of referance {referance.name} removed")
-            print(f"Referance at {referance.location.start}")
-            print(f"    Branches removed:")
-
-            for branch in removed:
-                print(f"        {branch[0]:<17}| {round(branch[1], 2):.3f} m away")
-            
-            print(f"\n\n{len(referance_branches)} referance branch(es) used\n\n")
-        removed = []
-
-    for branch in referance_branches:
-        
-        row_exists = (df.values == [branch.location.start.x, branch.location.start.y, branch.location.start.z, RADIUS]).all(axis=1).any()
-
-        if not row_exists:
-            new_row = pd.DataFrame([{'marked_x':branch.location.start.x, 'marked_y':branch.location.start.y, 'marked_z':branch.location.start.z,'radius':RADIUS}])
-            df = pd.concat([df, new_row], ignore_index=True)
-        else:
-            print(f'[ERROR] Duplicate referance location')
-
+                else:
+                    prune(key_name, query)
+    
     for name in names_to_x:
         del branch_hierarchy[name]
         del map_names_to_branches[name]
 
-    return df
+    for branch in referance_object:
+        row_exists = (df.values == [branch.start_loc.x, 
+                                    branch.start_loc.y, 
+                                    branch.start_loc.z, 
+                                    RADIUS,
+                                    branch.name]).all(axis=1).any()
+
+        if not row_exists:
+            new_row = pd.DataFrame([{'marked_x':branch.start_loc.x, 
+                                     'marked_y':branch.start_loc.y, 
+                                     'marked_z':branch.start_loc.z,
+                                     'radius':RADIUS,
+                                     'name':branch.name}])
+            
+            df = pd.concat([df, new_row], ignore_index=True)
+        else:
+            print(f'[ERROR] Duplicate referance location')
+
+    df.to_csv(Path(__file__).parent.resolve()/"marked_locations.csv", index_label="index", mode='w')
+
+    return 

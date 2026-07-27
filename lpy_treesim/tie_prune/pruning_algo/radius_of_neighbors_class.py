@@ -26,23 +26,58 @@ class DotDict(dict):
         self[key] = value
 
 class NeighborsDataStructure:
-    def __init__(self, map_names_to_branches:dict, to_index="bud"):
+    """Build and query a spatial index for nearby tree branches.
+
+    The class stores branch coordinates in a KD-tree so that nearby branches can
+    be discovered efficiently for pruning or tie-related analyses.
+    """
+
+    def __init__(self, 
+                 map_names_to_branches, 
+                 to_index="bud" # can be name to index or a list of tree objects
+                                # must have atribute .location.start or .start_loc
+                 ):
+        """Initialize the neighbor-search structure from branch objects.
+
+        Args:
+            map_names_to_branches: Mapping of branch names to branch object
+                collections that should be indexed. Can be set to None if list is
+                provided in to_index.
+            to_index: Can be name to index, such as "bud" or a list of tree objects
+                from map_names_to_branches or branch_hierarchy. If list of objects,
+                the objects must have either .location.start or .start_loc atribute
+                (can only have one, not both, becuase I am lazy).
+        """
         
         self.map_names_to_branches = map_names_to_branches
         self.tree_objects = []
         self.query_made = False
 
-        for name, objects in self.map_names_to_branches.items():
-            if to_index in name:
-                self.tree_objects.append(objects)
+        if type(to_index) is list:
+            self.tree_objects = to_index
 
+        elif type(to_index) is str:
+            for name, objects in self.map_names_to_branches.items():
+                if to_index in name:
+                    self.tree_objects.append(objects)
+        else:
+            raise ValueError('Unsported input for to_index')
+            
+
+        if type(to_index) is str:
+            if "bud" in to_index: 
+                self.coords = np.array([obj.start_loc for obj in self.tree_objects], 
+                                        dtype=np.float64)
+        elif type(to_index) is list:
+            if "bud" in to_index[0].name:
+                self.coords = np.array([obj.start_loc for obj in self.tree_objects], 
+                                        dtype=np.float64)
+        else:        
+            self.coords = np.array([obj.location.start for obj in self.tree_objects], 
+                                    dtype=np.float64)
 
         self.tree_names = np.array([obj.name for obj in self.tree_objects], 
-                                   dtype=StringDType)
-        
-        self.coords = np.array([obj.start_loc for obj in self.tree_objects], 
-                               dtype=np.float64)
-
+                                   dtype=StringDType)                    
         if self.tree_names.size == 0:
             raise ValueError('Locations must be given')
 
@@ -51,8 +86,22 @@ class NeighborsDataStructure:
     
     def query_objects_within_r(self, 
                                referance_name = 60, # Can be a name or index 
-                               radius = 0.1,
+                               radius = 0.2,
                                output_type="dict"):
+        """Find all indexed objects within a given radius of a reference branch.
+
+        Args:
+            referance_name: Name of the reference branch or its integer index.
+            radius: Search radius in the same coordinate system as the stored
+                branch locations.
+            output_type: Output format; "dict" returns a nested mapping while
+                other values return a structured NumPy array.
+
+        Returns:
+            A dictionary-like object or NumPy structured array containing the
+            matching branch names, coordinates, and distances.
+        """
+        self.radius = radius
         self.query_made = True
         start_time = tm.perf_counter()
         if type(referance_name) is int:
@@ -62,23 +111,25 @@ class NeighborsDataStructure:
         
         self.query_points = self.coords[reference_index]
         self.neighbor_indices = np.asarray(self.tree.query_ball_point(self.query_points, 
-                                                                      radius, 
+                                                                      self.radius, 
                                                                       return_length=False), 
                                       dtype=np.int32)
 
         self.neighbor_points = self.coords[self.neighbor_indices]
         distances = np.linalg.norm(self.neighbor_points - self.query_points, axis=1)
 
-        s_delta = tm.perf_counter() - start_time
+        self.s_delta = tm.perf_counter() - start_time
 
-        print(f"{self.neighbor_indices.size - 1} Neighbors found using data structure in {s_delta} sec")
+        #print(f"{self.neighbor_indices.size - 1} Neighbors found using data structure in {s_delta} sec")
 
         if output_type == 'dict':
             output = {}
             for name, location, distance in zip(self.tree_names[self.neighbor_indices], self.neighbor_points, distances):
                 output[name] = {'location':location.tolist(), 'distance':float(distance)}
                 output = DotDict(output)
-        else:     
+        elif output_type == 'indicies':
+            output = self.neighbor_indices
+        else:  
             # If you want the output to be a numpy array instead
             dtype = [('name', StringDType), 
                     ('location', np.float64, (3,)), 
@@ -89,9 +140,15 @@ class NeighborsDataStructure:
             output['location'] = self.neighbor_points
             output['distance'] = distances
         
-        return output
+        return output, (self.neighbor_indices.size-1)
     
     def find_edges(self):
+        """Create line segments connecting the query point to each neighbor.
+
+        Returns:
+            A tuple of arrays containing the x, y, and z coordinates for each
+            connecting edge.
+        """
         line_query = np.tile(self.query_points.tolist(), 
                                 (self.neighbor_points[:, 0].size, 1))
         
@@ -102,10 +159,18 @@ class NeighborsDataStructure:
         return x_line, y_line, z_line
     
     def make_plot(self, save_to= "data/nn_plot.png"):
+        """Create and save a 3D plot of the reference branch and its neighbors.
+
+        Args:
+            save_to: File path where the generated plot image should be written.
+
+        Raises:
+            ValueError: If a query has not been executed yet.
+        """
         if self.query_made == False:
             raise ValueError("Query must be run to plot the referance and objects found")
+        
         # Set up the 3D canvas
-        plt.ion
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection='3d')
         
@@ -133,14 +198,14 @@ class NeighborsDataStructure:
         ax.set_zlabel("Y Axis")
         
         legend_elements = [
-
-            Line2D([0], [0], 
-                marker='.', 
-                color='w',  
-                markerfacecolor='blue', 
-                markersize=15, 
-                label='w/ Iteration'),
-
+            
+            #Line2D([0], [0], 
+            #    marker='.', 
+            #    color='w',  
+            #    markerfacecolor='blue', 
+            #    markersize=15, 
+            #    label='w/ Iteration'),
+                
             Line2D([0], [0], 
                 marker='x', 
                 color='green', 
@@ -166,13 +231,20 @@ class NeighborsDataStructure:
         print(f"Saved 3D plot to {save_to}")
 
     def mark_referance(self):
+        """Export the query result as CSV files for downstream use.
+
+        The method writes edge and node data describing the reference branch and
+        its neighboring branches to the data directory.
+
+        Raises:
+            ValueError: If a query has not been executed yet.
+        """
         if self.query_made == False:
             raise ValueError('Query must be run to mark the referance and objects found')
         # Added this code in order to show what's generated by the plot within the sim
         edge_data = []
         x_line, y_line, z_line = self.find_edges()
 
-        
         for x, y, z in zip(x_line, y_line, z_line):
             edge_data.append({'x1': x[0], 
                               'y1': y[0],
@@ -184,7 +256,7 @@ class NeighborsDataStructure:
         
         df_edges = pd.DataFrame(edge_data)
         df_edges.to_csv("data/knn_edges.csv", index=False)
-        
+
         node_data = [{'x': self.query_points[0], 
                       'y': self.query_points[1], 
                       'z': self.query_points[2], 
@@ -202,13 +274,41 @@ class NeighborsDataStructure:
         df_nodes.to_csv("data/knn_nodes.csv", index=False)
         # Added this, end of new code changes
 
-    def test_time():
-        return
+    # function for testing purposes
+    def test_time(self):
+        """Benchmark the same radius query without using the KD-tree.
+
+        Args:
+            referance_name: Name of the reference branch or its integer index.
+            radius: Search radius in the same coordinate system as the stored
+                branch locations.
+
+        Returns:
+            Time difference of iteration.
+        """
+        if self.query_made != True:
+            raise RuntimeError ("Query to data structure must be made first to compare")
+
         start_time = tm.perf_counter()
-        for bud in all_buds:
-            dist = get_dist(ref.start_loc, bud.start_loc)
-            if dist < r:
-                within_iter.append(bud.start_loc)
-        end_time = tm.perf_counter()
-        i_delta = end_time - start_time
-        print(f"{len(within_iter)} Neighbors found using iteration in {i_delta} sec")
+
+        neighbor_indices = []
+        neighbor_points = []
+        distances = []
+
+        for index, point in enumerate(self.coords):
+            distance = np.linalg.norm(point - self.query_points)
+            if distance <= self.radius:
+                neighbor_indices.append(index)
+                neighbor_points.append(point)
+                distances.append(distance)
+
+        neighbor_indices = np.asarray(neighbor_indices, dtype=np.int32)
+        neighbor_points = np.asarray(neighbor_points, dtype=np.float64)
+        distances = np.asarray(distances, dtype=np.float64)
+
+        i_delta = tm.perf_counter() - start_time
+        print(f"{neighbor_indices.size} Neighbors found by iteration in {i_delta} sec")
+        print(f"{self.neighbor_indices.size} Neighbors found by iteration in {self.s_delta} sec")
+
+
+        return i_delta, self.s_delta

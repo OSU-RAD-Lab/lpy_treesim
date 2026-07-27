@@ -22,7 +22,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-trees", type=int, default=1, help="Number of trees to generate")
     parser.add_argument("--stage-dir", type=Path, default=None, help="Directory for top of Stage USD files")
     parser.add_argument("--output-dir", type=Path, default=Path("./data/"), help="Directory for regular mesh outputs")
-    parser.add_argument("--tree-name", type=str, default="ufo", help="Tree family to generate (UFO/Envy/etc.)")
+    parser.add_argument("--tree-name", type=str, default="envy", help="Tree family to generate (UFO/Envy/etc.)")
     parser.add_argument("--texture-name", type=str, default="apple", help="Use/make all textures with this name")
     parser.add_argument("--verbose", action="store_true", help="Print progress details")
     parser.add_argument("--interactive", action="store_true", help="Show tree growing")
@@ -141,7 +141,7 @@ def main():
         all_meshes = [mesh_existing]
 
         try:
-            df = pd.read_csv(Path(__file__).parents[1].resolve() / "tie_prune" / "marked_locations.csv")
+            df = pd.read_csv( "lpy_treesim/tie_prune/pruning_algo/marked_locations.csv")
             #mark locations, with transparent sphere, specified in prune_at_end.py
             for x, y, z in zip(df['marked_x'], df['marked_y'], df['marked_z']):
                 marker = trimesh.creation.icosphere(subdivisions=2, radius=df['radius'].iloc[0])
@@ -152,7 +152,7 @@ def main():
                 all_meshes.append(marker)
                 
         except:
-            print(Path(__file__).parents[1].resolve() / "tie_prune" / "marked_locations.csv" "not found")
+            print("marked_locations.csv" " not found")
         #Added this code just playing around with it 
         # 1. Draw the Nodes (The Buds)
         try:

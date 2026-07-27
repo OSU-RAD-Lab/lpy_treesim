@@ -395,7 +395,7 @@ def create_mesh_usd(stage_context, world_path:str, in_tree_name:str,
         if len(mesh["vertices"]) == 0:
             # This should not happen, because we took all of empty mesh parts out, but
             #  still here as a safetly check
-            print(f"ERR: Skipping {part_dict["name"]}, no mesh parts")
+            print(f"ERR: Skipping {part_dict['name']}, no mesh parts")
             continue
 
         # Each mesh part will be labeled with full part name to enable instance

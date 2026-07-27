@@ -30,7 +30,7 @@ from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 
 from lpy_treesim.tie_prune.pruning_algo.prune_tree import prune_tree
 from lpy_treesim.tie_prune.pruning_algo.prune_at_end import end_prune
-from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import NeighborsDataStructure
+from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import NeighborsDataStructure, LtrHuristic
 
 from pandas import DataFrame as DF
 from pathlib import Path
@@ -202,6 +202,47 @@ class TreeSimulationBase(ABC):
                        branch_hierarchy=branch_hierarchy, 
                        map_names_to_branches=map_names_to_branches)
         
+        # Create spatial data structure
+        # TODO add fuction to manage in sim_config
+        if self.current_iteration == 166:
+            current_tree = NeighborsDataStructure(map_names_to_branches=map_names_to_branches)
+            current_tree.query_objects_within_r()
+            current_tree.make_plot()
+            current_tree.mark_referance()
+
+            ltr = LtrHuristic(map_names_to_branches=map_names_to_branches)
+            # Added this change
+            # 1. Get TCSA baseline (Updated to calculate Area)
+            tcsa = ltr.get_tcsa(height_m=0.3)
+            
+            # 2. Get the list of primary limbs
+            primary_limbs = ltr.get_primary_limbs()
+            
+            # 3. Calculate LCSA metrics (Updated to calculate Area)
+            limb_metrics = ltr.get_lcsa_metrics(primary_limbs=primary_limbs, measurement_dist_m=0.025)
+            # Quick Prune Remove Later 
+            # valid_limbs_to_prune = limb_metrics.get("valid", [])
+            # valid_branch_names = [limb["name"] for limb in valid_limbs_to_prune]
+            
+            # names_to_x = []
+            # for branch_name, branch_children in branch_hierarchy.items():
+            #     if "trunk" not in branch_name:
+            #         continue
+                    
+            #     for bud in branch_children:
+            #         if "bud" not in bud.name or not bud.branch_child:
+            #             continue
+            #         if bud.branch_child.name in valid_branch_names:
+            #             print(f"Pruning valid limb: {bud.branch_child.name}")
+            #             names_to_x.extend(bud.prune())
+            # for name in names_to_x:
+            #     if name in branch_hierarchy:
+            #         del branch_hierarchy[name]
+            #     if name in map_names_to_branches:
+            #         del map_names_to_branches[name]
+            
+ 
+
         # Pruning that is only done after the tree has been generated
         # TODO add fuction to manage in sim_config
         if self.current_iteration == 166: # Iteration number 166 becuase 170 is the final iteration

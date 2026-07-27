@@ -171,7 +171,9 @@ log/*
 tests/tmp/
 
 data/
+models/
 *.zip
+*.usda
 
 
 .devcontainer/

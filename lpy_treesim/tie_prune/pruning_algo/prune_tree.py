@@ -37,13 +37,13 @@ def prune_tree(tree_sim_base, branch_hierarchy: dict,
     '''
     ltr = LtrHuristic(map_names_to_branches=map_names_to_branches)
     # Added this change
-    # 1. Get TCSA baseline (Updated to calculate Area)
+    # 1. Get TCSA baseline 
     tcsa = ltr.get_tcsa(height_m=0.3)
     
     # 2. Get the list of primary limbs
     primary_limbs = ltr.get_primary_limbs()
     
-    # 3. Calculate LCSA metrics (Updated to calculate Area)
+    # 3. Calculate LCSA metrics 
     limb_metrics = ltr.get_lcsa_metrics(primary_limbs=primary_limbs, measurement_dist_m=0.025)
     # Quick Prune Remove Later 
     # valid_limbs_to_prune = limb_metrics.get("valid", [])

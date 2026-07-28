@@ -412,3 +412,53 @@ class LtrHuristic:
         print("\n")
             
         return {"valid": valid_limbs, "too_short": too_short_limbs}
+    def simulate_ltr_pruning(self, tcsa_cm2: float, limb_metrics: dict, target_ltr: float = 0.5) -> dict:
+        """
+        Calculates the initial LTR and iteratively removes the largest valid limbs
+        until the target LTR threshold is achieved. Does not actually alter the tree.
+        """
+        if tcsa_cm2 <= 0:
+            print("Error: Invalid TCSA. Cannot calculate LTR.")
+            return {}
+
+        # Retrieve the list of valid limbs
+        valid_limbs = limb_metrics.get("valid", [])
+        
+        # Sort limbs by LCSA in descending order (largest branches first)
+        sorted_limbs = sorted(valid_limbs, key=lambda x: x['lcsa_cm2'], reverse=True)
+        
+        # Calculate initial LTR: Sum of all valid LCSA / TCSA
+        total_lcsa = sum(limb['lcsa_cm2'] for limb in sorted_limbs)
+        current_ltr = total_lcsa / tcsa_cm2
+        
+        print(f"\nMetrics: Trees to be pruned")
+        print(f"Initial Total LCSA: {total_lcsa:.2f} cm²")
+        print(f"Baseline TCSA: {tcsa_cm2:.2f} cm²")
+        print(f"Initial LTR: {current_ltr:.4f}")
+        print(f"Target LTR: {target_ltr:.4f}\n")
+        
+        removed_limbs = []
+        
+        # Iteratively remove the largest limbs until the target LTR is reached
+        while current_ltr > target_ltr and len(sorted_limbs) > 0:
+            # Pop the largest limb from the front of the list
+            largest_limb = sorted_limbs.pop(0)
+            removed_limbs.append(largest_limb)
+            
+            # Subtract its area from the total and recalculate the LTR
+            total_lcsa -= largest_limb['lcsa_cm2']
+            current_ltr = total_lcsa / tcsa_cm2
+            
+            print(f"Removing Limb: {largest_limb['name']} (LCSA: {largest_limb['lcsa_cm2']:.2f} cm²) -> New LTR: {current_ltr:.4f}")
+            
+        print(f"\nFinal LTR Achieved: {current_ltr:.4f}")
+        print(f"Total Limbs Flagged for Removal: {len(removed_limbs)}")
+        print(f"Total Limbs Kept: {len(sorted_limbs)}")
+        print("\n")
+        
+        # Return the separated lists
+        return {
+            "kept_limbs": sorted_limbs,
+            "removed_limbs": removed_limbs,
+            "final_ltr": current_ltr
+        }

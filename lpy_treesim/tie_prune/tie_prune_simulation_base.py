@@ -208,15 +208,18 @@ class TreeSimulationBase(ABC):
                 '''
                 ltr = LtrHuristic(map_names_to_branches=map_names_to_branches)
                 # Added this change
-                # 1. Get TCSA baseline (Updated to calculate Area)
+                # Get TCSA baseline
                 tcsa = ltr.get_tcsa(height_m=0.3)
                 
-                # 2. Get the list of primary limbs
+                # Get the list of primary limbs
                 primary_limbs = ltr.get_primary_limbs()
                 
-                # 3. Calculate LCSA metrics (Updated to calculate Area)
+                # Calculate LCSA metrics
                 limb_metrics = ltr.get_lcsa_metrics(primary_limbs=primary_limbs, measurement_dist_m=0.025)
 
+                # Runs the smulated LTR pruning. Doesn't actually prune
+                ltr_results = ltr.simulate_ltr_pruning(tcsa_cm2=tcsa, limb_metrics=limb_metrics, target_ltr=0.5)
+                
             # Pruning that happens every year (currently set to every 28 iterations)
             else:
                 prune_tree(self,

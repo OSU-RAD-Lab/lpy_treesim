@@ -337,7 +337,7 @@ class LtrHuristic:
 
         t_ratio = height_m / trunk.growth.length
         
-        diameter_at_height_m = trunk.growth.get_diameter(t=t_ratio)
+        diameter_at_height_m = trunk.growth.get_diameter(dist_along=t_ratio)
         
         # Extract the radius in centimeters
         radius_cm = (diameter_at_height_m / 2.0) * 100
@@ -386,7 +386,7 @@ class LtrHuristic:
                 
             t_ratio = measurement_dist_m / length_m
             
-            diameter_m = obj.growth.get_diameter(t=t_ratio)
+            diameter_m = obj.growth.get_diameter(dist_along=t_ratio)
             
             # Extract the radius in centimeters
             radius_cm = (diameter_m / 2.0) * 100

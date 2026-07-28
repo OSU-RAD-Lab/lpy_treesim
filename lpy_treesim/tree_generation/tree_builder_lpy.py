@@ -46,9 +46,6 @@ class TreeBuilder:
 
         # Show tree or not while building
         self.b_interactive = interactive
-        # Added this code. Placeholder just to prevent attribute erorr. 
-        self.prune_loc = []
-        self.radius = 0.4
 
         # Where to find the source code and start values for the trunk
         # See extern_variables in base_lpy.lpy

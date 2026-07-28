@@ -178,7 +178,4 @@ models/
 *.obj
 
 
-
 .devcontainer/
-data/
-*.png

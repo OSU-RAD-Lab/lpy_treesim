@@ -1,10 +1,14 @@
+#supress file print statements
+original_print = print
+print = lambda *args, **kwargs: None
+
 #!/usr/bin/env python3
 import sys
 from pathlib import Path
 
 import numpy as np
 
-from lpy_treesim import ColorManager
+from lpy_treesim.utils.color_manager import ColorManager
 import json
 from openalea.lpy import Lsystem
 from openalea.plantgl.all import *
@@ -179,7 +183,9 @@ class TreeBuilder:
         #  Roughly 28 iterations per year, 3-5 years (depending on SimulationConfig parameters)
         b_check_string = False
         for iteration in range(self.__lsystem.derivationLength):
+            #print = original_print
             print(f"Iteration {iteration}")
+            #print = lambda *args, **kwargs: None
 
             if b_check_string:
                 self.check_string(str(lstring))

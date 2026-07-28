@@ -367,8 +367,8 @@ IMakeCylinders(branch_name, start_dist, end_dist, b_generate):
     produce *
   branch = map_name_instance[branch_name]
   growth_length = end_dist - start_dist
-  start_diameter = branch.growth.get_diameter(start_dist / branch.growth.length)
-  end_diameter = branch.growth.get_diameter(end_dist / branch.growth.length)
+  start_diameter = branch.growth.get_diameter(start_dist)
+  end_diameter = branch.growth.get_diameter(end_dist)
   n_cylinders = int(growth_length / tree_sim.config.cylinder_length)
   if n_cylinders < 1:
     n_cylinders = 1

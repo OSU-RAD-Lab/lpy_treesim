@@ -1,6 +1,11 @@
+#supress file print statements
+'''
+original_print = print
+print = lambda *args, **kwargs: None
+'''
+
 from abc import ABC
 from dataclasses import dataclass
-
 import numpy as np
 
 

@@ -96,9 +96,9 @@ def make_mesh_from_components(mesh_usd, tree_parts : dict, b_use_uv=False):
     vs_texs = []
     # Not really sure we need to do this, but otherwise have trouble with the USD call
     if b_use_uv:
-        use_texs = mesh_parts["textures"]
-    else:
         use_texs = mesh_parts["uv_textures"]
+    else:
+        use_texs = mesh_parts["textures"]
     for pt, tex in zip(mesh_parts["vertices"], use_texs):
         # Fill in vertex/texture lists
         vs.append((pt[0], pt[1], pt[2]))
@@ -229,7 +229,7 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
             sphere = UsdGeom.Sphere.Define(stage, sphere_path)            
             sphere.CreateRadiusAttr(junction.radius * scl_factor)
             xformable = UsdGeom.Xformable(sphere)
-            #xformable.AddTranslateOp().Set(Gf.Vec3f(junction.pt_attach))
+            xformable.AddTranslateOp().Set(Gf.Vec3f(junction.pt_attach))
 
             # Add collision physics
             UsdPhysics.CollisionAPI.Apply(sphere.GetPrim())
@@ -279,7 +279,9 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
             midpoint = pt_start + vec_axis * 0.5
 
             name = f"cyl_{indx}"
-            cyl = UsdGeom.Cylinder.Define(stage, cyls_path.AppendChild(name))            
+            cyl = UsdGeom.Cylinder.Define(stage, cyls_path.AppendChild(name))
+            if skel.radii[indx] < 0.0:
+                print("Oops")
             cyl.CreateRadiusAttr(skel.radii[indx] * scl_factor)
             cyl.CreateHeightAttr(height)
             color_attr = cyl.CreateDisplayColorAttr()
@@ -393,7 +395,7 @@ def create_mesh_usd(stage_context, world_path:str, in_tree_name:str,
         if len(mesh["vertices"]) == 0:
             # This should not happen, because we took all of empty mesh parts out, but
             #  still here as a safetly check
-            print(f"ERR: Skipping {part_dict["name"]}, no mesh parts")
+            print(f"ERR: Skipping {part_dict['name']}, no mesh parts")
             continue
 
         # Each mesh part will be labeled with full part name to enable instance

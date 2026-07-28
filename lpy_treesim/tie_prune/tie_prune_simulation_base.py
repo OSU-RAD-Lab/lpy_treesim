@@ -1,3 +1,6 @@
+#supress file print statements
+print = lambda *args, **kwargs: None
+
 """
 Base module for adding tying, training, and pruning to a trellis to an L-System tree
 
@@ -24,6 +27,8 @@ import numpy as np
 from typing import Callable
 from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
 from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
+
+from lpy_treesim.tie_prune.pruning_algo.prune_tree import prune_tree
 
 
 class TreeSimulationBase(ABC):
@@ -185,11 +190,8 @@ class TreeSimulationBase(ABC):
         # This happens at the end of every year one iteration after the branches are tied and (optionally) for
         #   summer pruning
         if sim_config.do_pruning(self.current_iteration):
-            # These edit branch_hierarchy and map_names_to_branches in place to remove the branches/spurs etc
-            # Take out old primary branches
-            self.prune_primary(branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
-            # Cut short any overly long branches
-            self.prune_length(branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
+            # proceed to prune the tree
+            prune_tree(self, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_names_to_branches)
 
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):
@@ -240,12 +242,16 @@ class TreeSimulationBase(ABC):
                     open_branches.append(branch)
                 else:
                     print(f"Skipping {branch.name}, {branch.location.start} too short {branch.growth.length}")
+            else:
+                print(f"Branch {branch.name} tied to wire")
 
         wire_ids = []
         for wire_id, wire in enumerate(self.branch_attractor):
             # Skip wires that already have a branch attached
             if wire.branch_id == -1:
                 wire_ids.append(wire_id)
+            else:
+                print(f"Wire {wire_id} tied to {wire.branch_id}")
 
         num_branches = len(open_branches)
         num_wires = len(wire_ids)
@@ -260,14 +266,16 @@ class TreeSimulationBase(ABC):
         for branch_idx, branch in enumerate(open_branches):
             branch_start = np.array(branch.location.start)
             branch_dir = np.array(branch.location.start_dir)
-            branch_end = np.array(branch.location.end)
             if branch_start[2] < min_start_height:
                 print(f"Branch {branch.name} on trunk {branch_start} too far below wire ")
                 continue
 
-            spacing = self.support.spacing_wires
             if branch.tying.tie_type == TyingState.TyingType.TIE_ACROSS:
+                check_coord = 0  # UFO-style - check that x index is within 2/3 of tie spacing
                 spacing = self.support.spacing_across_wire()
+            else:
+                check_coord = 2  # Envy-style - check that z index is within 2/3 of wire spacing
+                spacing = self.support.spacing_wires
 
             for wire_idx, wire_id in enumerate(wire_ids):
                 wire = self.branch_attractor[wire_id]
@@ -280,51 +288,34 @@ class TreeSimulationBase(ABC):
                 len_vec_to_wire = np.linalg.norm(vec_to_wire_pt)
                 if not np.isclose(len_vec_to_wire, 0.0):
                     vec_to_wire_pt /= len_vec_to_wire
-                    align_growth = np.dot(branch_dir, vec_to_wire_pt)
-                    if align_growth < 0.45:
-                        print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {vec_to_wire_pt} wrong way")
-                        continue
+                else:
+                    vec_to_wire_pt = wire.attractor_dir
 
-                align = np.dot(branch_dir, wire.attractor_dir)
-                if align < 0.0:
-                    # Skip branches that are currently pointing away from the tie direction
-                    print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {wire.attractor_dir}")
+                align_growth = np.dot(branch_dir, vec_to_wire_pt)
+                if align_growth < 0.45:
+                    print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {vec_to_wire_pt} wrong way")
                     continue
 
-                end_indx = 3
-                if branch.tying.tie_type == TyingState.TyingType.TIE_ACROSS:
-                    # Don't care about z just if it aligns (x) and is not too far from the wire (y)
-                    end_indx = 2
+                align_wire = np.dot(branch_dir, wire.attractor_dir)
+                if align_wire < 0.0:
+                    print(f"Branch {branch.name} dir {branch_dir}, wire dir {wire.attractor_dir} wrong way")
+                    continue
 
                 # Find the closest wire attachment point; for the start point it's probably the first wire point,
                 #   for the end point it may be one further along
                 # End point distance is an approximate measure of if the branch is growing in the direction of the wire
-                start_distance_energy = 1e30
-                end_distance_energy = 1e30
-                for row in range(0, wire_points.shape[0]):
-                    start_energy = 0.0
-                    end_energy = 0.0
-                    for icoord in range(0, end_indx):
-                        start_energy += np.fabs(branch_start[icoord] - wire_points[row, icoord])
-                        end_energy += np.fabs(branch_end[icoord] - wire_points[row, icoord])
-                    if start_energy < start_distance_energy:
-                        start_distance_energy = start_energy
-                    if end_energy < end_distance_energy:
-                        end_distance_energy = end_energy
+                start_distance_energy = branch_start[check_coord] - wire_points[0, check_coord]
 
-                start_distance_energy /= end_indx
-                end_distance_energy /= end_indx
-                if start_distance_energy > spacing / 2.0 and end_distance_energy > spacing:
-                    print(f"Branch {branch.name} Too far away {start_distance_energy} {end_distance_energy}")
+                if np.fabs(start_distance_energy) > 2.0 * spacing / 3.0:
+                    print(f"Branch {branch.name} Too far away {start_distance_energy} spacing {spacing}")
                     continue
-                print(f"Branch {branch.name} Start {branch_start} end {branch_end}\n          wire {wire_points[0, :]} spacing {spacing}")
-                print(f" Energy {start_distance_energy:0.3f} {end_distance_energy:0.3f}", end="")
-                # Weight the starting distance energy as more important than the ending one
-                dist_energy = 0.8 * start_distance_energy / spacing + 0.2 * end_distance_energy / spacing
-                print(f" Dist {dist_energy}", end="")
+                print(f"Branch {branch.name} Start {branch_start}  wire {wire_points[0, :]} spacing {spacing}")
+                # Scale by spacing
+                dist_energy = np.fabs(start_distance_energy) / spacing
+                print(f" Dist {dist_energy} angle {align_growth}", end="")
                 # Weight the distance versus the angle
                 #   Distance is scaled 0..1 based on wire spacing, align is dot product 0 to 1. 1 is better
-                total_energy = self.config.energy_distance_weight * dist_energy + align * self.config.energy_angle_weight
+                total_energy = self.config.energy_distance_weight * dist_energy + align_growth * self.config.energy_angle_weight
                 print(f" Total {total_energy}")
 
                 energy_matrix[branch_idx, wire_idx] = total_energy
@@ -361,126 +352,14 @@ class TreeSimulationBase(ABC):
         # Continue making assignments as long as energy matrix < 1000
 
         for branch_indx, wire_indx in zip(row_ind, col_ind):
+            wire_id = wire_ids[wire_indx]
             if energy_matrix[branch_indx, wire_indx] < self.invalid_attractor_value:
-                print(f" Assigning branch {branches[branch_indx].name} to wire {self.branch_attractor[wire_indx].attractor_pts[0]} {energy_matrix[branch_indx, wire_indx]}")
+                print(f" Assigning branch {branches[branch_indx].name} to wire {self.branch_attractor[wire_id].attractor_pts[0]} {energy_matrix[branch_indx, wire_indx]}")
                 # Get the branch and wire objects
                 branch = branches[branch_indx]
-                wire_id = wire_ids[wire_indx]
                 wire_attach = self.branch_attractor[wire_id]
 
                 # Perform the assignment
                 branch.tying.wire_attach = wire_attach
                 branch_id = int(branch.name.split("_")[-1])
                 wire_attach.branch_id = branch_id
-
-    def prune_primary(self, branch_hierarchy: dict, map_names_to_branches: dict):
-        """
-        Prune old branches that exceed the age_in_iterations threshold and haven't been tied to wires.
-
-        This function implements the pruning strategy for the tree training simulation.
-        It identifies branches that have grown too old (exceeding the pruning age_in_iterations threshold)
-        but haven't been successfully tied to trellis wires.
-
-        Note: Removing items from the dictionary will cause WoodStart, SpurStart, and BudStart to x out the
-         string the next iteration. See base_lpy.lpy
-
-        The pruning criteria are:
-        1. Branch age_in_iterations exceeds the configured pruning threshold
-        2. Branch has not been tied to any trellis wire
-        3. Branch has not already been marked for cutting
-        4. Branch is prunable (respects the prunable flag)
-
-        When a branch meets all criteria, it is:
-        - Removed from branch_hierarchy
-        - Removed from parent's children list
-        - Removed from the map names dictionary
-
-        Note that the bud site that generated the pruned branch will remain and be marked pruned
-
-        Args:
-            branch_hierarchy: Dictionary mapping branch names to lists of child branches
-            map_names_to_branches: Dictionary mapping branch names to pointers to branches
-        """
-
-        # Collect names of buds/branches/spurs to be pruned
-        buds_to_prune = []
-        for branch_name, branch_children in branch_hierarchy.items():
-            if "trunk" not in branch_name:
-                continue
-
-            # Buds on trunk
-            for bud in branch_children:
-                if not "bud" in bud.name:
-                    # This shouldn't happen, but...
-                    continue
-                if not bud.branch_child:
-                    # Skip buds that don't have branches
-                    continue
-
-                branch: BasicWood = bud.branch_child
-                age_exceeds_threshold = branch.growth.age_in_iterations > self.config.pruning_age_threshold
-                not_tied_to_wire = not branch.tying.is_tied
-                prune_by_age = branch.config.remove_at_age
-
-                # Prune if all criteria are met
-                if age_exceeds_threshold and not_tied_to_wire and prune_by_age:
-                    buds_to_prune.append(bud)
-
-        # Now add the bud names (and all the bud's branch children) to the list
-        names_to_x = []
-        for bud in buds_to_prune:
-            # This removes spurs/branches, marks the bud as pruned, and recursively removes the children
-            names_to_x.extend(bud.prune())
-
-        # Now remove the names from branch hierarchy
-        for name in names_to_x:
-            del branch_hierarchy[name]
-            del map_names_to_branches[name]
-
-        # In the next iteration WoodStart etc will be replaced with % and cut out
-        print(f"Left: ")
-        for key in map_names_to_branches.keys():
-            if "rimary" in key and "bud" not in key:
-                print(f"{key}")
-
-    def prune_length(self, branch_hierarchy: dict, map_names_to_branches: dict):
-        """
-        Prune branches that exceed their maximum length. Adds some noise to the ending length
-
-        Args:
-            branch_hierarchy: Dictionary mapping branch names to lists of child branches
-            map_names_to_branches: Dictionary mapping branch names to branch instances
-
-        Returns:
-            bool: True if a branch was pruned, False if no eligible branches found
-
-        Note:
-            This function processes one branch at a time and returns immediately after
-            pruning a single branch. It should be called repeatedly (e.g., in a while loop)
-            until no more pruning operations are possible. The cut_from() function handles
-            the actual removal of the branch and any dependent substructures from the string.
-        """
-
-        # Collect names of all trunks/branches/spurs to be pruned
-        # This may indirecty prune bud sites/buds, but not directly
-        names_to_x = []
-        branches_shortened = []
-        for name, branch in map_names_to_branches.items():
-            if "bud" in name:
-                continue
-            noisy_len = branch.config.noisy_prune_length()
-            if branch.growth.length > noisy_len:
-                names_to_x.extend(branch.prune(noisy_len))
-                branches_shortened.append(branch.name)
-                keep_list = []
-                for child in branch_hierarchy[name]:
-                    if child.name not in names_to_x:
-                        keep_list.append(child)
-                branch_hierarchy[name] = keep_list
-
-        print(f"Shortened: {branches_shortened}")
-        print(f"{names_to_x}")
-        # Now remove any x'd buds etc from the hierarchy
-        for name in names_to_x:
-            del branch_hierarchy[name]
-            del map_names_to_branches[name]

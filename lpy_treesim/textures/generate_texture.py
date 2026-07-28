@@ -114,7 +114,7 @@ def make_uv_texture(fname: str):
     cv2.imwrite(fname, img)
 
 
-def make_texture_set(tree_type: str, dir_name: str) ->(list, list):
+def make_texture_set(tree_type: str, dir_name: str) -> tuple[list, list]:
     """ Make a nested set of texture images for trunk through small branches"""
     pixs_per_meter = 256
 

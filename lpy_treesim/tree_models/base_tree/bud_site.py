@@ -120,10 +120,7 @@ class BudSite(ABC):
         self.age_year += 1
 
     def start_diameter(self):
-        t = self.dist_along / self.wood_parent.growth.length
-        if t < 0.0 or t > 1.0:
-            print(f"bad t {t}")
-        parent_diameter = self.wood_parent.growth.get_diameter(t)
+        parent_diameter = self.wood_parent.growth.get_diameter(self.dist_along)
         if parent_diameter <= 0.0:
             print(f"Bad bud {parent_diameter}")
             parent_diameter = 0.001

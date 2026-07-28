@@ -96,9 +96,9 @@ def make_mesh_from_components(mesh_usd, tree_parts : dict, b_use_uv=False):
     vs_texs = []
     # Not really sure we need to do this, but otherwise have trouble with the USD call
     if b_use_uv:
-        use_texs = mesh_parts["textures"]
-    else:
         use_texs = mesh_parts["uv_textures"]
+    else:
+        use_texs = mesh_parts["textures"]
     for pt, tex in zip(mesh_parts["vertices"], use_texs):
         # Fill in vertex/texture lists
         vs.append((pt[0], pt[1], pt[2]))
@@ -229,7 +229,7 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
             sphere = UsdGeom.Sphere.Define(stage, sphere_path)            
             sphere.CreateRadiusAttr(junction.radius * scl_factor)
             xformable = UsdGeom.Xformable(sphere)
-            #xformable.AddTranslateOp().Set(Gf.Vec3f(junction.pt_attach))
+            xformable.AddTranslateOp().Set(Gf.Vec3f(junction.pt_attach))
 
             # Add collision physics
             UsdPhysics.CollisionAPI.Apply(sphere.GetPrim())
@@ -257,7 +257,7 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
 
         name = f"cyl_{part_name}"
         if "spur" in part_name:
-            name = f"spur/{name}"
+            continue
         elif level != -1:
             name = f"Level{level}/{name}"
         else:
@@ -276,10 +276,15 @@ def create_skeleton_geometry(stage, parent_path: str, tree: TreeStructure):
             pt_end = Gf.Vec3d(skel.centroids[indx + 1])
             vec_axis = pt_end - pt_start
             height = vec_axis.GetLength()
+            if height <= 0.0:
+                print(f"Warning making usd skeleton: Height zero {part_name} {name}")
+                height = 0.001
             midpoint = pt_start + vec_axis * 0.5
 
             name = f"cyl_{indx}"
-            cyl = UsdGeom.Cylinder.Define(stage, cyls_path.AppendChild(name))            
+            cyl = UsdGeom.Cylinder.Define(stage, cyls_path.AppendChild(name))
+            if skel.radii[indx] < 0.0:
+                print("Oops")
             cyl.CreateRadiusAttr(skel.radii[indx] * scl_factor)
             cyl.CreateHeightAttr(height)
             color_attr = cyl.CreateDisplayColorAttr()

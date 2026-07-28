@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate and save multiple L-Py trees.")
     parser.add_argument("--num-trees", type=int, default=1, help="Number of trees to generate")
-    parser.add_argument("--stage-dir", type=Path, default=None, help="Directory for top of Stage USD files")
+    parser.add_argument("--stage-dir", type=Path, default=Path("./"), help="Directory for top of Stage USD files")
     parser.add_argument("--output-dir", type=Path, default=Path("./data/"), help="Directory for regular mesh outputs")
     parser.add_argument("--tree-name", type=str, default="envy", help="Tree family to generate (UFO/Envy/etc.)")
     parser.add_argument("--texture-name", type=str, default="apple", help="Use/make all textures with this name")
@@ -28,9 +28,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--interactive", action="store_true", help="Show tree growing")
     parser.add_argument("--dataset-seed", type=int, default=None, help="Optional deterministic seed for dataset generation")
     parser.add_argument("--namespace", type=str, default="lpy", help="Prefix namespace for output filenames")
-    parser.add_argument("--ply", action="store_false", help="Write out ply file format")
+    parser.add_argument("--ply", action="store_true", help="Write out ply file format")
     parser.add_argument("--obj", action="store_false", help="Write out obj file format")
-    parser.add_argument("--meta-data", action="store_false", help="Write out meta data")
+    parser.add_argument("--meta-data", action="store_true", help="Write out meta data")
     parser.add_argument("--usda", action="store_true", help="Write out universal scene descriptor format")
     parser.add_argument("--make-textures", action="store_true", help="Create a new set of textures")
     args = parser.parse_args()
@@ -116,7 +116,7 @@ def main():
 
         if stage_context is not [] and args.usda:
             # Where the usd files are stored
-            usd_path = args.stage_dir / naming.usd_filename(index)
+            usd_path = os.path.join(str(args.stage_dir), naming.usd_filename(index))
             uv_name = str(args.stage_dir ) + "/textures/mesh_uv.png"
             make_uv_texture(uv_name)
             for b_use_uv in [True, False]:

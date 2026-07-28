@@ -133,9 +133,12 @@ class GrowthState:
         """ The diameter, based on the ratio """
         return self.target_diameter_ratio * self.length_without_pruning * self.taper
 
-    def get_diameter(self, t: float = 0.5):
+    def get_diameter(self, dist_along: float = 0.5):
         """ Linear scale at the moment
         Switching to Vinci/Murray pipe model which is Diameter of parent is
         d^beta = sum all children d^ beta, with beta == 2 ish (1.5 resists bending, 3.0 maximizes flow)
         Exponential decay is more natural d base * (dtop / dbase) ^t"""
+        t = dist_along / self.length_without_pruning
+        if t < 0.0 or t > 1.0:
+            print(f"Warning: Bad t value {t} in get_diameter")
         return (1.0 - t) * self.get_start_diameter() + t * self.get_end_diameter()

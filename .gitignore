@@ -170,9 +170,12 @@ GEMINI.md
 log/*
 tests/tmp/
 
-
+data/
+models/
+*.zip
+*.usda
+*.ply
+*.obj
 
 
 .devcontainer/
-data/
-*.png

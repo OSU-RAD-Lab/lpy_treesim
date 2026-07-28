@@ -20,7 +20,7 @@ def prune_length(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: d
     """
 
     # Collect names of all trunks/branches/spurs to be pruned
-    # This may indirecty prune bud sites/buds, but not directly
+    # This may indirectly prune bud sites/buds, but not directly
     names_to_x = []
     branches_shortened = []
     for name, branch in map_names_to_branches.items():

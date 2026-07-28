@@ -13,6 +13,7 @@ def prune_tree(tree_sim_base, branch_hierarchy: dict,
                  branch_hierarchy=branch_hierarchy, 
                  map_names_to_branches=map_names_to_branches)
 
+    '''
     # Prunes everthing in a set radius based of a referance tree object 
     names_to_check = []
     bud_check_list = []
@@ -27,12 +28,12 @@ def prune_tree(tree_sim_base, branch_hierarchy: dict,
                     if name not in names_to_check:
                         bud_check_list.append(tree_object)
                         names_to_check.append(tree_object.name)
-
+    
     dist_prune(tree_sim_base=tree_sim_base, 
                branch_hierarchy=branch_hierarchy, 
                map_names_to_branches=map_names_to_branches,
                check=bud_check_list)
-
+    '''
     '''
     ltr = LtrHuristic(map_names_to_branches=map_names_to_branches)
     # Added this change

@@ -30,7 +30,7 @@ def end_prune(tree_sim_base,
     names_to_check = []
     dist_check_list = []
     for name, tree_object in map_names_to_branches.items():
-        if "bud" in name:
+        if "bud" in name and "trunk" not in name:
             if tree_object.branch_child != None:
                 if tree_object.branch_child.growth.age_in_years == 0:
                     if name not in names_to_check:

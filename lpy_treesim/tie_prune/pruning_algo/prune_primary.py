@@ -1,7 +1,9 @@
 #from lpy_treesim.tie_prune.tie_prune_simulation_base import TreeSimulationBase
 from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 
-def prune_primary(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict):
+def prune_primary(tree_sim_base, 
+                  branch_hierarchy: dict, 
+                  map_names_to_branches: dict):
     """
     Prune old branches that exceed the age_in_iterations threshold and haven't been tied to wires.
 

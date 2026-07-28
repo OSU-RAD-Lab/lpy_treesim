@@ -1,7 +1,12 @@
 from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import NeighborsDataStructure
 from lpy_treesim.tie_prune.pruning_algo.prune_dist import dist_prune
+from lpy_treesim.tie_prune.pruning_algo.prune_length import prune_length
+from lpy_treesim.tie_prune.pruning_algo.prune_primary import prune_primary
 import pandas as pd
 from pathlib import Path
+
+# Pruning that only happens on the final iteration/year (iteration 167)
+# NONE OF THE PRUNING RULES IN prune_tree.py WILL BE APPLIED UNLESS FUNCTION IS CALLED HERE
 
 # changed from (self, branch_hierarchy: dict, map_names_to_branches: dict):
 def end_prune(tree_sim_base, 
@@ -11,6 +16,15 @@ def end_prune(tree_sim_base,
     RADIUS = 0.1
     df = pd.DataFrame(columns=['marked_x', 'marked_y', 'marked_z', 'radius', 'name'])
     if PRINT: print("[end_prune] Function Called, end_prune() running...")
+
+    prune_primary(tree_sim_base=tree_sim_base, 
+                  branch_hierarchy=branch_hierarchy, 
+                  map_names_to_branches=map_names_to_branches)
+    
+    # Cut short any overly long branches
+    prune_length(tree_sim_base=tree_sim_base, 
+                 branch_hierarchy=branch_hierarchy, 
+                 map_names_to_branches=map_names_to_branches)
 
     #currently the same code that is in prune_tree.py (but should be changed)
     names_to_check = []

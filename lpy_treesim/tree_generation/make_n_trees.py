@@ -138,62 +138,38 @@ def main():
         mesh_name = naming.mesh_filename(index, file_type="") + "_vc.obj"
         mod_path = str(args.output_dir / mesh_name)
         mesh_existing = trimesh.load(mod_path)
-        all_meshes = [mesh_existing]
-
+        # all_meshes = [mesh_existing]
         try:
-            df = pd.read_csv( "lpy_treesim/tie_prune/pruning_algo/marked_locations.csv")
-            #mark locations, with transparent sphere, specified in prune_at_end.py
-            for x, y, z in zip(df['marked_x'], df['marked_y'], df['marked_z']):
-                marker = trimesh.creation.icosphere(subdivisions=2, radius=df['radius'].iloc[0])
-                marker.visual.face_colors = [0, 255, 0, 35]
-                marker.visual = marker.visual.to_texture()
-                marker.visual.material.alphaMode = "BLEND"
-                marker.apply_translation((x, y, z))
-                all_meshes.append(marker)
+            df = pd.read_csv("lpy_treesim/tie_prune/pruning_algo/ltr_marked_locations.csv")
+            
+            # Loop through each iteration and saves in the CSV
+            for iter_val in df['iteration'].unique():
+                # Filter the dataframe to only include spheres for this specific iteration
+                iter_df = df[df['iteration'] == iter_val]
                 
-        except:
-            print("marked_locations.csv" " not found")
-        #Added this code just playing around with it 
-        # 1. Draw the Nodes (The Buds)
-        try:
-            df_nodes = pd.read_csv("data/knn_nodes.csv")
-            for _, row in df_nodes.iterrows():
-                # Make a tiny sphere for the node
-                #Changed radius from 0.2
-                node = trimesh.creation.icosphere(subdivisions=2, radius=0.02)
+                # Create a fresh list with a clean tree for this specific year
+                iter_meshes = [mesh_existing.copy()]
                 
-                # Should make it transparent now 
-                if row['type'] == 'ref':
-                    node.visual.face_colors = [0, 255, 0, 100] 
-                else:
-                    # Also Turquoise now
-                    node.visual.face_colors = [64, 224, 208, 100]
-                # Added this change to make sure it's transparent 
-                node.visual = node.visual.to_texture()
-                node.visual.material.alphamode = "BLEND"
+                for x, y, z, rad in zip(iter_df['marked_x'], iter_df['marked_y'], iter_df['marked_z'], iter_df['radius']):
+                    marker = trimesh.creation.icosphere(subdivisions=2, radius=rad)
+                    marker.visual.face_colors = [255, 165, 0, 200]
+                    marker.visual = marker.visual.to_texture()
+                    marker.visual.material.alphaMode = "BLEND"
+                    marker.apply_translation((x, y, z))
                     
-                node.apply_translation((row['x'], row['y'], row['z']))
-                all_meshes.append(node)
-        except FileNotFoundError:
-            print("No knn_nodes.csv found. Skipping KD-Tree node visualization.")
-        
-        try:
-            df_edges = pd.read_csv("data/knn_edges.csv")
-            for _, row in df_edges.iterrows():
-                start_pt = [row['x1'], row['y1'], row['z1']]
-                end_pt = [row['x2'], row['y2'], row['z2']]
+                    # Append the sphere to this year's fresh list
+                    iter_meshes.append(marker)
                 
-                # Create a thin 3D cylinder acting as a line connecting the two points
-                line = trimesh.creation.cylinder(radius=0.005, segment=[start_pt, end_pt])
-                line.visual.face_colors = [139, 69, 19, 150] # Semi-transparent brown now
-                all_meshes.append(line)
-        except FileNotFoundError:
-            print("No knn_edges.csv found. Skipping KD-Tree edge visualization.")
-        # End of my added additions 
-
-        #combine meshes and save file
-        combined_mesh = trimesh.util.concatenate(all_meshes)
-        combined_mesh.export(str(args.output_dir)+"/marked_location.obj")
+                # Combine the tree and spheres for this specific iteration
+                combined_mesh = trimesh.util.concatenate(iter_meshes)
+                
+                # Export as a separate file (e.g., marked_location_iter_29.obj)
+                out_name = f"{str(args.output_dir)}/marked_location_iter_{int(iter_val)}.obj"
+                combined_mesh.export(out_name)
+                print(f"Exported year file: {out_name}")
+                
+        except Exception as e:
+            print(f"Skipping sphere generation. Error: {e}")
 
 
         if args.meta_data:

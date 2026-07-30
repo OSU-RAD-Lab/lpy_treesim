@@ -335,9 +335,9 @@ class LtrHuristic:
             print(f"Trunk ({trunk.growth.length:.3f}m) has not reached {height_m}m.")
             return 0.0
 
-        t_ratio = height_m / trunk.growth.length
+        # t_ratio = height_m / trunk.growth.length
         
-        diameter_at_height_m = trunk.growth.get_diameter(dist_along=t_ratio)
+        diameter_at_height_m = trunk.growth.get_diameter(dist_along=height_m)
         
         # Extract the radius in centimeters
         radius_cm = (diameter_at_height_m / 2.0) * 100
@@ -384,9 +384,9 @@ class LtrHuristic:
                 too_short_limbs.append((name, obj))
                 continue
                 
-            t_ratio = measurement_dist_m / length_m
+            # t_ratio = measurement_dist_m / length_m
             
-            diameter_m = obj.growth.get_diameter(dist_along=t_ratio)
+            diameter_m = obj.growth.get_diameter(dist_along=measurement_dist_m)
             
             # Extract the radius in centimeters
             radius_cm = (diameter_m / 2.0) * 100

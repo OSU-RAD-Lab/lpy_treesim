@@ -176,6 +176,6 @@ models/
 *.usda
 *.ply
 *.obj
-
-
+*.csv
+*.png
 .devcontainer/

@@ -10,18 +10,17 @@ import pandas as pd
 
 from lpy_treesim.tree_generation.tree_builder_lpy import TreeBuilder
 from lpy_treesim.tree_generation.file_naming_config import FileNamingConfig
-from lpy_treesim.tree_generation.tree_to_usd import create_mesh_usd, check_texture
-from lpy_treesim.textures.generate_texture import make_texture_set, make_uv_texture
-from lpy_treesim.tree_generation.lpy_scene_to_mesh import plant_gl_scene_to_vertices_and_faces, stitch_cylinders, write_mesh
-from lpy_treesim.tree_generation.tree_structure import calculate_skeleton_junctions
+from lpy_treesim.tree_generation.tree_to_usd import check_texture # create_mesh_usd
+from lpy_treesim.textures.generate_texture import make_texture_set # make_uv_texture
+#from lpy_treesim.tree_generation.tree_structure import calculate_skeleton_junctions
 
 logger = logging.getLogger(__name__)
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate and save multiple L-Py trees.")
     parser.add_argument("--num-trees", type=int, default=1, help="Number of trees to generate")
-    parser.add_argument("--stage-dir", type=Path, default=Path("./"), help="Directory for top of Stage USD files")
-    parser.add_argument("--output-dir", type=Path, default=Path("./data/"), help="Directory for regular mesh outputs")
+    parser.add_argument("--stage-dir", type=Path, default=Path("."), help="Directory for top of Stage USD files")
+    parser.add_argument("--output-dir", type=Path, default=Path("./data"), help="Directory for regular mesh outputs")
     parser.add_argument("--tree-name", type=str, default="envy", help="Tree family to generate (UFO/Envy/etc.)")
     parser.add_argument("--texture-name", type=str, default="apple", help="Use/make all textures with this name")
     parser.add_argument("--verbose", action="store_true", help="Print progress details")
@@ -49,6 +48,7 @@ def main():
     naming = FileNamingConfig(namespace=args.namespace, tree_type=args.tree_name)
     # ensure_output_dir(args.output_dir)
     os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(args.stage_dir, exist_ok=True)
 
     stage_context = []
     if args.stage_dir is not None:
@@ -77,7 +77,9 @@ def main():
         tree_seed = tree_rng.integers(low=0, high=1_000_000)
 
         # Initialize the class
-        lsb = TreeBuilder(tree_name=args.tree_name, seed_value=int(tree_seed), interactive=args.interactive)
+        lsb = TreeBuilder(tree_name=args.tree_name, 
+                          seed_value=int(tree_seed),
+                          args=args)
 
         if args.verbose:
             print(f"INFO: Generating {args.tree_name} tree #{index:03d}")
@@ -85,49 +87,14 @@ def main():
 
         # Generates the l-string that everything is built off of, then converts it to the "scene"
         #   Also sets one color for each spur/branch/trunk instance (stored in branch_hierarchy)
-        lstring, scene = lsb.generate_tree()
+        usd_path, mesh_path = lsb.generate_tree(naming=naming, 
+                                     index=index, 
+                                     radii=radii, 
+                                     name_radii=name_radii,
+                                     stage_context=stage_context)
 
-        # Converts the scene to our tree structure.
-        #   Mapping maps the unique ids from the lstring into our tree structure
-        #   This ensures the branches etc are numbered sequentially
-        tree, mapping_lpy, mapping_tree_structure = lsb.create_tree_structure()
-
-        # Adds to each tree component the mesh cylinders created by lpy
-        bud_sites = plant_gl_scene_to_vertices_and_faces(scene,
-                                                         mapping_tree_structure=mapping_tree_structure,
-                                                         color_mapping=lsb.color_manager)
-
-        # Now stitch together all of the mesh components into tubes instead of discrete cylinders
-        # Also adds colors and texture coordinates
-        color_to_part, keys_to_remove = stitch_cylinders(tree=tree)
-        # Some newly created branch parts do not have any meshes associated with them
-        #for key in keys_to_remove:
-        #    tree.remove_key(key)
-
-        # Now that the cylinders/skeleton have been processed, build the junctions
-        #calculate_skeleton_junctions(tree=tree)
-
-        # Write out mesh file formats
-        if args.ply or args.obj:
-            mesh_path = args.output_dir / naming.mesh_filename(index, file_type="")
-            uv_name = str(mesh_path) + "_uv.png"
-            make_uv_texture(uv_name)
-            write_mesh(tree=tree, fname=mesh_path, bud_sites=bud_sites, image_name=uv_name)
-
-        if stage_context is not [] and args.usda:
-            # Where the usd files are stored
-            usd_path = os.path.join(str(args.stage_dir), naming.usd_filename(index))
-            uv_name = str(args.stage_dir ) + "/textures/mesh_uv.png"
-            make_uv_texture(uv_name)
-            for b_use_uv in [True, False]:
-                create_mesh_usd(stage_context, 
-                                world_path=str(args.stage_dir), 
-                                in_tree_name=naming._prefix(index), 
-                                tree=tree, 
-                                radii=radii, name_radii=name_radii,
-                                b_use_uv=b_use_uv)
-            logger.info(f"Wrote mesh to {usd_path}")
-
+        logger.info(f"Wrote mesh to {usd_path}")
+        logger.info(f"Wrote ply/obj to {mesh_path}")
 
         # Create indicators, from marked locations, on the tree after 
         # the tree has been generated
@@ -183,9 +150,7 @@ def main():
                 json.dump(meta_data, f, indent=4)
             logger.info(f"Wrote meta data to {metadata_path}")
 
-        del scene
-        del lstring
-        del lsb
+  
     logger.info("Tree generation complete.")
     return
 

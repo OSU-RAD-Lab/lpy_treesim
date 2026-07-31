@@ -1,5 +1,5 @@
 #supress file print statements
-print = lambda *args, **kwargs: None
+#print = lambda *args, **kwargs: None
 
 """
 General-purpose routines to turn the plantgl mesh structures into meshes
@@ -227,7 +227,7 @@ def create_mesh(tree: TreeStructure, bud_sites: list[dict], tex_image_file_name)
 
     if len(vs) == 0:
         print(f"Warning: No mesh parts, bailing")
-        return None, None, None
+        return None, None, None, None, None
 
     vs_np = np.array(vs, dtype=np.float64)
     vs_tex_np = np.array(vs_tex, dtype=np.float32)

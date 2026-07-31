@@ -179,3 +179,4 @@ models/
 *.csv
 *.png
 .devcontainer/
+stage_dir/

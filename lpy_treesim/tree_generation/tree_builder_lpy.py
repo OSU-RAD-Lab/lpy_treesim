@@ -1,9 +1,10 @@
 #supress file print statements
-original_print = print
-print = lambda *args, **kwargs: None
+#original_print = print
+#print = lambda *args, **kwargs: None
 
 #!/usr/bin/env python3
 import sys
+import os
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +18,10 @@ from lpy_treesim.tree_generation.tree_naming_convention import TreeNamingConvent
 from lpy_treesim.tree_generation.tree_structure import TreeStructure
 from lpy_treesim.tree_models.base_tree.bud_site import BudSite
 from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
+from lpy_treesim.tree_generation.tree_to_usd import create_mesh_usd
+from lpy_treesim.tree_generation.lpy_scene_to_mesh import plant_gl_scene_to_vertices_and_faces, stitch_cylinders, write_mesh
+from lpy_treesim.textures.generate_texture import make_texture_set, make_uv_texture
+
 import logging
 
 
@@ -30,7 +35,7 @@ class TreeBuilder:
     def __init__(self,
                  tree_name: str,
                  seed_value: int,
-                 interactive: bool):
+                 args):
 
         if not TreeBuilder.b_init_sys_path:
             # Ensure repository root is discoverable for prototype imports
@@ -45,7 +50,11 @@ class TreeBuilder:
         self.color_manager = ColorManager()
 
         # Show tree or not while building
-        self.b_interactive = interactive
+        self.b_interactive = args.interactive
+        #self.b_interactive = interactive
+
+        # args set in make_n_trees
+        self.args = args
 
         # Where to find the source code and start values for the trunk
         # See extern_variables in base_lpy.lpy
@@ -168,23 +177,26 @@ class TreeBuilder:
             if not name in self.branch_hierarchy:
                 print(f"Could not find name {name} in branch hierarchy")
 
-    def generate_tree(self):
+    def generate_tree(self, naming, index, radii, name_radii, stage_context):
         """ Actually build the lpy string
         @param b_interactive - do you want to have to hit a key every iteration?"""
+
+        usd_path = "no_usd_path"
 
         # First string - see base_lpy.lpy axiom module
         lstring = self.__lsystem.axiom
 
         if self.b_interactive:
             """Suppose to bring up a window. Whether or not it does depends on OS"""
-            Viewer.start()
+            Viewer.start() # type: ignore
 
         # Iterate, replacing modules with new ones every iteration
         #  Roughly 28 iterations per year, 3-5 years (depending on SimulationConfig parameters)
         b_check_string = False
+
         for iteration in range(self.__lsystem.derivationLength):
             #print = original_print
-            print(f"Iteration {iteration}")
+            #print(f"Iteration {iteration}")
             #print = lambda *args, **kwargs: None
 
             if b_check_string:
@@ -203,23 +215,70 @@ class TreeBuilder:
             # DO NOT TAKE OUT THIS LINE - or everything will stop working
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
             interpreted_string = self.__lsystem.interpret(lstring)
-
-            # if iteration % self.__lsystem.derivationLength == 28:
+            copy_interpreted_string = self.__lsystem.interpret(lstring)
+            
             #     self.make_string_readable(str(interpreted_string))
             if self.b_interactive:
                 scene =  self.__lsystem.sceneInterpretation(interpreted_string)
-                Viewer.display(scene)
+                Viewer.display(scene) # type: ignore
 
                 input("Press Enter to continue...")
 
-        if self.b_interactive:
-            Viewer.exit()
+            if (iteration % (28)) == 0 and iteration != 0:
+                print('generating tree')
+                # String and scene (which has geometry)
+                #   This string will have all the F() modules, which are the ones that actually produce geometry
+                self.check_string(str(lstring))
+                self.check_string(str(lstring))
 
-        # String and scene (which has geometry)
-        #   This string will have all the F() modules, which are the ones that actually produce geometry
-        self.check_string(str(lstring))
-        self.check_string(str(self.__lsystem.sceneInterpretation(lstring)))
-        return lstring, self.__lsystem.sceneInterpretation(lstring)
+                # Converts the scene to our tree structure.
+                #   Mapping maps the unique ids from the lstring into our tree structure
+                #   This ensures the branches etc are numbered sequentially
+                scene = self.__lsystem.sceneInterpretation(lstring)
+                tree, mapping_lpy, mapping_tree_structure = self.create_tree_structure()
+
+                # Adds to each tree component the mesh cylinders created by lpy
+                bud_sites = plant_gl_scene_to_vertices_and_faces(scene,
+                                                                mapping_tree_structure=mapping_tree_structure,
+                                                                color_mapping=self.color_manager)
+
+                # Now stitch together all of the mesh components into tubes instead of discrete cylinders
+                # Also adds colors and texture coordinates
+                color_to_part, keys_to_remove = stitch_cylinders(tree=tree)
+                # Some newly created branch parts do not have any meshes associated with them
+                #for key in keys_to_remove:
+                #    tree.remove_key(key)
+
+                # Now that the cylinders/skeleton have been processed, build the junctions
+                #calculate_skeleton_junctions(tree=tree)
+                
+                # Write out mesh file formats
+                if self.args.ply or self.args.obj:
+                    mesh_path = self.args.output_dir / naming.mesh_filename(index, file_type="")
+                    uv_name = str(mesh_path) + "_uv.png"
+                    make_uv_texture(uv_name)
+                    write_mesh(tree=tree, fname=mesh_path, bud_sites=bud_sites, image_name=uv_name)
+
+                if stage_context is not [] and self.args.usda:
+                    # Where the usd files are stored
+                    usd_path = os.path.join(str(self.args.stage_dir), naming.usd_filename(index))
+                    uv_name = str(self.args.stage_dir ) + "/textures/mesh_uv.png"
+                    make_uv_texture(uv_name)
+                    for b_use_uv in [True, False]:
+                        create_mesh_usd(stage_context, 
+                                        world_path=str(self.args.stage_dir), 
+                                        in_tree_name=naming._prefix(index), 
+                                        tree=tree, 
+                                        radii=radii, name_radii=name_radii,
+                                        b_use_uv=b_use_uv)
+                del lstring
+                del scene
+                lstring = copy_interpreted_string
+
+
+        if self.b_interactive:
+            Viewer.exit() # type: ignore
+        return usd_path, mesh_path
 
     def _add_junctions(self,
                        mapping_tree_structure: dict,

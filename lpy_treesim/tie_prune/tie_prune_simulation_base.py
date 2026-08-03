@@ -124,7 +124,8 @@ class TreeSimulationBase(ABC):
         This method is called at the start of every iteration (see base_lpy.lpy)
         @param lstring - the actual lstring being generated - not really used, but could be
         @param branch_hierarchy - the current branch hierarchy as a dictionary """
-        print(f'Iteration {self.current_iteration}')
+
+        print(f'Base Iteration {self.current_iteration} Start')
         if self.config.get_snapshot(self.current_iteration):
             self.freeze_for_snapshot = True
             self.snapshot_start = self.current_iteration
@@ -146,7 +147,7 @@ class TreeSimulationBase(ABC):
                 print("STARTING geometry")
                 self.generate_geometry = True
 
-            elif self.snapshot_iteration == 6:
+            elif self.snapshot_iteration == 4:
 
                 print("RESET to continue")
                 self.end_bud_growth = False
@@ -241,6 +242,7 @@ class TreeSimulationBase(ABC):
             # Pruning that happens every year (currently set to every 28 iterations)
             else:
                 # Standard yearly structural pruning
+                print("Pruning tree")
                 prune_tree(self,
                            branch_hierarchy=branch_hierarchy, 
                            map_names_to_branches=map_names_to_branches)            
@@ -308,7 +310,8 @@ class TreeSimulationBase(ABC):
             if wire.branch_id == -1:
                 wire_ids.append(wire_id)
             else:
-                print(f"Wire {wire_id} tied to {wire.branch_id}")
+                #print(f"Wire {wire_id} tied to {wire.branch_id}")
+                pass
 
         num_branches = len(open_branches)
         num_wires = len(wire_ids)

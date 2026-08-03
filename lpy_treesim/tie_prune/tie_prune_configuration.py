@@ -104,7 +104,7 @@ class SimulationConfig(ABC):
         return False
 
     def get_snapshot(self, current_iteration: int) -> bool:
-        if current_iteration % self.num_iter_per_year == (self.num_iter_per_year - 5):
+        if current_iteration % self.num_iter_per_year == (self.num_iter_per_year - 2):
             if current_iteration < self.derivation_length - 3:
                 print(f"Starting Tree Snapshot Generation")
             return True

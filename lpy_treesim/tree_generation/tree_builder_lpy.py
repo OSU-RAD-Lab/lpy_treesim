@@ -177,14 +177,16 @@ class TreeBuilder:
             if not name in self.branch_hierarchy:
                 print(f"Could not find name {name} in branch hierarchy")
 
+
     def generate_tree(self, naming, index, radii, name_radii, stage_context):
         """ Actually build the lpy string
         @param b_interactive - do you want to have to hit a key every iteration?"""
 
-        usd_path = "no_usd_path"
-
         # First string - see base_lpy.lpy axiom module
+        frozen_lstring = self.__lsystem.axiom
         lstring = self.__lsystem.axiom
+
+        usd_path = "no_usd_path"
 
         if self.b_interactive:
             """Suppose to bring up a window. Whether or not it does depends on OS"""
@@ -194,18 +196,28 @@ class TreeBuilder:
         #  Roughly 28 iterations per year, 3-5 years (depending on SimulationConfig parameters)
         b_check_string = False
 
+        year = 0
         for iteration in range(self.__lsystem.derivationLength):
-            #print = original_print
-            #print(f"Iteration {iteration}")
-            #print = lambda *args, **kwargs: None
+
+            print(f"Iteration {iteration}")
 
             if b_check_string:
                 self.check_string(str(lstring))
                 b_check_string = False
 
             # One iteration - replace symbols
-            lstring = self.__lsystem.derive(lstring, iteration, 1)
+           
             #self.make_string_readable(str(lstring))
+
+            if (iteration % (28)) == 25:
+                frozen_lstring = self.__lsystem.derive(lstring, iteration, 1)
+                lstring = self.__lsystem.derive(lstring, iteration, 1)
+            if (iteration % (28)) == 2 and iteration != 2:
+                lstring = self.__lsystem.derive(frozen_lstring, iteration, 1)
+                self.reset = 0
+            else:
+                lstring = self.__lsystem.derive(lstring, iteration, 1)
+
 
             if "%" in str(lstring):
                 print("PRUNING cuts found in string")
@@ -215,7 +227,6 @@ class TreeBuilder:
             # DO NOT TAKE OUT THIS LINE - or everything will stop working
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
             interpreted_string = self.__lsystem.interpret(lstring)
-            copy_interpreted_string = self.__lsystem.interpret(lstring)
             
             #     self.make_string_readable(str(interpreted_string))
             if self.b_interactive:
@@ -224,7 +235,8 @@ class TreeBuilder:
 
                 input("Press Enter to continue...")
 
-            if (iteration % (28)) == 0 and iteration != 0:
+            if (iteration % (28)) == 1 and iteration != 1:
+                year += 1
                 print('generating tree')
                 # String and scene (which has geometry)
                 #   This string will have all the F() modules, which are the ones that actually produce geometry
@@ -239,8 +251,8 @@ class TreeBuilder:
 
                 # Adds to each tree component the mesh cylinders created by lpy
                 bud_sites = plant_gl_scene_to_vertices_and_faces(scene,
-                                                                mapping_tree_structure=mapping_tree_structure,
-                                                                color_mapping=self.color_manager)
+                                                                 mapping_tree_structure=mapping_tree_structure,
+                                                                 color_mapping=self.color_manager)
 
                 # Now stitch together all of the mesh components into tubes instead of discrete cylinders
                 # Also adds colors and texture coordinates
@@ -254,14 +266,14 @@ class TreeBuilder:
                 
                 # Write out mesh file formats
                 if self.args.ply or self.args.obj:
-                    mesh_path = self.args.output_dir / naming.mesh_filename(index, file_type="")
+                    mesh_path = str(self.args.output_dir / naming.mesh_filename(index, file_type="")) + str(year)
                     uv_name = str(mesh_path) + "_uv.png"
                     make_uv_texture(uv_name)
                     write_mesh(tree=tree, fname=mesh_path, bud_sites=bud_sites, image_name=uv_name)
 
                 if stage_context is not [] and self.args.usda:
                     # Where the usd files are stored
-                    usd_path = os.path.join(str(self.args.stage_dir), naming.usd_filename(index))
+                    usd_path = str(os.path.join(str(self.args.stage_dir), naming.usd_filename(index))) + str(year)
                     uv_name = str(self.args.stage_dir ) + "/textures/mesh_uv.png"
                     make_uv_texture(uv_name)
                     for b_use_uv in [True, False]:
@@ -271,9 +283,8 @@ class TreeBuilder:
                                         tree=tree, 
                                         radii=radii, name_radii=name_radii,
                                         b_use_uv=b_use_uv)
-                del lstring
+                #del lstring
                 del scene
-                lstring = copy_interpreted_string
 
 
         if self.b_interactive:

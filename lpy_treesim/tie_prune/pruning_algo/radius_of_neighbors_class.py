@@ -313,8 +313,9 @@ class NeighborsDataStructure:
         return i_delta, self.s_delta
 
 class LtrHuristic:
-    def __init__(self, map_names_to_branches):
+    def __init__(self, map_names_to_branches, tree_sim=None):
         self.map_names_to_branches = map_names_to_branches
+        self.tree_sim = tree_sim
 
     def get_tcsa(self, height_m: float = 0.3) -> float:
         """
@@ -415,19 +416,15 @@ class LtrHuristic:
     def simulate_ltr_pruning(self, tcsa_cm2: float, limb_metrics: dict, target_ltr: float = 0.5) -> dict:
         """
         Calculates the initial LTR and iteratively removes the largest valid limbs
-        until the target LTR threshold is achieved. Does not actually alter the tree.
+        until the target LTR threshold is achieved. Validates replacements via Energy Matrix.
         """
         if tcsa_cm2 <= 0:
             print("Error: Invalid TCSA. Cannot calculate LTR.")
             return {}
 
-        # Retrieve the list of valid limbs
         valid_limbs = limb_metrics.get("valid", [])
-        
-        # Sort limbs by LCSA in descending order (largest branches first)
         sorted_limbs = sorted(valid_limbs, key=lambda x: x['lcsa_cm2'], reverse=True)
         
-        # Calculate initial LTR: Sum of all valid LCSA / TCSA
         total_lcsa = sum(limb['lcsa_cm2'] for limb in sorted_limbs)
         current_ltr = total_lcsa / tcsa_cm2
         
@@ -438,27 +435,92 @@ class LtrHuristic:
         print(f"Target LTR: {target_ltr:.4f}\n")
         
         removed_limbs = []
+        kept_limbs = []
         
-        # Iteratively remove the largest limbs until the target LTR is reached
         while current_ltr > target_ltr and len(sorted_limbs) > 0:
-            # Pop the largest limb from the front of the list
             largest_limb = sorted_limbs.pop(0)
+            limb_obj = largest_limb['object']
+            branch_id = int(largest_limb['name'].split("_")[-1])
+
+            is_viable_replacement = False
+            replacement_name = None
+
+            if self.tree_sim:
+                # 1. Identify which wire the removable branch is currently tied to
+                target_wire_id = None
+                for w_id, wire in enumerate(self.tree_sim.branch_attractor):
+                    if wire.branch_id == branch_id:
+                        target_wire_id = w_id
+                        break
+
+                # 2. Gather all untied candidates (buds and untied branches)
+                candidates = []
+                for name, obj in self.map_names_to_branches.items():
+                    # Skip the limb we are actively trying to remove
+                    if obj == limb_obj:
+                        continue
+                        
+                    is_bud = "bud" in name.lower()
+                    is_untied_branch = hasattr(obj, "tying") and not obj.tying.is_tied
+                    
+                    if is_bud or is_untied_branch:
+                        candidates.append(obj)
+
+                # 3. Run the Energy Matrix with the removable branch's wire forced open
+                energy_matrix, wire_ids, open_branches = self.tree_sim.get_energy_matrix(
+                    branches=candidates, 
+                    flagged_branch_ids=[branch_id]
+                )
+                
+                # 4. Check the proposed assignments without actually tying them
+                proposed_ties = self.tree_sim.test_assignment_viability(energy_matrix, wire_ids, open_branches)
+                
+                # 5. See if any candidate successfully map to a newly opened wire
+                if target_wire_id is not None:
+                    for cand_name, proposed_wire_id in proposed_ties.items():
+                        if proposed_wire_id == target_wire_id:
+                            is_viable_replacement = True
+                            replacement_name = cand_name
+                            break
+                else:
+                    # If the primary limb wasn't tied to a wire, we don't strictly need a wire replacement
+                    is_viable_replacement = True
+
+            # Dormancy Roll (Only roll if the chosen replacement is a bud) 
+            if is_viable_replacement and replacement_name and "bud" in replacement_name.lower():
+                import random
+                dormancy_chance = getattr(self.tree_sim.config, 'dormancy_probability', 0.7)
+                
+                if random.random() > dormancy_chance:
+                    print(f"  -> Dormancy Check: Bud {replacement_name} failed to wake up.")
+                    is_viable_replacement = False # Force the fallback
+                else:
+                    print(f"  -> Dormancy Check: Bud {replacement_name} successfully broke dormancy!")
+
+            # 6. Fallback Evaluation
+            if not is_viable_replacement:
+                print(f"Fallback Triggered: Limb {largest_limb['name']} lacks a viable tied replacement. Skipping.")
+                kept_limbs.append(largest_limb) # Save the skipped limb!
+                continue
+                
+            largest_limb['renewal_candidate'] = replacement_name 
             removed_limbs.append(largest_limb)
-            
-            # Subtract its area from the total and recalculate the LTR
             total_lcsa -= largest_limb['lcsa_cm2']
             current_ltr = total_lcsa / tcsa_cm2
             
-            print(f"Removing Limb: {largest_limb['name']} (LCSA: {largest_limb['lcsa_cm2']:.2f} cm²) -> New LTR: {current_ltr:.4f}")
+            replacement_str = f"Replaced by: {replacement_name}" if replacement_name else "No wire replacement needed"
+            print(f"Limb Marked For Removal: {largest_limb['name']} ({replacement_str}) -> New LTR: {current_ltr:.4f}")
             
         print(f"\nFinal LTR Achieved: {current_ltr:.4f}")
         print(f"Total Limbs Flagged for Removal: {len(removed_limbs)}")
-        print(f"Total Limbs Kept: {len(sorted_limbs)}")
+        
+        # Combine any remaining untouched limbs with the skipped limbs
+        kept_limbs.extend(sorted_limbs)
+        print(f"Total Limbs Kept: {len(kept_limbs)}")
         print("\n")
         
-        # Return the separated lists
         return {
-            "kept_limbs": sorted_limbs,
+            "kept_limbs": kept_limbs, # Return the populated list
             "removed_limbs": removed_limbs,
             "final_ltr": current_ltr
         }

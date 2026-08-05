@@ -210,8 +210,8 @@ class TreeSimulationBase(ABC):
                            branch_hierarchy=branch_hierarchy, 
                            map_names_to_branches=map_names_to_branches)
                 
-            # --- CSV export for Spheres, runs after all pruning 
-            ltr = LtrHuristic(map_names_to_branches=map_names_to_branches)
+            # Pruning Execution, I'm no longer using this stuff for csv exports 
+            ltr = LtrHuristic(map_names_to_branches=map_names_to_branches, tree_sim=self)
             
             # 1. Get TCSA baseline
             tcsa = ltr.get_tcsa(height_m=0.3)
@@ -225,47 +225,47 @@ class TreeSimulationBase(ABC):
             # 4. Run the simulated LTR logic (purely mathematical, no pruning)
             ltr_results = ltr.simulate_ltr_pruning(tcsa_cm2=tcsa, limb_metrics=limb_metrics, target_ltr=0.5)
 
-            removed_limbs = ltr_results.get("removed_limbs", [])
+            # removed_limbs = ltr_results.get("removed_limbs", [])
   
-            sphere_data = []
-            SPHERE_RADIUS = 0.035
+            # sphere_data = []
+            # SPHERE_RADIUS = 0.035
                 
-            if removed_limbs:
-                print(f"\nExporting LTR Cuts for CSV (Iteration {self.current_iteration})")
-                removed_branch_names = [limb["name"] for limb in removed_limbs]
+            # if removed_limbs:
+            #     print(f"\nExporting LTR Cuts for CSV (Iteration {self.current_iteration})")
+            #     removed_branch_names = [limb["name"] for limb in removed_limbs]
                     
-                for branch_name, branch_children in branch_hierarchy.items():
-                    if "trunk" not in branch_name:
-                        continue
+            #     for branch_name, branch_children in branch_hierarchy.items():
+            #         if "trunk" not in branch_name:
+            #             continue
                             
-                    for bud in branch_children:
-                        if "bud" not in bud.name or not bud.branch_child:
-                            continue
+            #         for bud in branch_children:
+            #             if "bud" not in bud.name or not bud.branch_child:
+            #                 continue
                                 
-                        if bud.branch_child.name in removed_branch_names:
-                            print(f"Logging limb for sphere: {bud.branch_child.name}")
-                            loc = bud.branch_child.location.start
-                            sphere_data.append({
-                                'iteration': self.current_iteration, # Adds the year/iteration 
-                                'marked_x': loc.x, 
-                                'marked_y': loc.y, 
-                                'marked_z': loc.z,
-                                'radius': SPHERE_RADIUS,
-                                'name': bud.branch_child.name
-                                })
+            #             if bud.branch_child.name in removed_branch_names:
+            #                 print(f"Logging limb for sphere: {bud.branch_child.name}")
+            #                 loc = bud.branch_child.location.start
+            #                 sphere_data.append({
+            #                     'iteration': self.current_iteration, # Adds the year/iteration 
+            #                     'marked_x': loc.x, 
+            #                     'marked_y': loc.y, 
+            #                     'marked_z': loc.z,
+            #                     'radius': SPHERE_RADIUS,
+            #                     'name': bud.branch_child.name
+            #                     })
                 
-                # Always export, even if empty, to prevent crashes and keep the timeline intact
-                df = DF(sphere_data, columns=['iteration', 'marked_x', 'marked_y', 'marked_z', 'radius', 'name'])
-                # csv_path = Path(__file__).parent.resolve() / "pruning_algo" / "marked_locations.csv"
-                csv_path = Path(__file__).parent.resolve() / "pruning_algo" / "ltr_marked_locations.csv"
+                # # Always export, even if empty, to prevent crashes and keep the timeline intact
+                # df = DF(sphere_data, columns=['iteration', 'marked_x', 'marked_y', 'marked_z', 'radius', 'name'])
+                # # csv_path = Path(__file__).parent.resolve() / "pruning_algo" / "marked_locations.csv"
+                # csv_path = Path(__file__).parent.resolve() / "pruning_algo" / "ltr_marked_locations.csv"
                 
-                # Wipe the file clean on the first pruning event , then append for all future years
-                write_mode = 'w' if self.current_iteration < 30 else 'a'
-                df.to_csv(csv_path, index_label="index", mode=write_mode, header=(write_mode == 'w'))
+                # # Wipe the file clean on the first pruning event , then append for all future years
+                # write_mode = 'w' if self.current_iteration < 30 else 'a'
+                # df.to_csv(csv_path, index_label="index", mode=write_mode, header=(write_mode == 'w'))
                 
-                if sphere_data:
-                    print(f"Exported {len(sphere_data)} locations to {csv_path} (Mode: {write_mode})")
-                print("\n")
+                # if sphere_data:
+                #     print(f"Exported {len(sphere_data)} locations to {csv_path} (Mode: {write_mode})")
+                # print("\n")
                 
 
 
@@ -287,33 +287,22 @@ class TreeSimulationBase(ABC):
                     branches.append(bud_site.branch_child)
         return branches
 
-    def get_energy_matrix(self, branches: list[BasicWood]) -> tuple[np.array, list[int], list[BasicWood]]:
+    def get_energy_matrix(self, branches: list, flagged_branch_ids: list[int] = None) -> tuple[np.ndarray, list[int], list]:
         """
         Calculate the energy matrix for optimal branch-to-wire assignment.
-
-        This function computes an energy cost matrix where each entry represents the
-        "cost" of assigning a specific branch to a specific wire/set of wires in the trellis system.
-        The energy is based on the Euclidean distance from the wire attachment point to
-        the start of each branch and the angle between the start of the branch and the tie
-        direction, weighted by the simulation's distance weight parameter.
-
-        Note: Skips branches that are too short/pointing the wrong way
-
-        Args:
-            branches: List of branch objects to be assigned to wires
-
-        Returns:
-            numpy.ndarray: Energy matrix of shape (num_branches, num_wires) where
-                          matrix[i][j] is the energy cost of assigning branch i to wire j.
-                          Untied branches and occupied wires have infinite energy (np.inf).
-            list[int]: List of wire ids used (wires that already have branches assigned are skipped)
-            list[BasicWood]: Available branches
+        Evaluates both active BasicWood branches and dormant BudSites.
         """
+        if flagged_branch_ids is None:
+            flagged_branch_ids = []
+
         open_branches = []
         for branch in branches:
-            # Skip branches that are already tied
-            if not branch.tying.is_tied:
-                # And that haven't grown yet
+            # Check if this object is a dormant bud (lacks the 'tying' attribute)
+            is_bud = not hasattr(branch, "tying")
+            
+            if is_bud:
+                open_branches.append(branch)
+            elif not branch.tying.is_tied:
                 if branch.growth.length > 0.5 * self.support.spacing_wires:
                     open_branches.append(branch)
                 else:
@@ -323,8 +312,8 @@ class TreeSimulationBase(ABC):
 
         wire_ids = []
         for wire_id, wire in enumerate(self.branch_attractor):
-            # Skip wires that already have a branch attached
-            if wire.branch_id == -1:
+            # Keep wire open if it's empty or if its current branch is flagged for removal
+            if wire.branch_id == -1 or wire.branch_id in flagged_branch_ids:
                 wire_ids.append(wire_id)
             else:
                 print(f"Wire {wire_id} tied to {wire.branch_id}")
@@ -332,32 +321,40 @@ class TreeSimulationBase(ABC):
         num_branches = len(open_branches)
         num_wires = len(wire_ids)
 
-        # Initialize energy matrix with infinite values (impossible assignments)
+        # Initialize energy matrix with infinite values
         energy_matrix = np.full((num_branches, num_wires), self.invalid_attractor_value)
 
-        # Calculate energy costs for all valid branch-wire combinations
         min_start_height = self.config.start_height - self.config.spacing_wires * 0.5
         min_dist = self.config.spacing_wires * 0.5
         print(f"Beginning energy matrix {num_branches} {num_wires}, start height {min_start_height} min dist {min_dist}")
+        
         for branch_idx, branch in enumerate(open_branches):
-            branch_start = np.array(branch.location.start)
-            branch_dir = np.array(branch.location.start_dir)
+            is_bud = not hasattr(branch, "tying")
+            
+            # Extract metrics based on whether it is a dormant bud or active branch
+            if is_bud:
+                branch_start = np.array(branch.start_loc) if hasattr(branch, 'start_loc') else np.array(branch.location.start)
+                branch_dir = np.array(branch.start_dir) if hasattr(branch, 'start_dir') else np.array([0, 1, 0])
+                tie_type = TyingState.TyingType.TIE_ALONG # Default to along the wire
+            else:
+                branch_start = np.array(branch.location.start)
+                branch_dir = np.array(branch.location.start_dir)
+                tie_type = branch.tying.tie_type
+
             if branch_start[2] < min_start_height:
                 print(f"Branch {branch.name} on trunk {branch_start} too far below wire ")
                 continue
 
-            if branch.tying.tie_type == TyingState.TyingType.TIE_ACROSS:
-                check_coord = 0  # UFO-style - check that x index is within 2/3 of tie spacing
+            # specific 1D distance checks
+            if tie_type == TyingState.TyingType.TIE_ACROSS:
+                check_coord = 0  # check that x index is within 2/3 of tie spacing
                 spacing = self.support.spacing_across_wire()
             else:
-                check_coord = 2  # Envy-style - check that z index is within 2/3 of wire spacing
+                check_coord = 2  # check that z index is within 2/3 of wire spacing
                 spacing = self.support.spacing_wires
 
             for wire_idx, wire_id in enumerate(wire_ids):
                 wire = self.branch_attractor[wire_id]
-
-                # Calculate weighted distance energy for this branch-wire pair
-                # Energy considers distance from wire to both branch endpoints
                 wire_points = np.array(wire.attractor_pts)
 
                 vec_to_wire_pt = wire_points[0, 0:3] - branch_start
@@ -377,20 +374,15 @@ class TreeSimulationBase(ABC):
                     print(f"Branch {branch.name} dir {branch_dir}, wire dir {wire.attractor_dir} wrong way")
                     continue
 
-                # Find the closest wire attachment point; for the start point it's probably the first wire point,
-                #   for the end point it may be one further along
-                # End point distance is an approximate measure of if the branch is growing in the direction of the wire
                 start_distance_energy = branch_start[check_coord] - wire_points[0, check_coord]
 
                 if np.fabs(start_distance_energy) > 2.0 * spacing / 3.0:
                     print(f"Branch {branch.name} Too far away {start_distance_energy} spacing {spacing}")
                     continue
+                    
                 print(f"Branch {branch.name} Start {branch_start}  wire {wire_points[0, :]} spacing {spacing}")
-                # Scale by spacing
                 dist_energy = np.fabs(start_distance_energy) / spacing
                 print(f" Dist {dist_energy} angle {align_growth}", end="")
-                # Weight the distance versus the angle
-                #   Distance is scaled 0..1 based on wire spacing, align is dot product 0 to 1. 1 is better
                 total_energy = self.config.energy_distance_weight * dist_energy + align_growth * self.config.energy_angle_weight
                 print(f" Total {total_energy}")
 
@@ -402,10 +394,10 @@ class TreeSimulationBase(ABC):
         """
         Perform assignment of branches to wires based on energy matrix.
 
-        This function uses the linear_sum_assignment method in scipy to find teh optimal minimum energy assignment.
+        This function uses the linear_sum_assignment method in scipy to find the optimal minimum energy assignment.
         Once a branch is assigned to a wire, both that branch and wire are marked as unavailable to prevent further assignments.
 
-        Note that this is not a 1-1, onto assignment - it only uses 'reasonable' pairings (see energy matrix above)
+        Note that this is not a 1-1, onto assignment - it only uses reasonable pairings (see energy matrix above)
         Args:
             energy_matrix: numpy.ndarray of shape (num_branches, num_wires) with energy costs
             wire_ids: Ids of wires that can be tied
@@ -420,7 +412,7 @@ class TreeSimulationBase(ABC):
         if num_branches == 0 or num_wires == 0:
             return
 
-        # Run the Hungarian algorithm
+        # Run the algorithm
         row_ind, col_ind = linear_sum_assignment(energy_matrix)
         print(f"Energy matrix {energy_matrix}")
 
@@ -439,3 +431,22 @@ class TreeSimulationBase(ABC):
                 branch.tying.wire_attach = wire_attach
                 branch_id = int(branch.name.split("_")[-1])
                 wire_attach.branch_id = branch_id
+    def test_assignment_viability(self, energy_matrix, wire_ids: list, branches: list) -> dict:
+        """
+        Runs the algorithm without mutating objects to validate viability.
+        Returns a dictionary mapping branch names to their proposed wire IDs.
+        """
+        num_branches, num_wires = energy_matrix.shape
+        if num_branches == 0 or num_wires == 0:
+            return {}
+
+        row_ind, col_ind = linear_sum_assignment(energy_matrix)
+        proposed_ties = {}
+
+        for branch_indx, wire_indx in zip(row_ind, col_ind):
+            if energy_matrix[branch_indx, wire_indx] < self.invalid_attractor_value:
+                branch = branches[branch_indx]
+                wire_id = wire_ids[wire_indx]
+                proposed_ties[branch.name] = wire_id
+                
+        return proposed_ties

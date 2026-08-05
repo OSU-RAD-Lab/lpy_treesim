@@ -6,7 +6,7 @@
 import sys
 import os
 from pathlib import Path
-
+import trimesh
 import numpy as np
 
 from lpy_treesim.utils.color_manager import ColorManager
@@ -185,39 +185,58 @@ class TreeBuilder:
         # First string - see base_lpy.lpy axiom module
         frozen_lstring = self.__lsystem.axiom
         lstring = self.__lsystem.axiom
-
         usd_path = "no_usd_path"
 
         if self.b_interactive:
             """Suppose to bring up a window. Whether or not it does depends on OS"""
             Viewer.start() # type: ignore
-
+            
         # Iterate, replacing modules with new ones every iteration
         #  Roughly 28 iterations per year, 3-5 years (depending on SimulationConfig parameters)
         b_check_string = False
 
         year = 0
-        for iteration in range(self.__lsystem.derivationLength):
+        snapshot_start = False
+        snapshot_iteration = 0
+        iteration = 0
 
-            print(f"Iteration {iteration}")
+        num_iter_per_year = self.__lsystem.simulation_config.num_iter_per_year
 
+        while iteration <= self.__lsystem.derivationLength:
+        #for iteration in range(self.__lsystem.derivationLength):
+
+            #print(f"Iteration {iteration}")
+            print(f"Lpy Iteration {self.__lsystem.context().getIterationNb()}")
+            #print(self.__lsystem.context().getIterationNb())
             if b_check_string:
                 self.check_string(str(lstring))
                 b_check_string = False
 
             # One iteration - replace symbols
-           
             #self.make_string_readable(str(lstring))
 
-            if (iteration % (28)) == 25:
-                frozen_lstring = self.__lsystem.derive(lstring, iteration, 1)
-                lstring = self.__lsystem.derive(lstring, iteration, 1)
-            if (iteration % (28)) == 2 and iteration != 2:
+            if (iteration % (num_iter_per_year)) == 0 and iteration != 0:
+                if iteration < self.__lsystem.derivationLength - 4:
+                    print("Deriving lstring copy")
+                    snapshot_start = True
+                    frozen_lstring = self.__lsystem.derive(lstring, iteration, 1)
+                    frozen_iteration = iteration
+                    print("Deriving lstring")
+                    lstring = self.__lsystem.derive(lstring, iteration, 1)
+   
+
+            elif snapshot_iteration == 4: #change back to 2
+                snapshot_start = False
+                iteration = frozen_iteration
                 lstring = self.__lsystem.derive(frozen_lstring, iteration, 1)
-                self.reset = 0
+
+                #print(iteration)
+                #print(self.__lsystem.context().getIterationNb())
+                print("Frozen lstring derived")
+                
             else:
                 lstring = self.__lsystem.derive(lstring, iteration, 1)
-
+                print("lstring derived")
 
             if "%" in str(lstring):
                 print("PRUNING cuts found in string")
@@ -235,9 +254,9 @@ class TreeBuilder:
 
                 input("Press Enter to continue...")
 
-            if (iteration % (28)) == 1 and iteration != 1:
+            if snapshot_iteration == 3 or iteration == self.__lsystem.derivationLength: # Change back to 1
                 year += 1
-                print('generating tree')
+                print(f'Generating Tree on Iteration {iteration}')
                 # String and scene (which has geometry)
                 #   This string will have all the F() modules, which are the ones that actually produce geometry
                 self.check_string(str(lstring))
@@ -251,22 +270,22 @@ class TreeBuilder:
 
                 # Adds to each tree component the mesh cylinders created by lpy
                 bud_sites = plant_gl_scene_to_vertices_and_faces(scene,
-                                                                 mapping_tree_structure=mapping_tree_structure,
-                                                                 color_mapping=self.color_manager)
+                                                                mapping_tree_structure=mapping_tree_structure,
+                                                                color_mapping=self.color_manager)
 
                 # Now stitch together all of the mesh components into tubes instead of discrete cylinders
                 # Also adds colors and texture coordinates
                 color_to_part, keys_to_remove = stitch_cylinders(tree=tree)
                 # Some newly created branch parts do not have any meshes associated with them
                 #for key in keys_to_remove:
-                #    tree.remove_key(key)
+                    #tree.remove_key(key)
 
                 # Now that the cylinders/skeleton have been processed, build the junctions
                 #calculate_skeleton_junctions(tree=tree)
                 
                 # Write out mesh file formats
                 if self.args.ply or self.args.obj:
-                    mesh_path = str(self.args.output_dir / naming.mesh_filename(index, file_type="")) + str(year)
+                    mesh_path = str(self.args.output_dir / naming.mesh_filename(index, file_type="")) + "_year" + str(year)
                     uv_name = str(mesh_path) + "_uv.png"
                     make_uv_texture(uv_name)
                     write_mesh(tree=tree, fname=mesh_path, bud_sites=bud_sites, image_name=uv_name)
@@ -285,7 +304,56 @@ class TreeBuilder:
                                         b_use_uv=b_use_uv)
                 #del lstring
                 del scene
+            if snapshot_start:
+                snapshot_iteration += 1
+            else:
+                snapshot_iteration = 0
 
+                # Create indicators, from marked locations, on the tree after 
+                # the tree has been generated
+
+                '''
+                # Create path for marked locations file and load generated tree mesh
+                # Added this code. This gets the base name and appends the file to _vc.obj 
+                # so trimesh will find the file
+                mesh_name = naming.mesh_filename(index, file_type="") + "_vc.obj"
+                mod_path = str(self.args.output_dir / mesh_name)
+                mesh_existing = trimesh.load(mod_path)
+                # all_meshes = [mesh_existing]
+                try:
+                    df = pd.read_csv("lpy_treesim/tie_prune/pruning_algo/ltr_marked_locations.csv")
+                    
+                    # Loop through each iteration and saves in the CSV
+                    for iter_val in df['iteration'].unique():
+                        # Filter the dataframe to only include spheres for this specific iteration
+                        iter_df = df[df['iteration'] == iter_val]
+                        
+                        # Create a fresh list with a clean tree for this specific year
+                        iter_meshes = [mesh_existing.copy()]
+                        
+                        for x, y, z, rad in zip(iter_df['marked_x'], iter_df['marked_y'], iter_df['marked_z'], iter_df['radius']):
+                            marker = trimesh.creation.icosphere(subdivisions=2, radius=rad)
+                            marker.visual.face_colors = [255, 165, 0, 200]
+                            marker.visual = marker.visual.to_texture()
+                            marker.visual.material.alphaMode = "BLEND"
+                            marker.apply_translation((x, y, z))
+                            
+                            # Append the sphere to this year's fresh list
+                            iter_meshes.append(marker)
+                        
+                        # Combine the tree and spheres for this specific iteration
+                        combined_mesh = trimesh.util.concatenate(iter_meshes)
+                        
+                        # Export as a separate file (e.g., marked_location_iter_29.obj)
+                        out_name = f"{str(args.output_dir)}/marked_location_iter_{int(iter_val)}.obj"
+                        combined_mesh.export(out_name)
+                        print(f"Exported year file: {out_name}")
+                        
+                except Exception as e:
+                    print(f"Skipping sphere generation. Error: {e}")
+                '''
+
+            iteration += 1
 
         if self.b_interactive:
             Viewer.exit() # type: ignore

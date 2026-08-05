@@ -357,18 +357,23 @@ def write_mesh(fname: str, tree: TreeStructure, bud_sites: list[dict], image_nam
     #  - fc faces colored by semantic labels
     #  - vc vertices colored by instance labels
     mesh_tm, mesh_uv, mesh_fc, mesh_vc, mesh_bud_sites = create_mesh(tree=tree, bud_sites=bud_sites, tex_image_file_name=image_name)
+    
     if mesh_tm is not None:
-        mesh_tm.export(str(fname) + "_tm.obj")
-        mesh_tm.export(str(fname) + "_tm.ply")
+        pass
+        #mesh_tm.export(str(fname) + "_tm.obj")
+        #mesh_tm.export(str(fname) + "_tm.ply")
     if mesh_uv is not None:
-        mesh_uv.export(str(fname) + "_uv.obj")
-        mesh_uv.export(str(fname) + "_uv.ply")
+        pass
+        #mesh_uv.export(str(fname) + "_uv.obj")
+        #mesh_uv.export(str(fname) + "_uv.ply")
     if mesh_fc is not None:
-        mesh_fc.export(str(fname) + "_fc.ply")
-        mesh_fc.export(str(fname) + "_fc.obj")
+        pass
+        #mesh_fc.export(str(fname) + "_fc.ply")
+        #mesh_fc.export(str(fname) + "_fc.obj")
     if mesh_vc is not None:
         mesh_vc.export(str(fname) + "_vc.obj")
-        mesh_vc.export(str(fname) + "_vc.ply")
+        #mesh_vc.export(str(fname) + "_vc.ply")
     if mesh_bud_sites is not None:
-        mesh_bud_sites.export(str(fname) + "_budsites.obj")
-        mesh_bud_sites.export(str(fname) + "_budsites.ply")
+        pass
+        #mesh_bud_sites.export(str(fname) + "_budsites.obj")
+        #mesh_bud_sites.export(str(fname) + "_budsites.ply")

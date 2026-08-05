@@ -5,7 +5,6 @@ from pathlib import Path
 import secrets
 import os as os
 import logging
-import trimesh
 import pandas as pd
 
 from lpy_treesim.tree_generation.tree_builder_lpy import TreeBuilder
@@ -70,6 +69,8 @@ def main():
             radii = [1]
             name_radii = ["pine_bark_vmbibe2g_2k"]
 
+    #print(args.ply)
+    #print(args.obj)
     # Generate trees - use unique seeds
     tree_rng: np.random.Generator = np.random.default_rng(seed=args.dataset_seed)
     for index in range(args.num_trees):
@@ -95,48 +96,6 @@ def main():
 
         logger.info(f"Wrote mesh to {usd_path}")
         logger.info(f"Wrote ply/obj to {mesh_path}")
-
-        # Create indicators, from marked locations, on the tree after 
-        # the tree has been generated
-    
-        # Create path for marked locations file and load generated tree mesh
-        # Added this code. This gets the base name and appends the file to _vc.obj 
-        # so trimesh will find the file
-        mesh_name = naming.mesh_filename(index, file_type="") + "_vc.obj"
-        mod_path = str(args.output_dir / mesh_name)
-        mesh_existing = trimesh.load(mod_path)
-        # all_meshes = [mesh_existing]
-        try:
-            df = pd.read_csv("lpy_treesim/tie_prune/pruning_algo/ltr_marked_locations.csv")
-            
-            # Loop through each iteration and saves in the CSV
-            for iter_val in df['iteration'].unique():
-                # Filter the dataframe to only include spheres for this specific iteration
-                iter_df = df[df['iteration'] == iter_val]
-                
-                # Create a fresh list with a clean tree for this specific year
-                iter_meshes = [mesh_existing.copy()]
-                
-                for x, y, z, rad in zip(iter_df['marked_x'], iter_df['marked_y'], iter_df['marked_z'], iter_df['radius']):
-                    marker = trimesh.creation.icosphere(subdivisions=2, radius=rad)
-                    marker.visual.face_colors = [255, 165, 0, 200]
-                    marker.visual = marker.visual.to_texture()
-                    marker.visual.material.alphaMode = "BLEND"
-                    marker.apply_translation((x, y, z))
-                    
-                    # Append the sphere to this year's fresh list
-                    iter_meshes.append(marker)
-                
-                # Combine the tree and spheres for this specific iteration
-                combined_mesh = trimesh.util.concatenate(iter_meshes)
-                
-                # Export as a separate file (e.g., marked_location_iter_29.obj)
-                out_name = f"{str(args.output_dir)}/marked_location_iter_{int(iter_val)}.obj"
-                combined_mesh.export(out_name)
-                print(f"Exported year file: {out_name}")
-                
-        except Exception as e:
-            print(f"Skipping sphere generation. Error: {e}")
 
 
         if args.meta_data:

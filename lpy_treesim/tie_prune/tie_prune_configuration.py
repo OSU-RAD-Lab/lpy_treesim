@@ -61,8 +61,10 @@ class SimulationConfig(ABC):
     # Random number to use - this is here for repeatability
     lpy_rng: np.random.Generator = None
 
+
     def __post_init__(self):
         self.lpy_rng = np.random.default_rng(self.seed)
+        self.second_time = False
 
     def end_height(self):
         return self.start_height + self.num_wires * self.spacing_wires
@@ -97,15 +99,17 @@ class SimulationConfig(ABC):
         return False
 
     def do_year_increment(self, current_iteration: int):
-        if current_iteration % self.num_iter_per_year == 1:
-            if current_iteration > 1:
+        if current_iteration % self.num_iter_per_year == 2:
+            if current_iteration > 2:
                 print(f"Year increment {current_iteration}")
                 return True
         return False
 
     def get_snapshot(self, current_iteration: int) -> bool:
-        if current_iteration % self.num_iter_per_year == (self.num_iter_per_year - 2):
+        if current_iteration % self.num_iter_per_year == 0 and current_iteration != 0:
+
             if current_iteration < self.derivation_length - 3:
                 print(f"Starting Tree Snapshot Generation")
-            return True
+                self.second_time = True
+                return True
         return False

@@ -34,6 +34,7 @@ from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import Neighbo
 
 from pandas import DataFrame as DF
 from pathlib import Path
+import copy
 
 
 class TreeSimulationBase(ABC):
@@ -115,7 +116,11 @@ class TreeSimulationBase(ABC):
         """
         pass
 
-    def start_iteration(self, lstring, branch_hierarchy: dict):
+    def start_iteration(self, 
+                        lstring, 
+                        branch_hierarchy: dict,
+                        map_names_to_branches: dict, 
+                        get_iteration_number: Callable[[], int]):
         """Shared pre-iteration tying preparation logic.
         Lstrings work by replacing module names with new modules. So creating a new branch happens
         by creating a bud site, then a bud site turns into a branch then the branch grows. This shuts down that
@@ -125,52 +130,73 @@ class TreeSimulationBase(ABC):
         @param lstring - the actual lstring being generated - not really used, but could be
         @param branch_hierarchy - the current branch hierarchy as a dictionary """
 
-        print(f'Base Iteration {self.current_iteration} Start')
-        if self.config.get_snapshot(self.current_iteration):
+        self.current_iteration = get_iteration_number()
+        
+        #print(f'Base Iteration {self.current_iteration} Starting')
+        #print(f'Base snapshot_iteration {self.snapshot_iteration}')
+
+        if self.config.get_snapshot(self.current_iteration) and self.freeze_for_snapshot == False:
+            print("deepcopying branch_hierarchy and map_names_to_branches")
+            self.map_copy = copy.deepcopy(map_names_to_branches)
+            self.hierarchy_copy = copy.deepcopy(branch_hierarchy)
             self.freeze_for_snapshot = True
             self.snapshot_start = self.current_iteration
             
         if self.freeze_for_snapshot:
-            
             if self.snapshot_iteration == 0:
                 # First, freeze budding (do not generate any new bud sites)
                 print("ENDING budding")
                 self.end_bud_growth = True
+                self.snapshot_iteration += 1
             
             elif self.snapshot_iteration == 1:
                 # Next, freeze bud growth (no new branches/spurs from buds)
                 print("ENDING growth")
                 self.end_growth = True
+                self.end_bud_growth = True
+                self.snapshot_iteration += 1
             
             elif self.snapshot_iteration == 2:
                 # Simulation ending - generate the cylinders by replacing make_cylinder with _ F
                 print("STARTING geometry")
                 self.generate_geometry = True
+                self.end_growth = True
+                self.end_bud_growth = True
+                self.snapshot_iteration += 1
 
-            elif self.snapshot_iteration == 4:
-
+            elif self.snapshot_iteration == 5: #change back to 3
                 print("RESET to continue")
                 self.end_bud_growth = False
                 self.end_growth = False
                 self.generate_geometry = False
                 self.freeze_for_snapshot = False
-                self.current_iteration = self.snapshot_start
+                
+                #del map_names_to_branches
+                #del branch_hierarchy
+                map_names_to_branches = self.map_copy
+                branch_hierarchy = self.hierarchy_copy
+                #del self.map_copy
+                #del self.hierarchy_copy
                 self.snapshot_iteration = 0
+                
+
+            else:
+                self.snapshot_iteration += 1
 
         else:
             if self.current_iteration >= self.config.derivation_length - 3:
                 # First, freeze budding (do not generate any new bud sites)
-                print("ENDING budding")
+                print("Final ENDING budding")
                 self.end_bud_growth = True
 
             if self.current_iteration >= self.config.derivation_length - 2:
                 # Next, freeze bud growth (no new branches/spurs from buds)
-                print("ENDING growth")
+                print("Final ENDING growth")
                 self.end_growth = True
 
             if self.current_iteration >= self.config.derivation_length - 1:
                 # Simulation ending - generate the cylinders by replacing make_cylinder with _ F
-                print("STARTING geometry")
+                print("Final STARTING geometry")
                 self.generate_geometry = True
 
         # If we haven't added the attractor for the main trunks, do so - this should happen on the first iteration
@@ -195,6 +221,7 @@ class TreeSimulationBase(ABC):
         sim_config = self.config
 
         if sim_config.do_trunk_tying(self.current_iteration):
+            print('tying trunk')
             # Pin tree trunk one iteration before branches so heading vectors for branches update correctly
             # Note that the trunk is pinned on the first iteration (see bottom of start_iteration)
             for trunk in branch_hierarchy["root"]:
@@ -206,6 +233,7 @@ class TreeSimulationBase(ABC):
 
         # This happens at the end of every year; pick branches to tie to the wires
         if sim_config.do_branch_tying(self.current_iteration):
+            print('tying branches')
             trunk = branch_hierarchy["root"][0]
             #  This will correctly map the dist_along parameter in the bud to the actual point on the curve
             """
@@ -233,7 +261,7 @@ class TreeSimulationBase(ABC):
         if sim_config.do_pruning(self.current_iteration):
             
             if self.current_iteration == None: #iteration to do pruing that only happens at end
-                
+                print("Prunning at end")
                 # Will wipe the CSV clean 
                 end_prune(self,
                           branch_hierarchy=branch_hierarchy,
@@ -247,17 +275,15 @@ class TreeSimulationBase(ABC):
                            branch_hierarchy=branch_hierarchy, 
                            map_names_to_branches=map_names_to_branches)            
 
-
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):
             for items in branch_hierarchy.values():
                 for item in items:
                     item.add_year()
 
-        if self.freeze_for_snapshot:
-            self.snapshot_iteration += 1
+        #self.current_iteration = get_iteration_number() + 1
+        #self.current_iteration += + 1
 
-        self.current_iteration = get_iteration_number() + 1
 
     @staticmethod
     def get_trunk_branches(branch_hierarchy: dict) -> list[BasicWood]:

@@ -3,20 +3,35 @@ from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import Neighbo
 def dist_prune(tree_sim_base,
                branch_hierarchy: dict, 
                map_names_to_branches: dict,
-               check: list,
                radius=0.1):
+    
     PRINT = False
     RADIUS = radius
     names_to_x = []
     pruned = []
     referance_object = []
+
+    # TODO: update so that primary branches are not purned only primary branch buds
+    names_to_check = []
+    bud_check_list = []
+    for name, tree_object in map_names_to_branches.items():
+        if "bud" in name:
+            if tree_object.branch_child != None:
+                if tree_object.branch_child.growth.age_in_years == 0:
+                    if name not in names_to_check:
+                        bud_check_list.append(tree_object)
+                        names_to_check.append(tree_object.name)
+            if tree_object.spur_child != None:
+                    if name not in names_to_check:
+                        bud_check_list.append(tree_object)
+                        names_to_check.append(tree_object.name)
     
     def prune(key_name,
-                query,
-                names_to_x=names_to_x, 
-                pruned=pruned,
-                check=check, 
-                map_names_to_branches=map_names_to_branches):
+              query,
+              names_to_x=names_to_x, 
+              pruned=pruned,
+              check=bud_check_list, 
+              map_names_to_branches=map_names_to_branches):
         
         names_to_x.extend(map_names_to_branches[key_name].prune())
         pruned.append(key_name)
@@ -26,10 +41,10 @@ def dist_prune(tree_sim_base,
                 check.remove(test)
     
     loop = True
-    while loop and (len(check)>0):
+    while loop and (len(bud_check_list)>0):
 
         index = None
-        structure = check+referance_object
+        structure = bud_check_list+referance_object
         spur_buds_spatial = NeighborsDataStructure(None, structure) #Faster to rebuild??
 
         if len(referance_object) > 0:
@@ -40,14 +55,14 @@ def dist_prune(tree_sim_base,
                 neighbors_total.update(neighbors)
 
             #unique_neighbors = list(set(neighbors_total))
-            for n, test in enumerate(check):
+            for n, test in enumerate(bud_check_list):
                 if test.name not in list(neighbors_total.keys()):
                     index = n
                     break
 
             if index == None:
                 if PRINT: print('no referance location found removing rest of check')
-                for remaining in check:
+                for remaining in bud_check_list:
                     names_to_x.extend(map_names_to_branches[remaining.name].prune())
                 loop = False
                 break
@@ -55,11 +70,11 @@ def dist_prune(tree_sim_base,
         else:
             index = 0
 
-        referance_object.append(check[index])
-        query = check[index].name
+        referance_object.append(bud_check_list[index])
+        query = bud_check_list[index].name
         neighbors, number = spur_buds_spatial.query_objects_within_r(query, radius=RADIUS)
         neighbors.pop(query, None)
-        check.pop(index)
+        bud_check_list.pop(index)
 
         if number >= 1:
             for key_name in list(neighbors.keys()):

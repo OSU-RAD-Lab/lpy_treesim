@@ -29,7 +29,6 @@ from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
 from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 
 from lpy_treesim.tie_prune.pruning_algo.prune_tree import prune_tree
-from lpy_treesim.tie_prune.pruning_algo.prune_at_end import end_prune
 from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import NeighborsDataStructure, LtrHuristic
 
 from pandas import DataFrame as DF
@@ -252,21 +251,13 @@ class TreeSimulationBase(ABC):
         # This happens at the end of every year one iteration after the branches are tied and (optionally) for
         #   summer pruning
         if sim_config.do_pruning(self.current_iteration):
-            
-            if self.current_iteration == None: #iteration to do pruing that only happens at end
-                print("Prunning at end")
-                # Will wipe the CSV clean 
-                end_prune(self,
-                          branch_hierarchy=branch_hierarchy,
-                          map_names_to_branches=map_names_to_branches)
 
             # Pruning that happens every year (currently set to every 28 iterations)
-            else:
-                # Standard yearly structural pruning
-                print("PRUNING TREE")
-                prune_tree(self,
-                           branch_hierarchy=branch_hierarchy, 
-                           map_names_to_branches=map_names_to_branches)
+            # Standard yearly structural pruning
+            print("PRUNING TREE")
+            prune_tree(self,
+                        branch_hierarchy=branch_hierarchy, 
+                        map_names_to_branches=map_names_to_branches)
                 
             # Pruning Execution, I'm no longer using this stuff for csv exports 
             ltr = LtrHuristic(map_names_to_branches=map_names_to_branches, tree_sim=self)
@@ -288,10 +279,6 @@ class TreeSimulationBase(ABC):
             for items in branch_hierarchy.values():
                 for item in items:
                     item.add_year()
-
-        #self.current_iteration = get_iteration_number() + 1
-        #self.current_iteration += + 1
-
 
     @staticmethod
     def get_trunk_branches(branch_hierarchy: dict) -> list[BasicWood]:

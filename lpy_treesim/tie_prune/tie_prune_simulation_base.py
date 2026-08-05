@@ -91,7 +91,6 @@ class TreeSimulationBase(ABC):
         # This controls when to stop letting buds turn into spurs/branches, and then generate geometry
         self.current_iteration: int = 0  # Set in start_common
         self.snapshot_iteration: int = 0
-        self.snapshot_start = 0
         self.freeze_for_snapshot = False
 
         # These are set in the start iteration method
@@ -140,50 +139,44 @@ class TreeSimulationBase(ABC):
             self.map_copy = copy.deepcopy(map_names_to_branches)
             self.hierarchy_copy = copy.deepcopy(branch_hierarchy)
             self.freeze_for_snapshot = True
-            self.snapshot_start = self.current_iteration
             
         if self.freeze_for_snapshot:
-            if self.snapshot_iteration == 0:
-                # First, freeze budding (do not generate any new bud sites)
-                print("ENDING budding")
-                self.end_bud_growth = True
-                self.snapshot_iteration += 1
-            
-            elif self.snapshot_iteration == 1:
-                # Next, freeze bud growth (no new branches/spurs from buds)
-                print("ENDING growth")
-                self.end_growth = True
-                self.end_bud_growth = True
-                self.snapshot_iteration += 1
-            
-            elif self.snapshot_iteration == 2:
-                # Simulation ending - generate the cylinders by replacing make_cylinder with _ F
-                print("STARTING geometry")
-                self.generate_geometry = True
-                self.end_growth = True
-                self.end_bud_growth = True
-                self.snapshot_iteration += 1
+                if self.snapshot_iteration == 4:
+                    print("RESET to continue")
+                    self.end_bud_growth = False
+                    self.end_growth = False
+                    self.generate_geometry = False
+                    self.freeze_for_snapshot = False
+                    
+                    #del map_names_to_branches
+                    #del branch_hierarchy
+                    map_names_to_branches = self.map_copy
+                    branch_hierarchy = self.hierarchy_copy
+                    #del self.map_copy
+                    #del self.hierarchy_copy
+                    self.snapshot_iteration = 0
 
-            elif self.snapshot_iteration == 5: #change back to 3
-                print("RESET to continue")
-                self.end_bud_growth = False
-                self.end_growth = False
-                self.generate_geometry = False
-                self.freeze_for_snapshot = False
-                
-                #del map_names_to_branches
-                #del branch_hierarchy
-                map_names_to_branches = self.map_copy
-                branch_hierarchy = self.hierarchy_copy
-                #del self.map_copy
-                #del self.hierarchy_copy
-                self.snapshot_iteration = 0
-                
+                else:
 
-            else:
-                self.snapshot_iteration += 1
+                    if self.snapshot_iteration >= 0:
+                        # First, freeze budding (do not generate any new bud sites)
+                        print("ENDING budding")
+                        self.end_bud_growth = True
+                        
+                    if self.snapshot_iteration >= 2:
+                        # Next, freeze bud growth (no new branches/spurs from buds)
+                        print("ENDING growth")
+                        self.end_bud_growth = True
+                        
+                    if self.snapshot_iteration >= 3:
+                        # Simulation ending - generate the cylinders by replacing make_cylinder with _ F
+                        print("STARTING geometry")
+                        self.generate_geometry = True
+
+                    self.snapshot_iteration += 1
 
         else:
+            # TODO: still getting no mesh errors for final tree generation
             if self.current_iteration >= self.config.derivation_length - 3:
                 # First, freeze budding (do not generate any new bud sites)
                 print("Final ENDING budding")
@@ -221,7 +214,7 @@ class TreeSimulationBase(ABC):
         sim_config = self.config
 
         if sim_config.do_trunk_tying(self.current_iteration):
-            print('tying trunk')
+            print('TYING T  RUNK')
             # Pin tree trunk one iteration before branches so heading vectors for branches update correctly
             # Note that the trunk is pinned on the first iteration (see bottom of start_iteration)
             for trunk in branch_hierarchy["root"]:
@@ -233,7 +226,7 @@ class TreeSimulationBase(ABC):
 
         # This happens at the end of every year; pick branches to tie to the wires
         if sim_config.do_branch_tying(self.current_iteration):
-            print('tying branches')
+            print('TYING BRANCHES')
             trunk = branch_hierarchy["root"][0]
             #  This will correctly map the dist_along parameter in the bud to the actual point on the curve
             """
@@ -270,7 +263,7 @@ class TreeSimulationBase(ABC):
             # Pruning that happens every year (currently set to every 28 iterations)
             else:
                 # Standard yearly structural pruning
-                print("Pruning tree")
+                print("PRUNING TREE")
                 prune_tree(self,
                            branch_hierarchy=branch_hierarchy, 
                            map_names_to_branches=map_names_to_branches)            

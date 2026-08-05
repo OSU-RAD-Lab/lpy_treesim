@@ -64,7 +64,6 @@ class SimulationConfig(ABC):
 
     def __post_init__(self):
         self.lpy_rng = np.random.default_rng(self.seed)
-        self.second_time = False
 
     def end_height(self):
         return self.start_height + self.num_wires * self.spacing_wires

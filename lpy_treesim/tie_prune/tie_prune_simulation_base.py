@@ -281,52 +281,7 @@ class TreeSimulationBase(ABC):
             limb_metrics = ltr.get_lcsa_metrics(primary_limbs=primary_limbs, measurement_dist_m=0.025)
             
             # 4. Run the simulated LTR logic (purely mathematical, no pruning)
-            ltr_results = ltr.simulate_ltr_pruning(tcsa_cm2=tcsa, limb_metrics=limb_metrics, target_ltr=0.5)
-
-            # removed_limbs = ltr_results.get("removed_limbs", [])
-  
-            # sphere_data = []
-            # SPHERE_RADIUS = 0.035
-                
-            # if removed_limbs:
-            #     print(f"\nExporting LTR Cuts for CSV (Iteration {self.current_iteration})")
-            #     removed_branch_names = [limb["name"] for limb in removed_limbs]
-                    
-            #     for branch_name, branch_children in branch_hierarchy.items():
-            #         if "trunk" not in branch_name:
-            #             continue
-                            
-            #         for bud in branch_children:
-            #             if "bud" not in bud.name or not bud.branch_child:
-            #                 continue
-                                
-            #             if bud.branch_child.name in removed_branch_names:
-            #                 print(f"Logging limb for sphere: {bud.branch_child.name}")
-            #                 loc = bud.branch_child.location.start
-            #                 sphere_data.append({
-            #                     'iteration': self.current_iteration, # Adds the year/iteration 
-            #                     'marked_x': loc.x, 
-            #                     'marked_y': loc.y, 
-            #                     'marked_z': loc.z,
-            #                     'radius': SPHERE_RADIUS,
-            #                     'name': bud.branch_child.name
-            #                     })
-                
-                # # Always export, even if empty, to prevent crashes and keep the timeline intact
-                # df = DF(sphere_data, columns=['iteration', 'marked_x', 'marked_y', 'marked_z', 'radius', 'name'])
-                # # csv_path = Path(__file__).parent.resolve() / "pruning_algo" / "marked_locations.csv"
-                # csv_path = Path(__file__).parent.resolve() / "pruning_algo" / "ltr_marked_locations.csv"
-                
-                # # Wipe the file clean on the first pruning event , then append for all future years
-                # write_mode = 'w' if self.current_iteration < 30 else 'a'
-                # df.to_csv(csv_path, index_label="index", mode=write_mode, header=(write_mode == 'w'))
-                
-                # if sphere_data:
-                #     print(f"Exported {len(sphere_data)} locations to {csv_path} (Mode: {write_mode})")
-                # print("\n")
-                
-
-                           map_names_to_branches=map_names_to_branches)            
+            ltr_results = ltr.simulate_ltr_pruning(tcsa_cm2=tcsa, limb_metrics=limb_metrics, target_ltr=0.5)                                 
 
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):

@@ -1,5 +1,5 @@
 #supress file print statements
-print = lambda *args, **kwargs: None
+#print = lambda *args, **kwargs: None
 
 """
 Base module for adding tying, training, and pruning to a trellis to an L-System tree
@@ -34,6 +34,7 @@ from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import Neighbo
 
 from pandas import DataFrame as DF
 from pathlib import Path
+import copy
 
 
 class TreeSimulationBase(ABC):
@@ -89,12 +90,14 @@ class TreeSimulationBase(ABC):
 
         # This controls when to stop letting buds turn into spurs/branches, and then generate geometry
         self.current_iteration: int = 0  # Set in start_common
+        self.snapshot_iteration: int = 0
+        self.freeze_for_snapshot = False
 
         # These are set in the start iteration method
         self.end_bud_growth: bool = False
         self.end_growth: bool = False
         self.generate_geometry: bool = False  # Set to True when ready for lstring to have geom
-
+        
         # For energy guide
         self.invalid_attractor_value = 1000
 
@@ -112,7 +115,11 @@ class TreeSimulationBase(ABC):
         """
         pass
 
-    def start_iteration(self, lstring, branch_hierarchy: dict):
+    def start_iteration(self, 
+                        lstring, 
+                        branch_hierarchy: dict,
+                        map_names_to_branches: dict, 
+                        get_iteration_number: Callable[[], int]):
         """Shared pre-iteration tying preparation logic.
         Lstrings work by replacing module names with new modules. So creating a new branch happens
         by creating a bud site, then a bud site turns into a branch then the branch grows. This shuts down that
@@ -122,20 +129,68 @@ class TreeSimulationBase(ABC):
         @param lstring - the actual lstring being generated - not really used, but could be
         @param branch_hierarchy - the current branch hierarchy as a dictionary """
 
-        if self.current_iteration >= self.config.derivation_length - 3:
-            # First, freeze budding (do not generate any new bud sites)
-            print("ENDING budding")
-            self.end_bud_growth = True
+        self.current_iteration = get_iteration_number()
+        
+        #print(f'Base Iteration {self.current_iteration} Starting')
+        #print(f'Base snapshot_iteration {self.snapshot_iteration}')
 
-        if self.current_iteration >= self.config.derivation_length - 2:
-            # Next, freeze bud growth (no new branches/spurs from buds)
-            print("ENDING growth")
-            self.end_growth = True
+        if self.config.get_snapshot(self.current_iteration) and self.freeze_for_snapshot == False:
+            print("deepcopying branch_hierarchy and map_names_to_branches")
+            self.map_copy = copy.deepcopy(map_names_to_branches)
+            self.hierarchy_copy = copy.deepcopy(branch_hierarchy)
+            self.freeze_for_snapshot = True
+            
+        if self.freeze_for_snapshot:
+                if self.snapshot_iteration == 4:
+                    print("RESET to continue")
+                    self.end_bud_growth = False
+                    self.end_growth = False
+                    self.generate_geometry = False
+                    self.freeze_for_snapshot = False
+                    
+                    #del map_names_to_branches
+                    #del branch_hierarchy
+                    map_names_to_branches = self.map_copy
+                    branch_hierarchy = self.hierarchy_copy
+                    #del self.map_copy
+                    #del self.hierarchy_copy
+                    self.snapshot_iteration = 0
 
-        if self.current_iteration >= self.config.derivation_length - 1:
-            # Simulation ending - generate the cylinders by replacing make_cylinder with _ F
-            print("STARTING geometry")
-            self.generate_geometry = True
+                else:
+
+                    if self.snapshot_iteration >= 0:
+                        # First, freeze budding (do not generate any new bud sites)
+                        print("ENDING budding")
+                        self.end_bud_growth = True
+                        
+                    if self.snapshot_iteration >= 2:
+                        # Next, freeze bud growth (no new branches/spurs from buds)
+                        print("ENDING growth")
+                        self.end_bud_growth = True
+                        
+                    if self.snapshot_iteration >= 3:
+                        # Simulation ending - generate the cylinders by replacing make_cylinder with _ F
+                        print("STARTING geometry")
+                        self.generate_geometry = True
+
+                    self.snapshot_iteration += 1
+
+        else:
+            # TODO: still getting no mesh errors for final tree generation
+            if self.current_iteration >= self.config.derivation_length - 3:
+                # First, freeze budding (do not generate any new bud sites)
+                print("Final ENDING budding")
+                self.end_bud_growth = True
+
+            if self.current_iteration >= self.config.derivation_length - 2:
+                # Next, freeze bud growth (no new branches/spurs from buds)
+                print("Final ENDING growth")
+                self.end_growth = True
+
+            if self.current_iteration >= self.config.derivation_length - 1:
+                # Simulation ending - generate the cylinders by replacing make_cylinder with _ F
+                print("Final STARTING geometry")
+                self.generate_geometry = True
 
         # If we haven't added the attractor for the main trunks, do so - this should happen on the first iteration
         for indx, trunk in enumerate(branch_hierarchy["root"]):
@@ -159,6 +214,7 @@ class TreeSimulationBase(ABC):
         sim_config = self.config
 
         if sim_config.do_trunk_tying(self.current_iteration):
+            print('TYING T  RUNK')
             # Pin tree trunk one iteration before branches so heading vectors for branches update correctly
             # Note that the trunk is pinned on the first iteration (see bottom of start_iteration)
             for trunk in branch_hierarchy["root"]:
@@ -170,6 +226,7 @@ class TreeSimulationBase(ABC):
 
         # This happens at the end of every year; pick branches to tie to the wires
         if sim_config.do_branch_tying(self.current_iteration):
+            print('TYING BRANCHES')
             trunk = branch_hierarchy["root"][0]
             #  This will correctly map the dist_along parameter in the bud to the actual point on the curve
             """
@@ -196,8 +253,8 @@ class TreeSimulationBase(ABC):
         #   summer pruning
         if sim_config.do_pruning(self.current_iteration):
             
-            if self.current_iteration == 167: #iteration to do pruing that only happens at end
-                
+            if self.current_iteration == None: #iteration to do pruing that only happens at end
+                print("Prunning at end")
                 # Will wipe the CSV clean 
                 end_prune(self,
                           branch_hierarchy=branch_hierarchy,
@@ -206,6 +263,7 @@ class TreeSimulationBase(ABC):
             # Pruning that happens every year (currently set to every 28 iterations)
             else:
                 # Standard yearly structural pruning
+                print("PRUNING TREE")
                 prune_tree(self,
                            branch_hierarchy=branch_hierarchy, 
                            map_names_to_branches=map_names_to_branches)
@@ -268,6 +326,7 @@ class TreeSimulationBase(ABC):
                 # print("\n")
                 
 
+                           map_names_to_branches=map_names_to_branches)            
 
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):
@@ -275,7 +334,9 @@ class TreeSimulationBase(ABC):
                 for item in items:
                     item.add_year()
 
-        self.current_iteration = get_iteration_number() + 1
+        #self.current_iteration = get_iteration_number() + 1
+        #self.current_iteration += + 1
+
 
     @staticmethod
     def get_trunk_branches(branch_hierarchy: dict) -> list[BasicWood]:
@@ -306,7 +367,8 @@ class TreeSimulationBase(ABC):
                 if branch.growth.length > 0.5 * self.support.spacing_wires:
                     open_branches.append(branch)
                 else:
-                    print(f"Skipping {branch.name}, {branch.location.start} too short {branch.growth.length}")
+                    pass
+                    #print(f"Skipping {branch.name}, {branch.location.start} too short {branch.growth.length}")
             else:
                 print(f"Branch {branch.name} tied to wire")
 
@@ -316,7 +378,8 @@ class TreeSimulationBase(ABC):
             if wire.branch_id == -1 or wire.branch_id in flagged_branch_ids:
                 wire_ids.append(wire_id)
             else:
-                print(f"Wire {wire_id} tied to {wire.branch_id}")
+                #print(f"Wire {wire_id} tied to {wire.branch_id}")
+                pass
 
         num_branches = len(open_branches)
         num_wires = len(wire_ids)
@@ -342,7 +405,7 @@ class TreeSimulationBase(ABC):
                 tie_type = branch.tying.tie_type
 
             if branch_start[2] < min_start_height:
-                print(f"Branch {branch.name} on trunk {branch_start} too far below wire ")
+                #print(f"Branch {branch.name} on trunk {branch_start} too far below wire ")
                 continue
 
             # specific 1D distance checks
@@ -366,25 +429,25 @@ class TreeSimulationBase(ABC):
 
                 align_growth = np.dot(branch_dir, vec_to_wire_pt)
                 if align_growth < 0.45:
-                    print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {vec_to_wire_pt} wrong way")
+                    #print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {vec_to_wire_pt} wrong way")
                     continue
 
                 align_wire = np.dot(branch_dir, wire.attractor_dir)
                 if align_wire < 0.0:
-                    print(f"Branch {branch.name} dir {branch_dir}, wire dir {wire.attractor_dir} wrong way")
+                    #print(f"Branch {branch.name} dir {branch_dir}, wire dir {wire.attractor_dir} wrong way")
                     continue
 
                 start_distance_energy = branch_start[check_coord] - wire_points[0, check_coord]
 
                 if np.fabs(start_distance_energy) > 2.0 * spacing / 3.0:
-                    print(f"Branch {branch.name} Too far away {start_distance_energy} spacing {spacing}")
+                    #print(f"Branch {branch.name} Too far away {start_distance_energy} spacing {spacing}")
                     continue
                     
                 print(f"Branch {branch.name} Start {branch_start}  wire {wire_points[0, :]} spacing {spacing}")
                 dist_energy = np.fabs(start_distance_energy) / spacing
                 print(f" Dist {dist_energy} angle {align_growth}", end="")
                 total_energy = self.config.energy_distance_weight * dist_energy + align_growth * self.config.energy_angle_weight
-                print(f" Total {total_energy}")
+                #print(f" Total {total_energy}")
 
                 energy_matrix[branch_idx, wire_idx] = total_energy
 
@@ -414,7 +477,7 @@ class TreeSimulationBase(ABC):
 
         # Run the algorithm
         row_ind, col_ind = linear_sum_assignment(energy_matrix)
-        print(f"Energy matrix {energy_matrix}")
+        #print(f"Energy matrix {energy_matrix}")
 
         # Wires are organized from left to right (ufo) or up to down (envy);
         # Continue making assignments as long as energy matrix < 1000
@@ -422,7 +485,7 @@ class TreeSimulationBase(ABC):
         for branch_indx, wire_indx in zip(row_ind, col_ind):
             wire_id = wire_ids[wire_indx]
             if energy_matrix[branch_indx, wire_indx] < self.invalid_attractor_value:
-                print(f" Assigning branch {branches[branch_indx].name} to wire {self.branch_attractor[wire_id].attractor_pts[0]} {energy_matrix[branch_indx, wire_indx]}")
+                #print(f" Assigning branch {branches[branch_indx].name} to wire {self.branch_attractor[wire_id].attractor_pts[0]} {energy_matrix[branch_indx, wire_indx]}")
                 # Get the branch and wire objects
                 branch = branches[branch_indx]
                 wire_attach = self.branch_attractor[wire_id]

@@ -80,7 +80,7 @@ map_name_instance[main_trunk.name] = main_trunk
 # L-Py callbacks delegate to the Python helpers so architectures share logic.
 def StartEach(lstring):
   """Proxy to shared tying preparation logic."""
-  tree_sim.start_iteration(lstring, branch_hierarchy=branch_hierarchy)
+  tree_sim.start_iteration(lstring, branch_hierarchy=branch_hierarchy, map_names_to_branches=map_name_instance, get_iteration_number=getIterationNb)
 
 
 def EndEach(lstring):

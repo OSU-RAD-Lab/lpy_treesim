@@ -53,10 +53,10 @@ class NeighborsDataStructure:
         self.tree_objects = []
         self.query_made = False
 
+        # TODO: code is not doing what it is supposed to but it works
         if type(to_index) is list:
             self.tree_objects = to_index
-
-        elif type(to_index) is str:
+        elif type(to_index[0]) is str:
             for name, objects in self.map_names_to_branches.items():
                 if to_index in name:
                     self.tree_objects.append(objects)

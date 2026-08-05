@@ -463,7 +463,7 @@ class TreeBuilder:
                                                    bud_sites=bud_sites)
         branch_dict["skel"] = skel
 
-    def create_tree_structure(self) -> (TreeStructure, dict, dict):
+    def create_tree_structure(self) -> tuple[TreeStructure, dict, dict]:
         """ Loop over the branch structure and make one Tree component for each structure.
         Returns the tree structure and a mapping from the lpy names to the new tree structures"""
         tree = TreeStructure()

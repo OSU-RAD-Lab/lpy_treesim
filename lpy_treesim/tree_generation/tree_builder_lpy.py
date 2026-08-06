@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 import trimesh
 import numpy as np
+import pandas as pd
+from pathlib import Path
 
 from lpy_treesim.utils.color_manager import ColorManager
 import json
@@ -177,6 +179,22 @@ class TreeBuilder:
             if not name in self.branch_hierarchy:
                 print(f"Could not find name {name} in branch hierarchy")
 
+    def create_cylinder_mark(self,
+                             normal_vector:np.ndarray,
+                             location:tuple, 
+                             radius:float = 0.05, 
+                             color: list = [255, 0, 0, 255], 
+                             height=0.005):
+        
+        #mag = np.linalg.norm(vector)
+        # rotation that maps cylinder z-axis [0,0,1] to the desired direction
+        transform = trimesh.geometry.align_vectors([0.0, 0.0, 1.0], normal_vector)
+        # build 4x4 transform: rotation + translation to midpoint
+        transform[:3, 3] = location
+        marker = trimesh.creation.cylinder(radius=radius, height=height, transform=transform)
+        marker.visual.face_colors = color
+        return marker
+
 
     def generate_tree(self, naming, index, radii, name_radii, stage_context):
         """ Actually build the lpy string
@@ -248,11 +266,10 @@ class TreeBuilder:
             # This calls all the code in the "Interpretation" block in base_lpy.py (the I() modules)
             interpreted_string = self.__lsystem.interpret(lstring)
             
-            #     self.make_string_readable(str(interpreted_string))
+            #self.make_string_readable(str(interpreted_string))
             if self.b_interactive:
-                scene =  self.__lsystem.sceneInterpretation(interpreted_string)
+                scene =  self.__lsystem.sceneInterpretation(lstring)
                 Viewer.display(scene) # type: ignore
-
                 input("Press Enter to continue...")
 
             if snapshot_iteration == SNAPSHOT_ITER_TO_GENERATE or iteration == (self.__lsystem.derivationLength): # Change back to 1
@@ -304,60 +321,93 @@ class TreeBuilder:
                                         radii=radii, name_radii=name_radii,
                                         b_use_uv=b_use_uv)
                 del scene
+
+
+                # Create indicators, from marked locations, on the tree after the tree has been generated
+
+                # Create path for marked locations file and load generated tree mesh
+                # Added this code. This gets the base name and appends the file to _vc.obj so trimesh will find the file
+                mesh_name = naming.mesh_filename(index, file_type="") + "_year" + str(year) + "_vc.obj"
+                mod_path = str(self.args.output_dir / mesh_name)
+                mesh_existing = trimesh.load(mod_path)
+                all_meshes = [mesh_existing]
+
+                #try:
+                df = pd.read_csv(str(Path(__file__).resolve().parents[1] / "tie_prune" / "pruning_algo" / "marked_locations.csv"))
+
+                
+                df = df[df['Year'] == year]
+                
+                for row in df.itertuples(index=False):
+                    # Pack the coordinates into tuples manually for each row
+                    location = (row.Loc_x, row.Loc_y, row.Loc_z)
+                    start_coord = (row.Norm_x1, row.Norm_y1, row.Norm_z1)
+                    end_coord = (row.Norm_x2, row.Norm_y2, row.Norm_z2)
+                    # Calulate normal vector for object orientation
+                    normal_vector = np.array(end_coord, dtype=float) - np.array(start_coord, dtype=float)
+                    
+                    # Grab the single values
+                    item_type = row.Type
+                    radius = row.Radius
+
+                    if item_type == "sphere":
+                        marker = trimesh.creation.icosphere(subdivisions=2, radius=radius)
+                        marker.visual.face_colors = [0, 255, 0, 30]
+                        marker.visual = marker.visual.to_texture()
+                        marker.visual.material.alphaMode = "BLEND"
+                        marker.apply_translation(location)
+
+                    elif item_type == "primary_to_prune":
+                        marker = self.create_cylinder_mark(normal_vector, location, color=[255, 0, 0, 255])
+                    elif item_type == "flag_for_no_replace":
+                        marker = self.create_cylinder_mark(normal_vector, location, color=[240, 230, 30, 255])
+                    elif item_type == "flag_for_replace":
+                        marker = self.create_cylinder_mark(normal_vector, location, color=[120, 246, 255, 255])
+
+                    elif item_type == "vigor":
+                        pass
+                    elif item_type == "bud_spacing":
+                        pass
+                    elif item_type == "canopy":
+                        pass
+                                    
+                    all_meshes.append(marker)    
+                # Combine the tree and spheres for this specific iteration
+                combined_mesh = trimesh.util.concatenate(all_meshes)
+                
+                # Export as a separate file (e.g., marked_location_iter_29.obj)
+                marked_file_name = "marked_locations_year" + str(year) + ".obj"
+                out_name = self.args.output_dir / marked_file_name
+                combined_mesh.export(out_name)
+                print(f"Exported year file: {out_name}")
+                        
+                #except Exception as e:
+                 #   print(f"Skipping Marking Generation. Error: {e}")
+
+                if self.args.meta_data:
+                    import json
+                    metadata_path = self.args.output_dir / str(year) + "year_" + str(naming.metadata_filename(index))
+                    meta_data = self.get_metadata()
+                    meta_data["tree"] = tree.create_dict()
+                    # meta_data["tree_mapping"] = mapping
+                    meta_data["color_mapping"] = color_to_part
+                    with open(metadata_path, "w") as f:
+                        json.dump(meta_data, f, indent=4)
+                else:
+                    metadata_path = None
+            
+                    
             if snapshot_start:
                 snapshot_iteration += 1
             else:
                 snapshot_iteration = 0
-
-                # Create indicators, from marked locations, on the tree after 
-                # the tree has been generated
-
-                '''
-                # Create path for marked locations file and load generated tree mesh
-                # Added this code. This gets the base name and appends the file to _vc.obj 
-                # so trimesh will find the file
-                mesh_name = naming.mesh_filename(index, file_type="") + "_vc.obj"
-                mod_path = str(self.args.output_dir / mesh_name)
-                mesh_existing = trimesh.load(mod_path)
-                # all_meshes = [mesh_existing]
-                try:
-                    df = pd.read_csv("lpy_treesim/tie_prune/pruning_algo/ltr_marked_locations.csv")
-                    
-                    # Loop through each iteration and saves in the CSV
-                    for iter_val in df['iteration'].unique():
-                        # Filter the dataframe to only include spheres for this specific iteration
-                        iter_df = df[df['iteration'] == iter_val]
-                        
-                        # Create a fresh list with a clean tree for this specific year
-                        iter_meshes = [mesh_existing.copy()]
-                        
-                        for x, y, z, rad in zip(iter_df['marked_x'], iter_df['marked_y'], iter_df['marked_z'], iter_df['radius']):
-                            marker = trimesh.creation.icosphere(subdivisions=2, radius=rad)
-                            marker.visual.face_colors = [255, 165, 0, 200]
-                            marker.visual = marker.visual.to_texture()
-                            marker.visual.material.alphaMode = "BLEND"
-                            marker.apply_translation((x, y, z))
-                            
-                            # Append the sphere to this year's fresh list
-                            iter_meshes.append(marker)
-                        
-                        # Combine the tree and spheres for this specific iteration
-                        combined_mesh = trimesh.util.concatenate(iter_meshes)
-                        
-                        # Export as a separate file (e.g., marked_location_iter_29.obj)
-                        out_name = f"{str(args.output_dir)}/marked_location_iter_{int(iter_val)}.obj"
-                        combined_mesh.export(out_name)
-                        print(f"Exported year file: {out_name}")
-                        
-                except Exception as e:
-                    print(f"Skipping sphere generation. Error: {e}")
-                '''
-
+                
             iteration += 1
+
 
         if self.b_interactive:
             Viewer.exit() # type: ignore
-        return usd_path, mesh_path
+        return usd_path, mesh_path, metadata_path
 
     def _add_junctions(self,
                        mapping_tree_structure: dict,

@@ -213,7 +213,7 @@ class TreeSimulationBase(ABC):
         sim_config = self.config
 
         if sim_config.do_trunk_tying(self.current_iteration):
-            print('TYING T  RUNK')
+            print('TYING TRUNK')
             # Pin tree trunk one iteration before branches so heading vectors for branches update correctly
             # Note that the trunk is pinned on the first iteration (see bottom of start_iteration)
             for trunk in branch_hierarchy["root"]:
@@ -258,7 +258,7 @@ class TreeSimulationBase(ABC):
             prune_tree(self,
                         branch_hierarchy=branch_hierarchy, 
                         map_names_to_branches=map_names_to_branches)
-                
+            '''  
             # Pruning Execution, I'm no longer using this stuff for csv exports 
             ltr = LtrHuristic(map_names_to_branches=map_names_to_branches, tree_sim=self)
             
@@ -273,7 +273,8 @@ class TreeSimulationBase(ABC):
             
             # 4. Run the simulated LTR logic (purely mathematical, no pruning)
             ltr_results = ltr.simulate_ltr_pruning(tcsa_cm2=tcsa, limb_metrics=limb_metrics, target_ltr=0.5)                                 
-
+            '''
+            
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):
             for items in branch_hierarchy.values():
@@ -312,7 +313,8 @@ class TreeSimulationBase(ABC):
                     pass
                     #print(f"Skipping {branch.name}, {branch.location.start} too short {branch.growth.length}")
             else:
-                print(f"Branch {branch.name} tied to wire")
+                #print(f"Branch {branch.name} tied to wire")
+                pass
 
         wire_ids = []
         for wire_id, wire in enumerate(self.branch_attractor):
@@ -320,7 +322,7 @@ class TreeSimulationBase(ABC):
             if wire.branch_id == -1 or wire.branch_id in flagged_branch_ids:
                 wire_ids.append(wire_id)
             else:
-                #print(f"Wire {wire_id} tied to {wire.branch_id}")
+                print(f"Wire {wire_id} tied to {wire.branch_id}")
                 pass
 
         num_branches = len(open_branches)
@@ -331,7 +333,7 @@ class TreeSimulationBase(ABC):
 
         min_start_height = self.config.start_height - self.config.spacing_wires * 0.5
         min_dist = self.config.spacing_wires * 0.5
-        print(f"Beginning energy matrix {num_branches} {num_wires}, start height {min_start_height} min dist {min_dist}")
+        #print(f"Beginning energy matrix {num_branches} {num_wires}, start height {min_start_height} min dist {min_dist}")
         
         for branch_idx, branch in enumerate(open_branches):
             is_bud = not hasattr(branch, "tying")
@@ -385,9 +387,9 @@ class TreeSimulationBase(ABC):
                     #print(f"Branch {branch.name} Too far away {start_distance_energy} spacing {spacing}")
                     continue
                     
-                print(f"Branch {branch.name} Start {branch_start}  wire {wire_points[0, :]} spacing {spacing}")
+                #print(f"Branch {branch.name} Start {branch_start}  wire {wire_points[0, :]} spacing {spacing}")
                 dist_energy = np.fabs(start_distance_energy) / spacing
-                print(f" Dist {dist_energy} angle {align_growth}", end="")
+                #print(f" Dist {dist_energy} angle {align_growth}", end="")
                 total_energy = self.config.energy_distance_weight * dist_energy + align_growth * self.config.energy_angle_weight
                 #print(f" Total {total_energy}")
 

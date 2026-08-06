@@ -88,27 +88,15 @@ def main():
 
         # Generates the l-string that everything is built off of, then converts it to the "scene"
         #   Also sets one color for each spur/branch/trunk instance (stored in branch_hierarchy)
-        usd_path, mesh_path = lsb.generate_tree(naming=naming, 
-                                     index=index, 
-                                     radii=radii, 
-                                     name_radii=name_radii,
-                                     stage_context=stage_context)
+        usd_path, mesh_path, metadata_path = lsb.generate_tree(naming=naming, 
+                                                               index=index, 
+                                                               radii=radii, 
+                                                               name_radii=name_radii,
+                                                               stage_context=stage_context)
 
         logger.info(f"Wrote mesh to {usd_path}")
         logger.info(f"Wrote ply/obj to {mesh_path}")
-
-
-        if args.meta_data:
-            import json
-            metadata_path = args.output_dir / naming.metadata_filename(index)
-            meta_data = lsb.get_metadata()
-            meta_data["tree"] = tree.create_dict()
-            # meta_data["tree_mapping"] = mapping
-            meta_data["color_mapping"] = color_to_part
-            with open(metadata_path, "w") as f:
-                json.dump(meta_data, f, indent=4)
-            logger.info(f"Wrote meta data to {metadata_path}")
-
+        logger.info(f"Wrote meta data to {metadata_path}")
   
     logger.info("Tree generation complete.")
     return

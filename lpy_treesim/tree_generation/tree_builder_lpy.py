@@ -207,7 +207,7 @@ class TreeBuilder:
         #for iteration in range(self.__lsystem.derivationLength):
 
             #print(f"Iteration {iteration}")
-            print(f"Lpy Iteration {self.__lsystem.context().getIterationNb()}")
+            # print(f"Lpy Iteration {self.__lsystem.context().getIterationNb()}")
 
             if b_check_string:
                 self.check_string(str(lstring))
@@ -218,13 +218,13 @@ class TreeBuilder:
 
             if (iteration % (num_iter_per_year)) == 0 and iteration != 0:
                 if iteration < self.__lsystem.derivationLength - 4:
-                    print("Deriving lstring copy")
+                    # print("Deriving lstring copy")
                     snapshot_start = True
                     frozen_lstring = self.__lsystem.derive(lstring, iteration, 1)
-                    print(f"Lpy Iteration {self.__lsystem.context().getIterationNb()}")
+                    # print(f"Lpy Iteration {self.__lsystem.context().getIterationNb()}")
                     iteration += 1
                     frozen_iteration = iteration
-                    print("Deriving current lstring")
+                    # print("Deriving current lstring")
                     lstring = self.__lsystem.derive(lstring, iteration, 1)
    
 
@@ -233,7 +233,7 @@ class TreeBuilder:
                 iteration = frozen_iteration
                 lstring = self.__lsystem.derive(frozen_lstring, iteration, 1)
 
-                print(f"Frozen lstring derived on {self.__lsystem.context().getIterationNb()}")
+                # print(f"Frozen lstring derived on {self.__lsystem.context().getIterationNb()}")
                 
             else:
                 lstring = self.__lsystem.derive(lstring, iteration, 1)

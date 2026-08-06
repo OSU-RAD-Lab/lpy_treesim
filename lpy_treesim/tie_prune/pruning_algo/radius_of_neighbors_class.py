@@ -5,6 +5,7 @@ import numpy as np
 from numpy.dtypes import StringDType
 import time as tm
 import pandas as pd
+from pathlib import Path
 
 # Class to have use a dot dictionary data structure for the output
 class DotDict(dict):
@@ -518,9 +519,81 @@ class LtrHuristic:
         kept_limbs.extend(sorted_limbs)
         print(f"Total Limbs Kept: {len(kept_limbs)}")
         print("\n")
+
+        
+        # 7. CSV Logging for Pruned Limbs
+        if removed_limbs:
+            import pandas as pd
+            from pathlib import Path
+
+            marker_data = []
+
+            for i, limb in enumerate(removed_limbs):
+                obj = limb['object']
+                name = limb['name']
+                replacement_name = limb.get('renewal_candidate')
+
+                # Extract absolute start coordinates for the primary limb
+                loc_x = obj.location.start.x
+                loc_y = obj.location.start.y
+                loc_z = obj.location.start.z
+        
+                # Extract the directional vector for Norm 2
+                dir_x = obj.location.start_dir.x
+                dir_y = obj.location.start_dir.y
+                dir_z = obj.location.start_dir.z
+
+                
+                norm_x1, norm_y1, norm_z1 = loc_x, loc_y, loc_z
+                if replacement_name and replacement_name in self.map_names_to_branches:
+                    rep_obj = self.map_names_to_branches[replacement_name]
+                    if hasattr(rep_obj, 'start_loc'):
+                        norm_x1 = rep_obj.start_loc.x
+                        norm_y1 = rep_obj.start_loc.y
+                        norm_z1 = rep_obj.start_loc.z
+                    elif hasattr(rep_obj, 'location'):
+                        norm_x1 = rep_obj.location.start.x
+                        norm_y1 = rep_obj.location.start.y
+                        norm_z1 = rep_obj.location.start.z
+
+                
+                radius = obj.growth.get_diameter(0.0) / 2.0
+        
+                # Calculate the exact year integer to match the .obj export suffix
+                current_year = 0
+                if getattr(self, 'tree_sim', None) and getattr(self.tree_sim, 'config', None):
+                    iters_per_year = self.tree_sim.config.num_iter_per_year
+                    if iters_per_year > 0:
+                        current_year = int(self.tree_sim.current_iteration / iters_per_year)
+
+                marker_data.append({
+                    'index': i,
+                    'Loc_x': loc_x,
+                    'Loc_y': loc_y,
+                    'Loc_z': loc_z,
+                    'Type': 'primary_to_prune',
+                    'Radius': radius,
+                    'Norm_x1': norm_x1,
+                    'Norm_y1': norm_y1,
+                    'Norm_z1': norm_z1,
+                    'Norm_x2': dir_x,
+                    'Norm_y2': dir_y,
+                    'Norm_z2': dir_z,
+                    'Year': current_year,
+                    'Name': name
+                })
+
+            df = pd.DataFrame(marker_data)
+            csv_path = Path(__file__).parent.resolve() / "ltr_marked_locations.csv"
+
+            # Append to existing file or create a new one with headers
+            if csv_path.exists():
+                df.to_csv(csv_path, mode='a', header=False, index=False)
+            else:
+                df.to_csv(csv_path, mode='w', header=True, index=False)
         
         return {
-            "kept_limbs": kept_limbs, # Return the populated list
+            "kept_limbs": kept_limbs, 
             "removed_limbs": removed_limbs,
             "final_ltr": current_ltr
         }

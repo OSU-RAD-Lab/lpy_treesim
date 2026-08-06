@@ -134,14 +134,14 @@ class TreeSimulationBase(ABC):
         #print(f'Base snapshot_iteration {self.snapshot_iteration}')
 
         if self.config.get_snapshot(self.current_iteration) and self.freeze_for_snapshot == False:
-            print("deepcopying branch_hierarchy and map_names_to_branches")
+            # print("deepcopying branch_hierarchy and map_names_to_branches")
             self.map_copy = copy.deepcopy(map_names_to_branches)
             self.hierarchy_copy = copy.deepcopy(branch_hierarchy)
             self.freeze_for_snapshot = True
             
         if self.freeze_for_snapshot:
                 if self.snapshot_iteration == 4:
-                    print("RESET to continue")
+                    # print("RESET to continue")
                     self.end_bud_growth = False
                     self.end_growth = False
                     self.generate_geometry = False
@@ -159,17 +159,17 @@ class TreeSimulationBase(ABC):
 
                     if self.snapshot_iteration >= 0:
                         # First, freeze budding (do not generate any new bud sites)
-                        print("ENDING budding")
+                        # print("ENDING budding")
                         self.end_bud_growth = True
                         
                     if self.snapshot_iteration >= 2:
                         # Next, freeze bud growth (no new branches/spurs from buds)
-                        print("ENDING growth")
+                        # print("ENDING growth")
                         self.end_bud_growth = True
                         
                     if self.snapshot_iteration >= 3:
                         # Simulation ending - generate the cylinders by replacing make_cylinder with _ F
-                        print("STARTING geometry")
+                        # print("STARTING geometry")
                         self.generate_geometry = True
 
                     self.snapshot_iteration += 1
@@ -331,7 +331,7 @@ class TreeSimulationBase(ABC):
 
         min_start_height = self.config.start_height - self.config.spacing_wires * 0.5
         min_dist = self.config.spacing_wires * 0.5
-        print(f"Beginning energy matrix {num_branches} {num_wires}, start height {min_start_height} min dist {min_dist}")
+        # print(f"Beginning energy matrix {num_branches} {num_wires}, start height {min_start_height} min dist {min_dist}")
         
         for branch_idx, branch in enumerate(open_branches):
             is_bud = not hasattr(branch, "tying")
@@ -385,9 +385,10 @@ class TreeSimulationBase(ABC):
                     #print(f"Branch {branch.name} Too far away {start_distance_energy} spacing {spacing}")
                     continue
                     
-                print(f"Branch {branch.name} Start {branch_start}  wire {wire_points[0, :]} spacing {spacing}")
+                # print(f"Branch {branch.name} Start {branch_start}  wire {wire_points[0, :]} spacing {spacing}")
                 dist_energy = np.fabs(start_distance_energy) / spacing
-                print(f" Dist {dist_energy} angle {align_growth}", end="")
+                # print(f"  -> Dist {dist_energy:.4f} | angle {align_growth:.4f}")
+                # print(f" Dist {dist_energy} angle {align_growth}", end="")
                 total_energy = self.config.energy_distance_weight * dist_energy + align_growth * self.config.energy_angle_weight
                 #print(f" Total {total_energy}")
 

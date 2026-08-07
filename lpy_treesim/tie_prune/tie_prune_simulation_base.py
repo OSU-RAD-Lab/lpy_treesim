@@ -257,8 +257,7 @@ class TreeSimulationBase(ABC):
             print("PRUNING TREE")
             prune_tree(self,
                         branch_hierarchy=branch_hierarchy, 
-                        map_names_to_branches=map_names_to_branches)
-            '''  
+                        map_names_to_branches=map_names_to_branches)  
             # Pruning Execution, I'm no longer using this stuff for csv exports 
             ltr = LtrHuristic(map_names_to_branches=map_names_to_branches, tree_sim=self)
             
@@ -272,8 +271,7 @@ class TreeSimulationBase(ABC):
             limb_metrics = ltr.get_lcsa_metrics(primary_limbs=primary_limbs, measurement_dist_m=0.025)
             
             # 4. Run the simulated LTR logic (purely mathematical, no pruning)
-            ltr_results = ltr.simulate_ltr_pruning(tcsa_cm2=tcsa, limb_metrics=limb_metrics, target_ltr=0.5)                                 
-            '''
+            ltr_results = ltr.simulate_ltr_pruning(tcsa_cm2=tcsa, limb_metrics=limb_metrics, target_ltr=0.5)
             
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):

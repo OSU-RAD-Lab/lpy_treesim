@@ -564,7 +564,7 @@ class LtrHuristic:
                 if getattr(self, 'tree_sim', None) and getattr(self.tree_sim, 'config', None):
                     iters_per_year = self.tree_sim.config.num_iter_per_year
                     if iters_per_year > 0:
-                        current_year = int(self.tree_sim.current_iteration / iters_per_year)
+                        current_year = int((self.tree_sim.current_iteration / iters_per_year) + 1)
 
                 marker_data.append({
                     'index': i,
@@ -584,7 +584,7 @@ class LtrHuristic:
                 })
 
             df = pd.DataFrame(marker_data)
-            csv_path = Path(__file__).parent.resolve() / "ltr_marked_locations.csv"
+            csv_path = Path(__file__).parent.resolve() / "marked_locations.csv"
 
             # Append to existing file or create a new one with headers
             if csv_path.exists():

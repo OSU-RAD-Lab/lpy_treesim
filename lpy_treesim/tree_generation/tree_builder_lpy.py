@@ -348,7 +348,7 @@ class TreeBuilder:
                     
                     # Grab the single values
                     item_type = row.Type
-                    radius = row.Radius
+                    radius = row.Radius + 0.02
 
                     if item_type == "sphere":
                         marker = trimesh.creation.icosphere(subdivisions=2, radius=radius)

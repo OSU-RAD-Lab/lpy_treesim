@@ -48,6 +48,12 @@ def main():
     # ensure_output_dir(args.output_dir)
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(args.stage_dir, exist_ok=True)
+    
+    # CSV Reset Logic 
+    csv_path = Path(__file__).resolve().parents[1] / "tie_prune" / "pruning_algo" / "marked_locations.csv"
+    if csv_path.exists():
+        csv_path.unlink()  # Deletes the file so it starts fresh every run
+        print("Previous marked_locations.csv deleted for a fresh run.")
 
     stage_context = []
     if args.stage_dir is not None:

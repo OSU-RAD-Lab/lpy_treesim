@@ -357,12 +357,34 @@ class TreeBuilder:
                         marker.visual.material.alphaMode = "BLEND"
                         marker.apply_translation(location)
 
+                    # elif item_type == "primary_to_prune":
+                    #     marker = self.create_cylinder_mark(normal_vector, location, color=[255, 0, 0, 255])
+                    # elif item_type == "flag_for_no_replace":
+                    #     marker = self.create_cylinder_mark(normal_vector, location, color=[240, 230, 30, 255])
+                    # elif item_type == "flag_for_replace":
+                    #     marker = self.create_cylinder_mark(normal_vector, location, color=[120, 246, 255, 255])
+
+                   
+                    # Disc Sizing 
+                    # Slightly wider than the branch so it's visible, but not massive
+                    radius = row.Radius + 0.015  
+                    # Trying to make the disc thinner
+                    disc_height = 0.005  
+                    # Marker radius and height are explicitly passed here
+                    # Changed flag_for_no_replace to primary_without_replacement
+                    if item_type == "sphere":
+                        marker = trimesh.creation.icosphere(subdivisions=2, radius=radius)
+                        marker.visual.face_colors = [0, 255, 0, 30]
+                        marker.visual = marker.visual.to_texture()
+                        marker.visual.material.alphaMode = "BLEND"
+                        marker.apply_translation(location)
+
                     elif item_type == "primary_to_prune":
-                        marker = self.create_cylinder_mark(normal_vector, location, color=[255, 0, 0, 255])
-                    elif item_type == "flag_for_no_replace":
-                        marker = self.create_cylinder_mark(normal_vector, location, color=[240, 230, 30, 255])
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, 255])
+                    elif item_type == "primary_without_replacement":
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 165, 0, 255])
                     elif item_type == "flag_for_replace":
-                        marker = self.create_cylinder_mark(normal_vector, location, color=[120, 246, 255, 255])
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[120, 246, 255, 255])
 
                     elif item_type == "vigor":
                         pass

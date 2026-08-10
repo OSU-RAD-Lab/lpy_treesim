@@ -356,6 +356,8 @@ class LtrHuristic:
         and stores them in a list for the LCSA calculations.
         """
         primary_limbs = []
+        kept_limbs = []
+        csv_log_queue = []
         
         # 1. Scan every piece of wood/node on the tree
         for name, obj in self.map_names_to_branches.items():
@@ -435,8 +437,9 @@ class LtrHuristic:
         print(f"Initial LTR: {current_ltr:.4f}")
         print(f"Target LTR: {target_ltr:.4f}\n")
         
-        removed_limbs = []
+        primary_to_prune = []
         kept_limbs = []
+        csv_log_queue = []  # Tracks everything for the CSV
         
         while current_ltr > target_ltr and len(sorted_limbs) > 0:
             largest_limb = sorted_limbs.pop(0)
@@ -501,11 +504,37 @@ class LtrHuristic:
             # 6. Fallback Evaluation
             if not is_viable_replacement:
                 print(f"Fallback Triggered: Limb {largest_limb['name']} lacks a viable tied replacement. Skipping.")
-                kept_limbs.append(largest_limb) # Save the skipped limb!
+                kept_limbs.append(largest_limb) # Save the skipped limb
+
+                # Log the skipped limb (Orange)
+                csv_log_queue.append({
+                    "limb_name": largest_limb['name'],
+                    "type": "primary_without_replacement",
+                    "object": limb_obj,
+                    "replacement_name": None
+                })
                 continue
                 
             largest_limb['renewal_candidate'] = replacement_name 
-            removed_limbs.append(largest_limb)
+            primary_to_prune.append(largest_limb)
+            
+            # 1. Log the primary limb getting pruned (Red)
+            csv_log_queue.append({
+                "limb_name": largest_limb['name'],
+                "type": "primary_to_prune",
+                "object": limb_obj,
+                "replacement_name": replacement_name
+            })
+            
+            # 2. Log the replacement if one exists (Cyan)
+            if replacement_name and replacement_name in self.map_names_to_branches:
+                csv_log_queue.append({
+                    "limb_name": replacement_name,
+                    "type": "flag_for_replace",
+                    "object": self.map_names_to_branches[replacement_name],
+                    "replacement_name": None
+                })
+
             total_lcsa -= largest_limb['lcsa_cm2']
             current_ltr = total_lcsa / tcsa_cm2
             
@@ -513,7 +542,7 @@ class LtrHuristic:
             print(f"Limb Marked For Removal: {largest_limb['name']} ({replacement_str}) -> New LTR: {current_ltr:.4f}")
             
         print(f"\nFinal LTR Achieved: {current_ltr:.4f}")
-        print(f"Total Limbs Flagged for Removal: {len(removed_limbs)}")
+        print(f"Total Limbs Flagged for Removal: {len(primary_to_prune)}")
         
         # Combine any remaining untouched limbs with the skipped limbs
         kept_limbs.extend(sorted_limbs)
@@ -521,44 +550,82 @@ class LtrHuristic:
         print("\n")
 
         
-        # 7. CSV Logging for Pruned Limbs
-        if removed_limbs:
+        # 7. CSV Logging for All Marked Items
+        if csv_log_queue:
             import pandas as pd
             from pathlib import Path
 
             marker_data = []
 
-            for i, limb in enumerate(removed_limbs):
-                obj = limb['object']
-                name = limb['name']
-                replacement_name = limb.get('renewal_candidate')
-
-                # Extract absolute start coordinates for the primary limb
-                loc_x = obj.location.start.x
-                loc_y = obj.location.start.y
-                loc_z = obj.location.start.z
+            for i, log_item in enumerate(csv_log_queue):
+                obj = log_item['object']
+                name = log_item['limb_name']
+                item_type = log_item['type']
+                
+                # 1. Base coordinates
+                is_bud = hasattr(obj, 'start_loc')
+                if is_bud:
+                    base_x, base_y, base_z = obj.start_loc.x, obj.start_loc.y, obj.start_loc.z
+                else:
+                    base_x, base_y, base_z = obj.location.start.x, obj.location.start.y, obj.location.start.z
         
-                # Extract the directional vector for Norm 2
-                dir_x = obj.location.start_dir.x
-                dir_y = obj.location.start_dir.y
-                dir_z = obj.location.start_dir.z
+                # 2. Extract the normalized directional vector (fallback)
+                if hasattr(obj, 'start_dir'):
+                    dir_x, dir_y, dir_z = obj.start_dir.x, obj.start_dir.y, obj.start_dir.z
+                else:
+                    dir_x, dir_y, dir_z = obj.location.start_dir.x, obj.location.start_dir.y, obj.location.start_dir.z
 
+                loc_x, loc_y, loc_z = base_x, base_y, base_z
+                norm_x2, norm_y2, norm_z2 = loc_x + dir_x, loc_y + dir_y, loc_z + dir_z
+
+                
+                if item_type in ["primary_to_prune", "primary_without_replacement"]:
+                    
+                    # Find the first existing bud on this branch to establish the true curved vector. Stops marker from floating, kinda
+                    bud_loc = None
+                    for b_idx in range(10): # Check first 10 possible buds
+                        bud_name = f"{name}_bud_{b_idx}"
+                        if bud_name in self.map_names_to_branches:
+                            bud_loc = self.map_names_to_branches[bud_name].start_loc
+                            break
+                    
+                    if bud_loc:
+                        bx, by, bz = bud_loc.x, bud_loc.y, bud_loc.z
+                        
+                        # Calculate physical distance to the first bud
+                        dist_to_bud = ((bx - base_x)**2 + (by - base_y)**2 + (bz - base_z)**2) ** 0.5
+                        
+                        if dist_to_bud > 0.001:
+                            # Move 10cm out to clear the  trunk.
+                            # Cap at 90% of the distance to the first bud so it doesn't overshoot.
+                            fraction = min(0.10 / dist_to_bud, 0.9)
+                            
+                            loc_x = base_x + (bx - base_x) * fraction
+                            loc_y = base_y + (by - base_y) * fraction
+                            loc_z = base_z + (bz - base_z) * fraction
+                        
+                        # Update normal vector to aim directly at the first bud (perfect tilt)
+                        norm_x2, norm_y2, norm_z2 = bx, by, bz
+                    else:
+                        # Fallback if no bud exists: use a larger linear offset (10cm)
+                        offset_dist = 0.10 
+                        loc_x = base_x + (dir_x * offset_dist)
+                        loc_y = base_y + (dir_y * offset_dist)
+                        loc_z = base_z + (dir_z * offset_dist)
+                        norm_x2 = loc_x + dir_x
+                        norm_y2 = loc_y + dir_y
+                        norm_z2 = loc_z + dir_z
+        
                 
                 norm_x1, norm_y1, norm_z1 = loc_x, loc_y, loc_z
-                if replacement_name and replacement_name in self.map_names_to_branches:
-                    rep_obj = self.map_names_to_branches[replacement_name]
-                    if hasattr(rep_obj, 'start_loc'):
-                        norm_x1 = rep_obj.start_loc.x
-                        norm_y1 = rep_obj.start_loc.y
-                        norm_z1 = rep_obj.start_loc.z
-                    elif hasattr(rep_obj, 'location'):
-                        norm_x1 = rep_obj.location.start.x
-                        norm_y1 = rep_obj.location.start.y
-                        norm_z1 = rep_obj.location.start.z
 
+                # Safely extract radius (buds do not have growth attributes)
+                if hasattr(obj, 'growth'):
+                    radius = obj.growth.get_diameter(0.0) / 2.0
+                else:
+                    radius = 0.005 # Fallback radius for buds
                 
-                radius = obj.growth.get_diameter(0.0) / 2.0
-        
+
                 # Calculate the exact year integer to match the .obj export suffix
                 current_year = 0
                 if getattr(self, 'tree_sim', None) and getattr(self.tree_sim, 'config', None):
@@ -571,14 +638,14 @@ class LtrHuristic:
                     'Loc_x': loc_x,
                     'Loc_y': loc_y,
                     'Loc_z': loc_z,
-                    'Type': 'primary_to_prune',
+                    'Type': item_type,
                     'Radius': radius,
                     'Norm_x1': norm_x1,
                     'Norm_y1': norm_y1,
                     'Norm_z1': norm_z1,
-                    'Norm_x2': dir_x,
-                    'Norm_y2': dir_y,
-                    'Norm_z2': dir_z,
+                    'Norm_x2': norm_x2,
+                    'Norm_y2': norm_y2,
+                    'Norm_z2': norm_z2,
                     'Year': current_year,
                     'Name': name
                 })
@@ -594,6 +661,6 @@ class LtrHuristic:
         
         return {
             "kept_limbs": kept_limbs, 
-            "removed_limbs": removed_limbs,
+            "primary_to_prune": primary_to_prune,
             "final_ltr": current_ltr
         }

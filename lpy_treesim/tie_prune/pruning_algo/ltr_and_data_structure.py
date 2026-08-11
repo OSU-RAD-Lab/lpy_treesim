@@ -2,10 +2,8 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from scipy.spatial import KDTree
 import numpy as np
-from numpy.dtypes import StringDType
 import time as tm
 import pandas as pd
-from pathlib import Path
 
 # Class to have use a dot dictionary data structure for the output
 class DotDict(dict):
@@ -77,8 +75,7 @@ class NeighborsDataStructure:
             self.coords = np.array([obj.location.start for obj in self.tree_objects], 
                                     dtype=np.float64)
 
-        self.tree_names = np.array([obj.name for obj in self.tree_objects], 
-                                   dtype=StringDType)                    
+        self.tree_names = np.array([obj.name for obj in self.tree_objects])                    
         if self.tree_names.size == 0:
             raise ValueError('Locations must be given')
 
@@ -132,7 +129,7 @@ class NeighborsDataStructure:
             output = self.neighbor_indices
         else:  
             # If you want the output to be a numpy array instead
-            dtype = [('name', StringDType), 
+            dtype = [('name'), 
                     ('location', np.float64, (3,)), 
                     ('distance', np.float64)]
 

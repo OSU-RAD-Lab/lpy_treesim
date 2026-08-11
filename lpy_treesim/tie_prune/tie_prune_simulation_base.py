@@ -29,7 +29,7 @@ from lpy_treesim.tie_prune.tie_prune_configuration import SimulationConfig
 from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 
 from lpy_treesim.tie_prune.pruning_algo.prune_tree import prune_tree
-from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import NeighborsDataStructure, LtrHuristic
+from lpy_treesim.tie_prune.pruning_algo.ltr_and_data_structure import NeighborsDataStructure, LtrHuristic
 
 from pandas import DataFrame as DF
 from pathlib import Path

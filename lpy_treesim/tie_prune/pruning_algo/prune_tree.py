@@ -1,7 +1,48 @@
 from lpy_treesim.tie_prune.pruning_algo.prune_length import prune_length
 from lpy_treesim.tie_prune.pruning_algo.prune_primary import prune_primary
-from lpy_treesim.tie_prune.pruning_algo.prune_dist import dist_prune
+from lpy_treesim.tie_prune.pruning_algo.primary_heuristic import primary_heuristic_prune
+from lpy_treesim.tie_prune.pruning_algo.secondary_heuristic import secondary_heuristic_prune
+import pandas as pd
+from pathlib import Path
 
+# Function to mark to mark cuts, location should be outputed by functions such as prune_dist()
+    # This should be called after the ltr huristics cuts are marked becuase this fucntion will not
+    # clear the csv file.
+
+def mark_cuts(location, type, radius, normal_vector, year, name):    
+    df = pd.DataFrame(columns=['Loc_x,Loc_y,Loc_z,Type,Radius,Norm_x1,Norm_y1,Norm_z1,Norm_x2,Norm_y2,Norm_z2,Year,Name'])
+    for location, type, radius, normal_vector, year, name in zip(location, type, radius, normal_vector, year, name):
+        mask = (
+                (df['Loc_x'] == location[0]) &
+                (df['Loc_y'] == location[1]) &
+                (df['Loc_z'] == location[2]) &
+                (df['Type'] == type) 
+                )
+        row_exists = mask.any()
+
+        if not row_exists:
+            new_row = pd.DataFrame([{
+                                        'Loc_x':location[0], 
+                                        'Loc_y':location[1], 
+                                        'Loc_z':location[2],
+                                        'Type':type,
+                                        'Radius':radius,
+                                        'Norm_x1':normal_vector[0][0],
+                                        'Norm_y1':normal_vector[0][1],
+                                        'Norm_z1':normal_vector[0][2],
+                                        'Norm_x2':normal_vector[1][0],
+                                        'Norm_y2':normal_vector[1][1],
+                                        'Norm_z2':normal_vector[1][2],
+                                        'Year':year,
+                                        'Name':name}])
+            
+            df = pd.concat([new_row], ignore_index=False)
+        else:
+            print(f'[ERROR] Duplicate mark location')
+
+        df.to_csv(Path(__file__).parent.resolve()/"pruning_algo"/"marked_locations.csv", 
+                mode='a',
+                header=False)
 
 def prune_tree(tree_sim_base, branch_hierarchy: dict, 
                map_names_to_branches: dict):
@@ -16,43 +57,13 @@ def prune_tree(tree_sim_base, branch_hierarchy: dict,
                  branch_hierarchy=branch_hierarchy, 
                  map_names_to_branches=map_names_to_branches)
 
-    
     # Prunes everthing in a set radius based of a referance tree object 
     # Currently pruning primary branches which it should not do
     # dist_prune(tree_sim_base=tree_sim_base, 
     #            branch_hierarchy=branch_hierarchy, 
     #            map_names_to_branches=map_names_to_branches)
 
-    # Function to mark to mark cuts, location should be outputed by functions such as prune_dist()
+    location, type, radius, normal_vector, year, name = primary_heuristic_prune()
+    location, type, radius, normal_vector, year, name = secondary_heuristic_prune()
 
-    def mark_cuts():
-        pass
-
-    '''
-    df = pd.DataFrame(columns=['marked_x', 'marked_y', 'marked_z', 'radius', 'name'])
-        if PRINT: print("[end_prune] Function Called, end_prune() running...")
-
-        for branch in referance_object:
-            row_exists = (df.values == [branch.start_loc.x, 
-                                        branch.start_loc.y, 
-                                        branch.start_loc.z, 
-                                        RADIUS,
-                                        branch.name]).all(axis=1).any()
-
-            if not row_exists:
-                new_row = pd.DataFrame([{'marked_x':branch.start_loc.x, 
-                                        'marked_y':branch.start_loc.y, 
-                                        'marked_z':branch.start_loc.z,
-                                        'radius':RADIUS,
-                                        'name':branch.name}])
-                
-                df = pd.concat([df, new_row], ignore_index=True)
-            else:
-                print(f'[ERROR] Duplicate referance location')
-
-        df.to_csv(Path(__file__).parent.resolve()/"marked_locations.csv", 
-                index_label="index", 
-                mode='w')
-
-    return 
-    '''
+    mark_cuts(location, type, radius, normal_vector, year, name)

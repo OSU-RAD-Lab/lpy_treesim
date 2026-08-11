@@ -5,7 +5,7 @@ import numpy as np
 import time as tm
 import pandas as pd
 from pathlib import Path
-print = lambda *args, **kwargs: None
+# print = lambda *args, **kwargs: None
 
 # Class to have use a dot dictionary data structure for the output
 class DotDict(dict):
@@ -430,13 +430,13 @@ class LtrHuristic:
         total_lcsa = sum(limb['lcsa_cm2'] for limb in sorted_limbs)
         current_ltr = total_lcsa / tcsa_cm2
 
-        '''
+        
         print(f"\nMetrics: Trees to be pruned")
         print(f"Initial Total LCSA: {total_lcsa:.2f} cm²")
         print(f"Baseline TCSA: {tcsa_cm2:.2f} cm²")
         print(f"Initial LTR: {current_ltr:.4f}")
         print(f"Target LTR: {target_ltr:.4f}\n")
-        '''
+        
 
         primary_to_prune = []
         kept_limbs = []

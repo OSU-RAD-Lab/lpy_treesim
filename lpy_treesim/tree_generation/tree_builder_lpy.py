@@ -383,8 +383,9 @@ class TreeBuilder:
                         marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, 255])
                     elif item_type == "primary_without_replacement":
                         marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 165, 0, 255])
-                    elif item_type == "flag_for_replace":
-                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[120, 246, 255, 255])
+                    # Shouldn't show buds/branch replacements anymore 
+                    # elif item_type == "flag_for_replace":
+                    #     marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[120, 246, 255, 255])
 
                     elif item_type == "vigor":
                         pass

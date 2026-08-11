@@ -251,7 +251,7 @@ class TreeSimulationBase(ABC):
         # This happens at the end of every year one iteration after the branches are tied and (optionally) for
         #   summer pruning
         if sim_config.do_pruning(self.current_iteration):
-
+            # TODO, Moving LTR code above end prune breaks the marking code. I'll figure out something later when I have more time. 
             # Pruning that happens every year (currently set to every 28 iterations)
             # Standard yearly structural pruning
             print("PRUNING TREE")
@@ -320,7 +320,7 @@ class TreeSimulationBase(ABC):
             if wire.branch_id == -1 or wire.branch_id in flagged_branch_ids:
                 wire_ids.append(wire_id)
             else:
-                print(f"Wire {wire_id} tied to {wire.branch_id}")
+                # print(f"Wire {wire_id} tied to {wire.branch_id}")
                 pass
 
         num_branches = len(open_branches)

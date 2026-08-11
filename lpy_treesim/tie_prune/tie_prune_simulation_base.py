@@ -251,13 +251,8 @@ class TreeSimulationBase(ABC):
         # This happens at the end of every year one iteration after the branches are tied and (optionally) for
         #   summer pruning
         if sim_config.do_pruning(self.current_iteration):
-
             # Pruning that happens every year (currently set to every 28 iterations)
-            # Standard yearly structural pruning
-            print("PRUNING TREE")
-            prune_tree(self,
-                        branch_hierarchy=branch_hierarchy, 
-                        map_names_to_branches=map_names_to_branches)  
+            
             # Pruning Execution, I'm no longer using this stuff for csv exports 
             ltr = LtrHuristic(map_names_to_branches=map_names_to_branches, tree_sim=self)
             
@@ -272,6 +267,13 @@ class TreeSimulationBase(ABC):
             
             # 4. Run the simulated LTR logic (purely mathematical, no pruning)
             ltr_results = ltr.simulate_ltr_pruning(tcsa_cm2=tcsa, limb_metrics=limb_metrics, target_ltr=0.5)
+            
+            # Standard yearly structural pruning
+            print("PRUNING TREE")
+            prune_tree(self,
+                       branch_hierarchy=branch_hierarchy, 
+                       map_names_to_branches=map_names_to_branches)  
+            
             
         # The branches track what year they are so that growth rates can change per year
         if sim_config.do_year_increment(self.current_iteration):

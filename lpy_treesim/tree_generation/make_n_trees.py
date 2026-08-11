@@ -51,9 +51,10 @@ def main():
     
     # CSV Reset Logic 
     csv_path = Path(__file__).resolve().parents[1] / "tie_prune" / "pruning_algo" / "marked_locations.csv"
-    if csv_path.exists():
-        csv_path.unlink()  # Deletes the file so it starts fresh every run
-        print("Previous marked_locations.csv deleted for a fresh run.")
+    columns = 'Loc_x,Loc_y,Loc_z,Type,Radius,Norm_x1,Norm_y1,Norm_z1,Norm_x2,Norm_y2,Norm_z2,Year,Name'
+    df = pd.DataFrame(columns=columns.split(','))
+    df.to_csv(csv_path, mode='w', header=True, index=False)
+    print("Previous marked_locations.csv deleted for a fresh run.")
 
     stage_context = []
     if args.stage_dir is not None:

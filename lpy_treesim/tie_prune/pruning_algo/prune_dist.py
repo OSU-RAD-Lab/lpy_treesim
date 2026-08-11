@@ -1,4 +1,4 @@
-from lpy_treesim.tie_prune.pruning_algo.radius_of_neighbors_class import NeighborsDataStructure
+from lpy_treesim.tie_prune.pruning_algo.ltr_and_data_structure import NeighborsDataStructure
         
 def dist_prune(tree_sim_base,
                branch_hierarchy: dict, 

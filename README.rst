@@ -16,9 +16,9 @@ A Dataset for Semantic and Instance Segmentation of Modern Fruit Orchards - http
 Documentation
 -------------
 
-The documentation is provided at `Read the Docs <https://osurobotics.github.io/lpy_treesim/>`_.
+The documentation is provided at `Read the Docs <https://osurobotics.github.io/lpy_treesim/>
 
-You can find the latest L-Py documentation at `L-Py documentation <https://lpy.readthedocs.io/en/latest>`_.
+You can find the latest L-Py documentation at <https://lpy.readthedocs.io/en/latest>
 
 Docker GUI (noVNC) and activating the `lpy` environment
 -------------------------------------------------------
@@ -60,14 +60,15 @@ See the repository Dockerfile for more details about the installed packages and 
 
 Installing (Windows and Linux only)
 -----------------------
-First install Miniforge; you need this to get the openalea environment (mamba).
-- make sure you have `conda-build` enabled
-- `conda install conda-build`
-Follow the instructions to install `openalea-meta` (`https://github.com/openalea/openalea-meta`) or visit the project page: `openalea-meta <https://github.com/openalea/openalea-meta>`_.
+First install conda mini-forge; you need this to get the openalea environment (mamba)
+- make sure you have conda-build enabled 
+- conda install conda-build
+Follow the instructions to install openalea-meta. Note that you need miniforge (which has mamba)
+-  "https://github.com/openalea/openalea-meta"
 
 Copy the openalea environment
  - conda create --name lpy_tree --clone openalea
- - conda activate lpy_tree
+- conda activate lpy_tree
 
 Add the Universal Scene Description libraries
 - python -m pip install usd-core
@@ -78,7 +79,7 @@ shapely, used by generate_orchard
 either pip install or set up conda develop (note, in PyCharm you can just set the current folder to be the top one)
 - conda develop .
 cd into the lpy_treesim directory and pip install 
-- pip install -e .
+- pip install .
 now you should be able to run code as below
 
 Making your first tree
@@ -87,22 +88,34 @@ To create your first tree using TreeSim_Lpy, in the NoVNC window with the termin
 
 .. code-block:: bash
    
-   python lpy_treesim/tree_generation/make_n_trees.py --output-dir ./dataset
+   python lpy_treesim/tree_generation/make_n_trees.py --num-trees 1 --output-dir ./dataset
 
 
 This should create a dataset folder in the current directory with one generated tree mesh in it. It should be available locally on your host machine in the cloned repository folder.
 
+Labeling Options
+----------------
+You can specify labeling options via command-line flags. Only one labeling mode can be enabled at a time:
+
+.. code-block:: bash
+
+   # Enable semantic labeling
+   python lpy_treesim/tree_generation/make_n_trees.py --num_trees 1 --semantic-label
+
+   # Enable instance labeling
+   python lpy_treesim/tree_generation/make_n_trees.py --num_trees 1 --instance-label
+
+   # Enable per-cylinder labeling
+   python lpy_treesim/tree_generation/make_n_trees.py --num_trees 1 --per-cylinder-label
+
+If no labeling flag is provided, no labeling is applied to the generated trees.
 
 Features
 --------
 
-- **Pruning:** Tools to remove or simulate removal of branches, including scripted pruning algorithms.
-
-- **Branch Tying:** Simulate tying branches down to mimic different orchard architectures (e.g., V‑trellis and UFO) with configurable tying policies.
-
-- **Tree Generation:** Procedural tree generation using L‑Py grammars with configurable species, growth parameters, and stochastic variations.
-
-=experimentation.
+- **Pruning:** Remove unwanted branches to simulate pruning.
+- **Branch Tying:** Simulate branches being tied down to mimic different orchard architectures.
+- **Labelling:** Get instance and semantic segmentation labels of the mesh
 
 
 Contact

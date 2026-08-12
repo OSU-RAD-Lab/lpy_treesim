@@ -2,6 +2,7 @@ from lpy_treesim.tie_prune.pruning_algo.prune_length import prune_length
 from lpy_treesim.tie_prune.pruning_algo.prune_primary import prune_primary
 from lpy_treesim.tie_prune.pruning_algo.primary_heuristic import primary_heuristic_prune
 from lpy_treesim.tie_prune.pruning_algo.secondary_heuristic import secondary_heuristic_prune
+from lpy_treesim.tie_prune.pruning_algo.prune_dist import dist_prune
 import pandas as pd
 from pathlib import Path
 

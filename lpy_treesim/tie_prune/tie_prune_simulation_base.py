@@ -96,7 +96,7 @@ class TreeSimulationBase(ABC):
         self.end_bud_growth: bool = False
         self.end_growth: bool = False
         self.generate_geometry: bool = False  # Set to True when ready for lstring to have geom
-        
+        self.prune: bool = True # Set to False when create a snapshot tree
         # For energy guide
         self.invalid_attractor_value = 1000
 
@@ -147,12 +147,10 @@ class TreeSimulationBase(ABC):
                     self.generate_geometry = False
                     self.freeze_for_snapshot = False
                     
-                    #del map_names_to_branches
-                    #del branch_hierarchy
                     map_names_to_branches = self.map_copy
                     branch_hierarchy = self.hierarchy_copy
-                    #del self.map_copy
-                    #del self.hierarchy_copy
+                    del self.map_copy
+                    del self.hierarchy_copy
                     self.snapshot_iteration = 0
 
                 else:
@@ -161,6 +159,7 @@ class TreeSimulationBase(ABC):
                         # First, freeze budding (do not generate any new bud sites)
                         # print("ENDING budding")
                         self.end_bud_growth = True
+                        self.prune = False
                         
                     if self.snapshot_iteration >= 2:
                         # Next, freeze bud growth (no new branches/spurs from buds)
@@ -250,7 +249,7 @@ class TreeSimulationBase(ABC):
 
         # This happens at the end of every year one iteration after the branches are tied and (optionally) for
         #   summer pruning
-        if sim_config.do_pruning(self.current_iteration):
+        if sim_config.do_pruning(self.current_iteration) and self.prune:
             # Pruning that happens every year (currently set to every 28 iterations)
             
             # Pruning Execution, I'm no longer using this stuff for csv exports 

@@ -5,7 +5,7 @@ import numpy as np
 import time as tm
 import pandas as pd
 from pathlib import Path
-# print = lambda *args, **kwargs: None
+print = lambda *args, **kwargs: None
 
 # Class to have use a dot dictionary data structure for the output
 class DotDict(dict):

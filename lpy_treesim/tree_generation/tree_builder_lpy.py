@@ -1,5 +1,6 @@
 #supress file print statements
 #original_print = print
+'''
 import builtins
 
 original_print = builtins.print
@@ -13,7 +14,7 @@ def smart_print(*args, **kwargs):
 
 # Override the global print function
 builtins.print = smart_print
-
+'''
 
 #!/usr/bin/env python3
 import sys

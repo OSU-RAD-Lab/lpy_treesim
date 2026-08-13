@@ -130,7 +130,7 @@ class TyingState:
                 mat_solve_a[indx, 1] = pt[2]  # the t value
                 mat_solve_b[indx, 0] = pt[0]
                 mat_solve_b[indx, 1] = pt[1]
-            ls = np.linalg.lstsq(mat_solve_a, mat_solve_b)
+            ls = np.linalg.lstsq(mat_solve_a, mat_solve_b, rcond=-1)
             x = ls[0]
             for indx in range(0, n_pts_smooth):
                 z = self.guide_points[indx_start + indx][2]

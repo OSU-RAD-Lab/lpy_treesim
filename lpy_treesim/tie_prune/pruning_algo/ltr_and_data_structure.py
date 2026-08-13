@@ -362,7 +362,7 @@ class LtrHuristic:
         for name, obj in self.map_names_to_branches.items():
             
             # 2. Filter for primary limbs, ensuring it has a growth attribute
-            if "primary" in name.lower() and hasattr(obj, "growth"):
+            if "primary" in name.lower() and "bud" not in name.lower():
                 primary_limbs.append((name, obj))
                 
         # 3. Print the total count and the names of the limbs found
@@ -464,12 +464,9 @@ class LtrHuristic:
                     # Skip the limb we are actively trying to remove
                     if obj == limb_obj:
                         continue
-                        
-                    is_bud = "bud" in name.lower()
-                    is_untied_branch = hasattr(obj, "tying") and not obj.tying.is_tied
-                    
-                    if is_bud or is_untied_branch:
-                        candidates.append(obj)
+                    if 'bud' not in name.lower() and 'primary' in name.lower():
+                        if not obj.tying.is_tied:
+                            candidates.append(obj)
 
                 # 3. Run the Energy Matrix with the removable branch's wire forced open
                 energy_matrix, wire_ids, open_branches = self.tree_sim.get_energy_matrix(
@@ -491,6 +488,7 @@ class LtrHuristic:
                     # If the primary limb wasn't tied to a wire, we don't strictly need a wire replacement
                     is_viable_replacement = True
 
+            '''
             # Dormancy Roll (Only roll if the chosen replacement is a bud) 
             if is_viable_replacement and replacement_name and "bud" in replacement_name.lower():
                 import random
@@ -515,7 +513,7 @@ class LtrHuristic:
                     "replacement_name": None
                 })
                 continue
-                
+            '''
             largest_limb['renewal_candidate'] = replacement_name 
             primary_to_prune.append(largest_limb)
             
@@ -632,10 +630,9 @@ class LtrHuristic:
                 if getattr(self, 'tree_sim', None) and getattr(self.tree_sim, 'config', None):
                     iters_per_year = self.tree_sim.config.num_iter_per_year
                     if iters_per_year > 0:
-                        current_year = int((self.tree_sim.current_iteration / iters_per_year) + 1)
+                        current_year = int((self.tree_sim.current_iteration / iters_per_year))
 
                 marker_data.append({
-                    'index': i,
                     'Loc_x': loc_x,
                     'Loc_y': loc_y,
                     'Loc_z': loc_z,
@@ -650,15 +647,15 @@ class LtrHuristic:
                     'Year': current_year,
                     'Name': name
                 })
+            if True:
+                df = pd.DataFrame(marker_data)
+                csv_path = Path(__file__).parent.resolve() / "marked_locations.csv"
 
-            df = pd.DataFrame(marker_data)
-            csv_path = Path(__file__).parent.resolve() / "marked_locations.csv"
-
-            # Append to existing file or create a new one with headers
-            if csv_path.exists():
-                df.to_csv(csv_path, mode='a', header=False, index=False)
-            else:
-                df.to_csv(csv_path, mode='w', header=True, index=False)
+                # Append to existing file or create a new one with headers
+                if csv_path.exists():
+                    df.to_csv(csv_path, mode='a', header=False, index=False)
+                else:
+                    df.to_csv(csv_path, mode='w', header=True, index=False)
         
         return {
             "kept_limbs": kept_limbs, 

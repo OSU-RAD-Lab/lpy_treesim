@@ -96,7 +96,7 @@ class TreeSimulationBase(ABC):
         self.end_bud_growth: bool = False
         self.end_growth: bool = False
         self.generate_geometry: bool = False  # Set to True when ready for lstring to have geom
-        self.prune: bool = True # Set to False when create a snapshot tree
+        self.mark: bool = True # Set to True when create a snapshot tree (will mark without making pruning cuts)
         # For energy guide
         self.invalid_attractor_value = 1000
 
@@ -130,22 +130,23 @@ class TreeSimulationBase(ABC):
 
         self.current_iteration = get_iteration_number()
         
-        #print(f'Base Iteration {self.current_iteration} Starting')
+        print(f'Base Iteration {self.current_iteration} Starting')
         #print(f'Base snapshot_iteration {self.snapshot_iteration}')
 
         if self.config.get_snapshot(self.current_iteration) and self.freeze_for_snapshot == False:
-            # print("deepcopying branch_hierarchy and map_names_to_branches")
+            print("deepcopying branch_hierarchy and map_names_to_branches")
             self.map_copy = copy.deepcopy(map_names_to_branches)
             self.hierarchy_copy = copy.deepcopy(branch_hierarchy)
             self.freeze_for_snapshot = True
             
         if self.freeze_for_snapshot:
-                if self.snapshot_iteration == 4:
-                    # print("RESET to continue")
+                if self.snapshot_iteration == 5:
+                    print("RESET to continue")
                     self.end_bud_growth = False
                     self.end_growth = False
                     self.generate_geometry = False
                     self.freeze_for_snapshot = False
+                    self.mark = False
                     
                     map_names_to_branches = self.map_copy
                     branch_hierarchy = self.hierarchy_copy
@@ -157,19 +158,20 @@ class TreeSimulationBase(ABC):
 
                     if self.snapshot_iteration >= 0:
                         # First, freeze budding (do not generate any new bud sites)
-                        # print("ENDING budding")
-                        self.end_bud_growth = True
-                        self.prune = False
-                        
-                    if self.snapshot_iteration >= 2:
-                        # Next, freeze bud growth (no new branches/spurs from buds)
-                        # print("ENDING growth")
+                        print("ENDING budding")
                         self.end_bud_growth = True
                         
                     if self.snapshot_iteration >= 3:
+                        # Next, freeze bud growth (no new branches/spurs from buds)
+                        #print("ENDING growth")
+                        #self.end_growth = True
+                        pass
+
+                    if self.snapshot_iteration >= 4:
                         # Simulation ending - generate the cylinders by replacing make_cylinder with _ F
-                        # print("STARTING geometry")
+                        print("STARTING geometry")
                         self.generate_geometry = True
+                        
 
                     self.snapshot_iteration += 1
 
@@ -249,36 +251,50 @@ class TreeSimulationBase(ABC):
 
         # This happens at the end of every year one iteration after the branches are tied and (optionally) for
         #   summer pruning
-        if sim_config.do_pruning(self.current_iteration) and self.prune:
-            # Pruning that happens every year (currently set to every 28 iterations)
-            
-            # Pruning Execution, I'm no longer using this stuff for csv exports 
-            ltr = LtrHuristic(map_names_to_branches=map_names_to_branches, tree_sim=self)
-            
-            # 1. Get TCSA baseline
-            tcsa = ltr.get_tcsa(height_m=0.3)
-            
-            # 2. Get the list of primary limbs
-            primary_limbs = ltr.get_primary_limbs()
-            
-            # 3. Calculate LCSA metrics
-            limb_metrics = ltr.get_lcsa_metrics(primary_limbs=primary_limbs, measurement_dist_m=0.025)
-            
-            # 4. Run the simulated LTR logic (purely mathematical, no pruning)
-            ltr_results = ltr.simulate_ltr_pruning(tcsa_cm2=tcsa, limb_metrics=limb_metrics, target_ltr=0.5)
-            
-            # Standard yearly structural pruning
-            print("PRUNING TREE")
-            prune_tree(self,
-                       branch_hierarchy=branch_hierarchy, 
-                       map_names_to_branches=map_names_to_branches)  
-            
-            
-        # The branches track what year they are so that growth rates can change per year
-        if sim_config.do_year_increment(self.current_iteration):
-            for items in branch_hierarchy.values():
-                for item in items:
-                    item.add_year()
+        if sim_config.do_pruning(self.current_iteration):
+
+            if self.mark:
+                # Pruning that happens every year (currently set to every 28 iterations
+
+                # ltr should run first
+                print('RUNNING MARKING LTR')
+                ltr = LtrHuristic(map_names_to_branches=map_names_to_branches, tree_sim=self)
+                
+                # 1. Get TCSA baseline
+                tcsa = ltr.get_tcsa(height_m=0.3)
+                
+                # 2. Get the list of primary limbs
+                primary_limbs = ltr.get_primary_limbs()
+                
+                # 3. Calculate LCSA metrics
+                limb_metrics = ltr.get_lcsa_metrics(primary_limbs=primary_limbs, measurement_dist_m=0.025)
+                
+                # 4. Run the simulated LTR logic (purely mathematical, no pruning)
+                ltr_results = ltr.simulate_ltr_pruning(tcsa_cm2=tcsa, limb_metrics=limb_metrics, target_ltr=0.5)
+
+                
+                # Standard yearly structural pruning
+                print("MARKING CUTS")
+                #prune_tree(self,
+                #           branch_hierarchy=branch_hierarchy, 
+                #           map_names_to_branches=map_names_to_branches,
+                #           mark = True)
+
+
+            else:
+                print('PRUNING TREE WITHOUT MARKING')
+                prune_tree(self,
+                           branch_hierarchy=branch_hierarchy, 
+                           map_names_to_branches=map_names_to_branches,
+                           mark = False)
+                self.mark = True
+                
+                
+            # The branches track what year they are so that growth rates can change per year
+            if sim_config.do_year_increment(self.current_iteration):
+                for items in branch_hierarchy.values():
+                    for item in items:
+                        item.add_year()
 
     @staticmethod
     def get_trunk_branches(branch_hierarchy: dict) -> list[BasicWood]:
@@ -321,7 +337,7 @@ class TreeSimulationBase(ABC):
             if wire.branch_id == -1 or wire.branch_id in flagged_branch_ids:
                 wire_ids.append(wire_id)
             else:
-                # print(f"Wire {wire_id} tied to {wire.branch_id}")
+                #print(f"Wire {wire_id} tied to {wire.branch_id}")
                 pass
 
         num_branches = len(open_branches)

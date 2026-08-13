@@ -3,7 +3,8 @@ from lpy_treesim.tree_models.base_tree.tree_wood_prototypes import BasicWood
 
 def prune_primary(tree_sim_base, 
                   branch_hierarchy: dict, 
-                  map_names_to_branches: dict):
+                  map_names_to_branches: dict,
+                  mark: bool):
     """
     Prune old branches that exceed the age_in_iterations threshold and haven't been tied to wires.
 
@@ -56,22 +57,25 @@ def prune_primary(tree_sim_base,
             if age_exceeds_threshold and not_tied_to_wire and prune_by_age:
                 buds_to_prune.append(bud)
 
-    # Now add the bud names (and all the bud's branch children) to the list
-    names_to_x = []
-    for bud in buds_to_prune:
-        # This removes spurs/branches, marks the bud as pruned, and recursively removes the children
-        names_to_x.extend(bud.prune())
+    if mark:
+        pass
+    else:
+        # Now add the bud names (and all the bud's branch children) to the list
+        names_to_x = []
+        for bud in buds_to_prune:
+            # This removes spurs/branches, marks the bud as pruned, and recursively removes the children
+            names_to_x.extend(bud.prune())
 
-    # Now remove the names from branch hierarchy
-    for name in names_to_x:
-        del branch_hierarchy[name]
-        del map_names_to_branches[name]
+        # Now remove the names from branch hierarchy
+        for name in names_to_x:
+            del branch_hierarchy[name]
+            del map_names_to_branches[name]
 
-    '''
-    # In the next iteration WoodStart etc will be replaced with % and cut out
-    print(f"Left: ")
-    for key in map_names_to_branches.keys():
-        if "primary" in key and "bud" not in key:
-            pass
-            print(f"{key}")
-    '''
+        '''
+        # In the next iteration WoodStart etc will be replaced with % and cut out
+        print(f"Left: ")
+        for key in map_names_to_branches.keys():
+            if "primary" in key and "bud" not in key:
+                pass
+                print(f"{key}")
+        '''

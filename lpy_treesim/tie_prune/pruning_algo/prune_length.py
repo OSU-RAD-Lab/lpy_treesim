@@ -1,7 +1,7 @@
 #from lpy_treesim.tie_prune.tie_prune_simulation_base import TreeSimulationBase
 
 
-def prune_length(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict):
+def prune_length(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict, mark: bool):
     """
     Prune branches that exceed their maximum length. Adds some noise to the ending length
 
@@ -23,13 +23,16 @@ def prune_length(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: d
     # This may indirectly prune bud sites/buds, but not directly
     names_to_x = []
     branches_shortened = []
+    branches_to_prune = []
     for name, branch in map_names_to_branches.items():
         if "bud" in name:
             continue
         noisy_len = branch.config.noisy_prune_length()
         if branch.growth.length > noisy_len:
             
-            names_to_x.extend(branch.prune(noisy_len))
+            if not mark: 
+                names_to_x.extend(branch.prune(noisy_len))
+                
             branches_shortened.append(branch.name)
             keep_list = []
             for child in branch_hierarchy[name]:
@@ -40,6 +43,7 @@ def prune_length(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: d
     #print(f"Shortened: {branches_shortened}")
     #print(f"{names_to_x}")
     # Now remove any x'd buds etc from the hierarchy
-    for name in names_to_x:
-        del branch_hierarchy[name]
-        del map_names_to_branches[name]
+    if not mark:
+        for name in names_to_x:
+            del branch_hierarchy[name]
+            del map_names_to_branches[name]

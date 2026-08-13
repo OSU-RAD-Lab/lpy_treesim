@@ -11,9 +11,9 @@ class ENVYSimulationConfig(SimulationConfig):
     start_height: float = 0.6   # 24 inches
     angle: float = 0.0
     spacing_wires: float = 0.45 # 18 inches
-    num_wires: int = 7          # Make a bit taller than 5
-    x_left: float = -0.6       # 2 feet on either side
-    x_right: float = 0.6
+    num_wires: int = 4          # Make a bit taller than 5
+    x_left: float = -1.5       # 2 feet on either side
+    x_right: float = 1.5
     n_years:int = 6
 
 

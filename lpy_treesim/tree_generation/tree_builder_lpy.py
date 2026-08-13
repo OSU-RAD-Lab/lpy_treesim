@@ -217,7 +217,7 @@ class TreeBuilder:
         snapshot_start = False
         snapshot_iteration = 0
         iteration = 0
-        SNAPSHOT_ITER_TO_GENERATE = 2
+        SNAPSHOT_ITER_TO_GENERATE = 3
 
         num_iter_per_year = self.__lsystem.simulation_config.num_iter_per_year
 
@@ -234,9 +234,9 @@ class TreeBuilder:
             # One iteration - replace symbols
             #self.make_string_readable(str(lstring))
 
-            if (iteration % (num_iter_per_year)) == 0 and iteration != 0:
+            if (iteration % (num_iter_per_year)) == (num_iter_per_year - 1):  #and iteration != 0:
                 if iteration < self.__lsystem.derivationLength - 4:
-                    # print("Deriving lstring copy")
+                    print("Deriving lstring copy")
                     snapshot_start = True
                     frozen_lstring = self.__lsystem.derive(lstring, iteration, 1)
                     # print(f"Lpy Iteration {self.__lsystem.context().getIterationNb()}")
@@ -246,7 +246,7 @@ class TreeBuilder:
                     lstring = self.__lsystem.derive(lstring, iteration, 1)
    
 
-            elif snapshot_iteration == (SNAPSHOT_ITER_TO_GENERATE + 1): #change back to 2
+            elif snapshot_iteration == (SNAPSHOT_ITER_TO_GENERATE + 2): #change back to 2
                 snapshot_start = False
                 iteration = frozen_iteration
                 lstring = self.__lsystem.derive(frozen_lstring, iteration, 1)

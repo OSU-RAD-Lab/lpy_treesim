@@ -1,6 +1,19 @@
 #supress file print statements
 #original_print = print
-#print = lambda *args, **kwargs: None
+import builtins
+
+original_print = builtins.print
+
+def smart_print(*args, **kwargs):
+    # Intercept and silence the specific L-System geometry and mesh spam
+    if args and isinstance(args[0], str):
+        if "Bad growth length" in args[0] or "has no mesh, removing" in args[0]:
+            return
+    original_print(*args, **kwargs)
+
+# Override the global print function
+builtins.print = smart_print
+
 
 #!/usr/bin/env python3
 import sys
@@ -335,41 +348,41 @@ class TreeBuilder:
                 #try:
                 df = pd.read_csv(str(Path(__file__).resolve().parents[1] / "tie_prune" / "pruning_algo" / "marked_locations.csv"))
 
-                
                 df = df[df['Year'] == year]
                 
                 for row in df.itertuples(index=False):
-                    # Pack the coordinates into tuples manually for each row
-                    location = (row.Loc_x, row.Loc_y, row.Loc_z)
-                    start_coord = (row.Norm_x1, row.Norm_y1, row.Norm_z1)
-                    end_coord = (row.Norm_x2, row.Norm_y2, row.Norm_z2)
-                    # Calulate normal vector for object orientation
-                    normal_vector = np.array(end_coord, dtype=float) - np.array(start_coord, dtype=float)
+                    # Grab coordinates as numpy arrays so we can do math on them
+                    base_location = np.array([row.Loc_x, row.Loc_y, row.Loc_z], dtype=float)
+                    start_coord = np.array([row.Norm_x1, row.Norm_y1, row.Norm_z1], dtype=float)
+                    end_coord = np.array([row.Norm_x2, row.Norm_y2, row.Norm_z2], dtype=float)
+                    
+                    # Calculate the direction the branch is growing outward
+                    branch_vector = end_coord - start_coord
+                    branch_length = np.linalg.norm(branch_vector)
+                    
+                    # Slide the marker 2cm up the branch to clear the trunk
+                    offset_distance = 0.02 
+                    if branch_length > 0:
+                        branch_direction = branch_vector / branch_length
+                        location = tuple(base_location + (branch_direction * offset_distance))
+                    else:
+                        location = tuple(base_location)
+                    
+                    
+                    
+                   
+                    normal_vector = np.array([1.0, 0.0, 0.0], dtype=float)
+                   
                     
                     # Grab the single values
                     item_type = row.Type
-                    radius = row.Radius + 0.02
-
-                    if item_type == "sphere":
-                        marker = trimesh.creation.icosphere(subdivisions=2, radius=radius)
-                        marker.visual.face_colors = [0, 255, 0, 30]
-                        marker.visual = marker.visual.to_texture()
-                        marker.visual.material.alphaMode = "BLEND"
-                        marker.apply_translation(location)
-
-                    # elif item_type == "primary_to_prune":
-                    #     marker = self.create_cylinder_mark(normal_vector, location, color=[255, 0, 0, 255])
-                    # elif item_type == "flag_for_no_replace":
-                    #     marker = self.create_cylinder_mark(normal_vector, location, color=[240, 230, 30, 255])
-                    # elif item_type == "flag_for_replace":
-                    #     marker = self.create_cylinder_mark(normal_vector, location, color=[120, 246, 255, 255])
-
-                   
+                    
                     # Disc Sizing 
                     # Slightly wider than the branch so it's visible, but not massive
-                    radius = row.Radius + 0.015  
+                    radius = row.Radius + 0.012  
                     # Trying to make the disc thinner
                     disc_height = 0.005  
+                    
                     # Marker radius and height are explicitly passed here
                     # Changed flag_for_no_replace to primary_without_replacement
                     if item_type == "sphere":
@@ -380,12 +393,15 @@ class TreeBuilder:
                         marker.apply_translation(location)
 
                     elif item_type == "primary_to_prune":
+                        # RED: Tied primary branch matched with a replacement
                         marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, 255])
                     elif item_type == "primary_without_replacement":
-                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 165, 0, 255])
-                    # Shouldn't show buds/branch replacements anymore 
-                    # elif item_type == "flag_for_replace":
-                    #     marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[120, 246, 255, 255])
+                        # YELLOW: Tied primary branch with no available replacement
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 255, 0, 255])
+                    # TODO
+                    elif item_type == "flag_for_replace":
+                        # BLUE: Untied primary branch acting as the replacement
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[0, 0, 255, 255])
 
                     elif item_type == "vigor":
                         pass
@@ -395,6 +411,7 @@ class TreeBuilder:
                         pass
                                     
                     all_meshes.append(marker)    
+                
                 # Combine the tree and spheres for this specific iteration
                 combined_mesh = trimesh.util.concatenate(all_meshes)
                 

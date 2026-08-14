@@ -161,11 +161,10 @@ class TreeSimulationBase(ABC):
                         print("ENDING budding")
                         self.end_bud_growth = True
                         
-                    if self.snapshot_iteration >= 3:
+                    #if self.snapshot_iteration >= 3:
                         # Next, freeze bud growth (no new branches/spurs from buds)
                         #print("ENDING growth")
                         #self.end_growth = True
-                        pass
 
                     if self.snapshot_iteration >= 4:
                         # Simulation ending - generate the cylinders by replacing make_cylinder with _ F

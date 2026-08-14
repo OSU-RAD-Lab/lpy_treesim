@@ -57,9 +57,7 @@ def prune_primary(tree_sim_base,
             if age_exceeds_threshold and not_tied_to_wire and prune_by_age:
                 buds_to_prune.append(bud)
 
-    if mark:
-        pass
-    else:
+    if not mark:
         # Now add the bud names (and all the bud's branch children) to the list
         names_to_x = []
         for bud in buds_to_prune:

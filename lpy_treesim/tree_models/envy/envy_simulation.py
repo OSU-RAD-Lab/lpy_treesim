@@ -12,8 +12,8 @@ class ENVYSimulationConfig(SimulationConfig):
     angle: float = 0.0
     spacing_wires: float = 0.45 # 18 inches
     num_wires: int = 4          # Make a bit taller than 5
-    x_left: float = -2.0      # 2 feet on either side
-    x_right: float = 2.0
+    x_left: float = -0.7      # changed from 0.6 (2 feet) on either side
+    x_right: float = 0.7
     n_years:int = 6
 
 
@@ -37,6 +37,6 @@ class ENVYSimulation(TreeSimulationBase):
         """
         # The trunk support
         self.trunk_attractor = self.support.make_attractor_grid(tie_type=TyingState.TyingType.TIE_ACROSS, n_along_x=1)
-        self.branch_attractor = self.support.make_attractor_grid(tie_type=TyingState.TyingType.TIE_ALONG, n_along_x=3)
+        self.branch_attractor = self.support.make_attractor_grid(tie_type=TyingState.TyingType.TIE_ALONG, n_along_x=2) # Changed from 3
 
         return self.support

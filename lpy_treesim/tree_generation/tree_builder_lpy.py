@@ -344,14 +344,17 @@ class TreeBuilder:
                 mesh_name = naming.mesh_filename(index, file_type="") + "_year" + str(year) + "_vc.obj"
                 mod_path = str(self.args.output_dir / mesh_name)
                 mesh_existing = trimesh.load(mod_path)
-                all_meshes = [mesh_existing]
+                mesh_existing.visual = mesh_existing.visual.to_texture()
+                mesh_existing.visual.material.alphaMode = "OPAQUE"
 
-                #try:
+                scene = trimesh.Scene()
+                scene.add_geometry(mesh_existing, node_name="base_tree")
+
                 df = pd.read_csv(str(Path(__file__).resolve().parents[1] / "tie_prune" / "pruning_algo" / "marked_locations.csv"))
 
                 df = df[df['Year'] == year]
                 
-                for row in df.itertuples(index=False):
+                for n, row in enumerate(df.itertuples(index=False)):
                     # Grab coordinates as numpy arrays so we can do math on them
                     base_location = np.array([row.Loc_x, row.Loc_y, row.Loc_z], dtype=float)
                     start_coord = np.array([row.Norm_x1, row.Norm_y1, row.Norm_z1], dtype=float)
@@ -362,7 +365,7 @@ class TreeBuilder:
                     branch_length = np.linalg.norm(branch_vector)
                     
                     # Slide the marker 2cm up the branch to clear the trunk
-                    offset_distance = 0.02 
+                    offset_distance = 0.005 
                     if branch_length > 0:
                         branch_direction = branch_vector / branch_length
                         location = tuple(base_location + (branch_direction * offset_distance))
@@ -370,60 +373,50 @@ class TreeBuilder:
                         location = tuple(base_location)
                     
                     
-                    
-                   
-                    normal_vector = np.array([1.0, 0.0, 0.0], dtype=float)
-                   
-                    
+                    normal_vector = branch_vector #np.array([1.0, 0.0, 0.0], dtype=float)
+                
                     # Grab the single values
                     item_type = row.Type
                     
                     # Disc Sizing 
                     # Slightly wider than the branch so it's visible, but not massive
-                    radius = row.Radius + 0.012  
+                    radius = row.Radius + 0.03  
                     # Trying to make the disc thinner
-                    disc_height = 0.005  
-                    
+                    disc_height = 0.015
+                    TRANSPARENCY = 120
                     # Marker radius and height are explicitly passed here
                     # Changed flag_for_no_replace to primary_without_replacement
-                    if item_type == "sphere":
+                    if item_type == "bud_spacing":
                         marker = trimesh.creation.icosphere(subdivisions=2, radius=radius)
                         marker.visual.face_colors = [0, 255, 0, 30]
-                        marker.visual = marker.visual.to_texture()
-                        marker.visual.material.alphaMode = "BLEND"
                         marker.apply_translation(location)
 
                     elif item_type == "primary_to_prune":
                         # RED: Tied primary branch matched with a replacement
-                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, 255])
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, TRANSPARENCY])
                     elif item_type == "primary_without_replacement":
                         # YELLOW: Tied primary branch with no available replacement
-                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 255, 0, 255])
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 255, 0, TRANSPARENCY])
                     # TODO
                     elif item_type == "flag_for_replace":
                         # BLUE: Untied primary branch acting as the replacement
-                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[0, 0, 255, 255])
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[0, 0, 255, TRANSPARENCY])
 
                     elif item_type == "vigor":
-                        pass
-                    elif item_type == "bud_spacing":
-                        pass
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, TRANSPARENCY])
                     elif item_type == "canopy":
-                        pass
-                                    
-                    all_meshes.append(marker)    
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[0, 0, 255, TRANSPARENCY])
+
+                    marker.visual = marker.visual.to_texture()
+                    marker.visual.material.alphaMode = "BLEND"
+                    scene.add_geometry(marker, node_name=f"marker_{n}")
                 
-                # Combine the tree and spheres for this specific iteration
-                combined_mesh = trimesh.util.concatenate(all_meshes)
                 
                 # Export as a separate file (e.g., marked_location_iter_29.obj)
                 marked_file_name = "marked_locations_year" + str(year) + ".obj"
                 out_name = self.args.output_dir / marked_file_name
-                combined_mesh.export(out_name)
+                scene.export(out_name)
                 print(f"Exported year file: {out_name}")
-                        
-                #except Exception as e:
-                 #   print(f"Skipping Marking Generation. Error: {e}")
 
                 if self.args.meta_data:
                     import json

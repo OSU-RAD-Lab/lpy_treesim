@@ -105,7 +105,7 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                             bud_break_probs=(0.6, 0.7, 0.8),   # Most buds break as vegetative
                                             tie_type=TyingState.TyingType.TIE_ALONG,
                                             tie_start_dist=0.0,  # 18 inches from first wire
-                                            tie_spacing=0.5 * sim_config.width() / 3.0,     # 3 tie points along wire
+                                            tie_spacing=0.5 * sim_config.width() / 4.0,     # changed this number from 3.0 (should be double n_along_x value??)
                                             curve_x_range=(-0.2, 0.2),
                                             curve_y_range=(-0.2, 0.2),
                                             num_iter_per_year=sim_config.num_iter_per_year,
@@ -115,7 +115,7 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                    # 24-36 inches per age_in_years, tapering off
                                    yearly_growth_range=[(1, 0.6, 0.9), (4, 0.5, 0.7), (5, 0.15, 0.3), (6, 0.05, 0.15)],
                                    taper_amount=0.4,  # Not too skinny
-                                   prune_length=1.1 * (sim_config.end_height()),
+                                   prune_length=0.9 * (sim_config.end_height()), # Changed from 1.1, trunk was sticking up too much
                                    bud_angle_probs=bud_angle_probs,
                                    bud_break_probs=(0.6, 0.7, 0.8),  # Most buds break as vegetative
                                    tie_type=TyingState.TyingType.TIE_ACROSS,

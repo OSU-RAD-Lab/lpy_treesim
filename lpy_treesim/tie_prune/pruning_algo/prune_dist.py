@@ -3,9 +3,10 @@ from lpy_treesim.tie_prune.pruning_algo.ltr_and_data_structure import NeighborsD
 def dist_prune(tree_sim_base,
                branch_hierarchy: dict, 
                map_names_to_branches: dict,
-               radius=0.1):
+               radius: float = 0.1016,
+               print_to_terminal: bool = True):
     
-    PRINT = False
+    PRINT = print_to_terminal
     RADIUS = radius
     names_to_x = []
     pruned = []
@@ -16,15 +17,21 @@ def dist_prune(tree_sim_base,
     bud_check_list = []
     for name, tree_object in map_names_to_branches.items():
         if "bud" in name:
+            '''
             if tree_object.branch_child != None:
                 if tree_object.branch_child.growth.age_in_years == 0:
                     if name not in names_to_check:
                         bud_check_list.append(tree_object)
                         names_to_check.append(tree_object.name)
+            '''
             if tree_object.spur_child != None:
+                    if PRINT and tree_object.branch_child != None:
+                        print(f'Branch Child {tree_object.branch_child.name}')
+                        print(f'Spur Children {tree_object.spur_child.name}')
                     if name not in names_to_check:
                         bud_check_list.append(tree_object)
                         names_to_check.append(tree_object.name)
+                    
     
     def prune(key_name,
               query,
@@ -51,7 +58,7 @@ def dist_prune(tree_sim_base,
             neighbors_total = {}
             for ref in referance_object:
                 neighbors, number = spur_buds_spatial.query_objects_within_r(ref.name, 
-                                                                            radius=(2*RADIUS))
+                                                                             radius=(2*RADIUS))
                 neighbors_total.update(neighbors)
 
             #unique_neighbors = list(set(neighbors_total))
@@ -91,4 +98,14 @@ def dist_prune(tree_sim_base,
         del branch_hierarchy[name]
         del map_names_to_branches[name]
 
-    return referance_object
+    
+    location = [location.start_loc for location in referance_object]
+    LENGTH = len(location)
+    type = ["bud_spacing"]*LENGTH
+    radius = [RADIUS]*LENGTH
+    normal_vector = [""]*len(location)
+    year = [referance_object[0].age_year + 1]*LENGTH
+    name = [bud.name for bud in referance_object]*LENGTH
+
+
+    return location, type, radius, normal_vector, year, name

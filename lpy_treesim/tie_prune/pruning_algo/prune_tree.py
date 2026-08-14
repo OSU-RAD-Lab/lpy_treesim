@@ -11,6 +11,7 @@ from pathlib import Path
     # clear the csv file.
 
 def mark_cuts(location, type, radius, normal_vector, year, name):    
+    df = pd.read_csv(str(Path(__file__).parent.resolve() / "marked_locations.csv"))
     for location, type, radius, normal_vector, year, name in zip(location, type, radius, normal_vector, year, name):
         mask = (
                 (df['Loc_x'] == location[0]) &
@@ -62,9 +63,10 @@ def prune_tree(tree_sim_base, branch_hierarchy: dict,
 
     # Prunes everthing in a set radius based of a referance tree object 
     # Currently pruning primary branches which it should not do
-    # dist_prune(tree_sim_base=tree_sim_base, 
-    #            branch_hierarchy=branch_hierarchy, 
-    #            map_names_to_branches=map_names_to_branches)
+    location, type, radius, normal_vector, year, name = dist_prune(tree_sim_base=tree_sim_base, 
+                                                                   branch_hierarchy=branch_hierarchy, 
+                                                                   map_names_to_branches=map_names_to_branches)
+    mark_cuts(location, type, radius, normal_vector, year, name)
 
     # Placeholder fucntion
     location, type, radius, normal_vector, year, name = primary_heuristic_prune()

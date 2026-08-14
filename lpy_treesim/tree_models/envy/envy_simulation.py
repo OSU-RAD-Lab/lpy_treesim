@@ -15,7 +15,7 @@ class ENVYSimulationConfig(SimulationConfig):
     x_left: float = -0.7      # changed from 0.6 (2 feet) on either side
     x_right: float = 0.7
     n_years: int = 6
-    n_along: int = 3
+    n_along: int = 4 # changed from 3 tied down points
 
 
 class ENVYSimulation(TreeSimulationBase):

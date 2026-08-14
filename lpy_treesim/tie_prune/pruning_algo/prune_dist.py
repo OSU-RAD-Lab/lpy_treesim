@@ -4,7 +4,7 @@ def dist_prune(tree_sim_base,
                branch_hierarchy: dict, 
                map_names_to_branches: dict,
                mark: bool,
-               radius: float = 0.1016,
+               radius: float = 0.05,
                print_to_terminal: bool = False):
     
     PRINT = print_to_terminal

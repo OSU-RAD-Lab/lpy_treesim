@@ -107,8 +107,8 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                             tie_type=TyingState.TyingType.TIE_ALONG,
                                             tie_start_dist=0.5 * tie_spacing,  # 18 inches from first wire
                                             tie_spacing=tie_spacing,
-                                            curve_x_range=(-0.2, 0.2),
-                                            curve_y_range=(-0.2, 0.2),
+                                            curve_x_range=(-0.1, 0.1), # changed from 0.2 to get less wiggly branches
+                                            curve_y_range=(-0.1, 0.1),
                                             num_iter_per_year=sim_config.num_iter_per_year,
                                             lpy_rng=lpy_rng)
 

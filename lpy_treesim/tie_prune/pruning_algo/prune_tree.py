@@ -41,9 +41,10 @@ def mark_cuts(location, type, radius, normal_vector, year, name):
         else:
             print(f'[ERROR] Duplicate mark location')
 
-        df.to_csv(Path(__file__).parent.resolve()/"pruning_algo"/"marked_locations.csv", 
+        df.to_csv(Path(__file__).parent.resolve()/"marked_locations.csv", 
                 mode='a',
-                header=False)
+                header=False,
+                index=False)
 
 def prune_tree(tree_sim_base, branch_hierarchy: dict, 
                map_names_to_branches: dict,
@@ -64,9 +65,11 @@ def prune_tree(tree_sim_base, branch_hierarchy: dict,
     # Prunes everthing in a set radius based of a referance tree object 
     # Currently pruning primary branches which it should not do
     location, type, radius, normal_vector, year, name = dist_prune(tree_sim_base=tree_sim_base, 
-                                                                   branch_hierarchy=branch_hierarchy, 
-                                                                   map_names_to_branches=map_names_to_branches)
-    mark_cuts(location, type, radius, normal_vector, year, name)
+                                                                   branch_hierarchy=branch_hierarchy,
+                                                                   map_names_to_branches=map_names_to_branches,
+                                                                   mark = mark)
+    
+    if mark: mark_cuts(location, type, radius, normal_vector, year, name)
 
     # Placeholder fucntion
     location, type, radius, normal_vector, year, name = primary_heuristic_prune()

@@ -3,8 +3,9 @@ from lpy_treesim.tie_prune.pruning_algo.ltr_and_data_structure import NeighborsD
 def dist_prune(tree_sim_base,
                branch_hierarchy: dict, 
                map_names_to_branches: dict,
+               mark: bool,
                radius: float = 0.1016,
-               print_to_terminal: bool = True):
+               print_to_terminal: bool = False):
     
     PRINT = print_to_terminal
     RADIUS = radius
@@ -16,7 +17,7 @@ def dist_prune(tree_sim_base,
     names_to_check = []
     bud_check_list = []
     for name, tree_object in map_names_to_branches.items():
-        if "bud" in name:
+        if "bud" in name and "trunk" not in name:
             '''
             if tree_object.branch_child != None:
                 if tree_object.branch_child.growth.age_in_years == 0:
@@ -40,7 +41,7 @@ def dist_prune(tree_sim_base,
               check=bud_check_list, 
               map_names_to_branches=map_names_to_branches):
         
-        names_to_x.extend(map_names_to_branches[key_name].prune())
+        if not mark: names_to_x.extend(map_names_to_branches[key_name].prune())
         pruned.append(key_name)
         if PRINT: print(f'{key_name} pruned becuase of {query}')
         for test in check[:]:
@@ -70,7 +71,7 @@ def dist_prune(tree_sim_base,
             if index == None:
                 if PRINT: print('no referance location found removing rest of check')
                 for remaining in bud_check_list:
-                    names_to_x.extend(map_names_to_branches[remaining.name].prune())
+                    if not mark: names_to_x.extend(map_names_to_branches[remaining.name].prune())
                 loop = False
                 break
 
@@ -93,19 +94,23 @@ def dist_prune(tree_sim_base,
 
                 else:
                     prune(key_name, query)
-    
-    for name in names_to_x:
-        del branch_hierarchy[name]
-        del map_names_to_branches[name]
-
-    
-    location = [location.start_loc for location in referance_object]
-    LENGTH = len(location)
-    type = ["bud_spacing"]*LENGTH
-    radius = [RADIUS]*LENGTH
-    normal_vector = [""]*len(location)
-    year = [referance_object[0].age_year + 1]*LENGTH
-    name = [bud.name for bud in referance_object]*LENGTH
 
 
-    return location, type, radius, normal_vector, year, name
+    if mark:
+        location = [location.start_loc for location in referance_object]
+        LENGTH = len(location)
+        type = ["bud_spacing"]*LENGTH
+        radius = [RADIUS]*LENGTH
+        normal_vector = [[(0,0,0),(0,0,0)]]*len(location)
+        year = [int(tree_sim_base.current_iteration/tree_sim_base.config.num_iter_per_year)]*LENGTH
+        name = [bud.name for bud in referance_object]*LENGTH
+
+
+        return location, type, radius, normal_vector, year, name
+
+    else:
+        for name in names_to_x:
+            del branch_hierarchy[name]
+            del map_names_to_branches[name]
+
+        return None, None, None, None, None, None

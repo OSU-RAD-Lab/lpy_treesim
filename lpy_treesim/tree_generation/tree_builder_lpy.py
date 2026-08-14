@@ -207,6 +207,8 @@ class TreeBuilder:
         transform[:3, 3] = location
         marker = trimesh.creation.cylinder(radius=radius, height=height, transform=transform)
         marker.visual.face_colors = color
+        marker.visual = marker.visual.to_texture()
+        marker.visual.material.alphaMode = "BLEND"
         return marker
 
 
@@ -365,7 +367,7 @@ class TreeBuilder:
                     branch_length = np.linalg.norm(branch_vector)
                     
                     # Slide the marker 2cm up the branch to clear the trunk
-                    offset_distance = 0.005 
+                    offset_distance = 0.006 
                     if branch_length > 0:
                         branch_direction = branch_vector / branch_length
                         location = tuple(base_location + (branch_direction * offset_distance))
@@ -382,14 +384,17 @@ class TreeBuilder:
                     # Slightly wider than the branch so it's visible, but not massive
                     radius = row.Radius + 0.03  
                     # Trying to make the disc thinner
-                    disc_height = 0.015
+                    disc_height = 0.02
                     TRANSPARENCY = 120
                     # Marker radius and height are explicitly passed here
                     # Changed flag_for_no_replace to primary_without_replacement
                     if item_type == "bud_spacing":
                         marker = trimesh.creation.icosphere(subdivisions=2, radius=radius)
-                        marker.visual.face_colors = [0, 255, 0, 30]
+                        marker.visual.face_colors = [0, 100, 200, 50]
                         marker.apply_translation(location)
+                        marker.visual = marker.visual.to_texture()
+                        marker.visual.material.alphaMode = "BLEND"
+
 
                     elif item_type == "primary_to_prune":
                         # RED: Tied primary branch matched with a replacement
@@ -400,15 +405,14 @@ class TreeBuilder:
                     # TODO
                     elif item_type == "flag_for_replace":
                         # BLUE: Untied primary branch acting as the replacement
-                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[0, 0, 255, TRANSPARENCY])
-
+                        #marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[0, 0, 255, TRANSPARENCY])
+                        print("not marking replacements -- code currently not working")
                     elif item_type == "vigor":
                         marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, TRANSPARENCY])
                     elif item_type == "canopy":
                         marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[0, 0, 255, TRANSPARENCY])
 
-                    marker.visual = marker.visual.to_texture()
-                    marker.visual.material.alphaMode = "BLEND"
+
                     scene.add_geometry(marker, node_name=f"marker_{n}")
                 
                 

@@ -274,10 +274,10 @@ class TreeSimulationBase(ABC):
                 
                 # Standard yearly structural pruning
                 print("MARKING CUTS")
-                #prune_tree(self,
-                #           branch_hierarchy=branch_hierarchy, 
-                #           map_names_to_branches=map_names_to_branches,
-                #           mark = True)
+                prune_tree(self,
+                            branch_hierarchy=branch_hierarchy, 
+                            map_names_to_branches=map_names_to_branches,
+                            mark = True)
 
 
             else:
@@ -470,5 +470,5 @@ class TreeSimulationBase(ABC):
                 branch = branches[branch_indx]
                 wire_id = wire_ids[wire_indx]
                 proposed_ties[branch.name] = wire_id
-                
+        
         return proposed_ties

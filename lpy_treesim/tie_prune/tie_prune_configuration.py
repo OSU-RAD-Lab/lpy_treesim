@@ -36,12 +36,14 @@ class SimulationConfig(ABC):
     # start height - first wire
     # angle - optional tilt the entire structure
     # x_left/right are relative to the tree trunk, which is at 0
+    # n_along is the number of tie points along the left (or right) side
     start_height: float = 0.5
     angle: float = 0.0
     spacing_wires: float = 0.45
     num_wires: int = 6
     x_left: float = -1.0
     x_right: float = 1.0
+    n_along: int = 3
 
     # Pruning Parameters
     pruning_age_threshold: int = num_iter_per_year  # Age threshold for pruning untied branches

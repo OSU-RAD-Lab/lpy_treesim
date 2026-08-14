@@ -84,8 +84,11 @@ class TyingState:
         else:
             n_tie_regions = int((expected_length - self.tie_start_dist) / self.tie_spacing)
             # number of tie regions should be correct if the tie spacing distance and prune length are set correctly
-            if n_tie_regions < 6:
-                n_tie_regions = 6  # Just in case not enough
+            if n_tie_regions < 2:
+                n_tie_regions = 2  # Just in case not enough
+            # n_pts_tie_down is the number of control points for the first section
+            # n_pts_per_tie is the number of control points for remaining sections
+            # First section spaces from 0 to tie_start_dist, then all remainin sections are spaced by self.tie_spacing
             z_values = np.linspace(0.0, self.tie_start_dist, self.n_pts_tie_down)
             spacing_values = np.linspace(0.0, self.tie_spacing, self.n_pts_per_tie+1)
             for indx in range(0, n_tie_regions):

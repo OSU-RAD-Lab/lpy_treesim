@@ -85,7 +85,7 @@ class TreeSimulationBase(ABC):
         self.branch_attractor = None
 
         # Override this method to set the tie points
-        self.generate_attractor_grids()
+        self.generate_attractor_grids(self.config)
 
         # This controls when to stop letting buds turn into spurs/branches, and then generate geometry
         self.current_iteration: int = 0  # Set in start_common
@@ -101,7 +101,7 @@ class TreeSimulationBase(ABC):
         self.invalid_attractor_value = 1000
 
     @abstractmethod
-    def generate_attractor_grids(self):
+    def generate_attractor_grids(self, config: SimulationConfig):
         """
         Generate 3D points for the trellis wire structure.
 

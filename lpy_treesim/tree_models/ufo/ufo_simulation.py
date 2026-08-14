@@ -31,7 +31,8 @@ class UFOSimulationConfig(SimulationConfig):
     num_wires: int = 6          # Make a bit taller than 5
     x_left: float = 0.0         # Start at the trunk center
     x_right: float = 1.8        # 5-6 ' to the right
-    n_years:int = 6
+    n_years: int = 6
+    n_along: int = 6
 
 
 class UFOSimulation(TreeSimulationBase):
@@ -42,7 +43,7 @@ class UFOSimulation(TreeSimulationBase):
     horizontal wires arranged linearly along the x-axis.
     """
 
-    def generate_attractor_grids(self):
+    def generate_attractor_grids(self, config: SimulationConfig):
         """
         Generate 3D points for the UFO trellis wire structure.
 
@@ -56,6 +57,6 @@ class UFOSimulation(TreeSimulationBase):
         #   Pin at 2 points along first wire
         self.trunk_attractor = self.support.make_attractor_grid(tie_type=TyingState.TyingType.TIE_ALONG_FIRST, n_along_x=4)
         self.branch_attractor = self.support.make_attractor_grid(tie_type=TyingState.TyingType.TIE_ACROSS,
-                                                                 n_along_x=6,
+                                                                 n_along_x=config.n_along,
                                                                  start_x=self.trunk_attractor[0].attractor_pts[0][0],
                                                                  skip_first=True)

@@ -95,6 +95,7 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                              num_iter_per_year=sim_config.num_iter_per_year,
                                              lpy_rng=lpy_rng)
 
+    tie_spacing = 0.5 * sim_config.width() / (sim_config.n_along + 0.5) # 1/2 of tree divided by number of tie points plus 0.5
     primary_branch_config = BasicWoodConfig(bud_spacing_range=(0.0254, 0.0508),  # 1-2 inches
                                             # 12-36 inches per age_in_years, tapering off
                                             yearly_growth_range=[(1, 0.3, 0.9), (2, 0.25, 0.7), (3, 0.1, 0.3), (4, 0.05, 0.15)],
@@ -104,8 +105,8 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                             bud_angle_probs=bud_angle_probs,
                                             bud_break_probs=(0.6, 0.7, 0.8),   # Most buds break as vegetative
                                             tie_type=TyingState.TyingType.TIE_ALONG,
-                                            tie_start_dist=0.0,  # 18 inches from first wire
-                                            tie_spacing=0.5 * sim_config.width() / 4.0,     # changed this number from 3.0 (should be double n_along_x value??)
+                                            tie_start_dist=0.5 * tie_spacing,  # 18 inches from first wire
+                                            tie_spacing=tie_spacing,
                                             curve_x_range=(-0.2, 0.2),
                                             curve_y_range=(-0.2, 0.2),
                                             num_iter_per_year=sim_config.num_iter_per_year,

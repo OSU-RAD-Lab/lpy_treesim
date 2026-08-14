@@ -83,11 +83,13 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                   curve_x_range=(-0.02, 0.02),
                                   curve_y_range=(-0.02, 0.02),
                                   num_iter_per_year=sim_config.num_iter_per_year,
-                                  lpy_rng=lpy_rng)
+                                   lpy_rng=lpy_rng,
+                                  prune_length = 0.3 # Tempory control on spur length
+                                  )
 
     tertiary_branch_config = BasicWoodConfig(bud_spacing_range=(0.01, 0.02),  # Slightly less than the vertical leaders
                                              yearly_growth_range=[(1, 0.02, 0.04), (3, 0.0025, 0.05)],  # 4-12 inches, dropping to 1-2 inches
-                                             taper_amount=0.1,    # Gets skinny
+                                             taper_amount=0.3,    # Changed from 0.1, too skinny
                                              bud_angle_probs=bud_angle_probs,
                                              bud_break_probs=(0.1, 0.6, 0.7),  # Veg, fruit, mixed
                                              curve_x_range=(-0.1, 0.1),

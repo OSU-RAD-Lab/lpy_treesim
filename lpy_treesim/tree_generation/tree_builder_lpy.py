@@ -390,7 +390,7 @@ class TreeBuilder:
                     # Changed flag_for_no_replace to primary_without_replacement
                     if item_type == "bud_spacing":
                         marker = trimesh.creation.icosphere(subdivisions=2, radius=radius)
-                        marker.visual.face_colors = [0, 100, 200, 50]
+                        marker.visual.face_colors = [0, 100, 200, 70]
                         marker.apply_translation(location)
                         marker.visual = marker.visual.to_texture()
                         marker.visual.material.alphaMode = "BLEND"

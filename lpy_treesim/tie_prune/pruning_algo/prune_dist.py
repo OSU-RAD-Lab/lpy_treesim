@@ -12,6 +12,7 @@ def dist_prune(tree_sim_base,
     names_to_x = []
     pruned = []
     referance_object = []
+    PURNE_MARKS = False
 
     # TODO: update so that primary branches are not purned only primary branch buds
     names_to_check = []
@@ -34,14 +35,14 @@ def dist_prune(tree_sim_base,
                         names_to_check.append(tree_object.name)
                     
     
-    def prune(key_name,
+    def do_prune(key_name,
               query,
               names_to_x=names_to_x, 
               pruned=pruned,
               check=bud_check_list, 
               map_names_to_branches=map_names_to_branches):
         
-        if not mark: names_to_x.extend(map_names_to_branches[key_name].prune())
+        names_to_x.extend(map_names_to_branches[key_name].prune())
         pruned.append(key_name)
         if PRINT: print(f'{key_name} pruned becuase of {query}')
         for test in check[:]:
@@ -70,8 +71,9 @@ def dist_prune(tree_sim_base,
 
             if index == None:
                 if PRINT: print('no referance location found removing rest of check')
-                for remaining in bud_check_list:
-                    if not mark: names_to_x.extend(map_names_to_branches[remaining.name].prune())
+                if not mark or PURNE_MARKS:
+                    for remaining in bud_check_list:
+                        names_to_x.extend(map_names_to_branches[remaining.name].prune())
                 loop = False
                 break
 
@@ -84,19 +86,20 @@ def dist_prune(tree_sim_base,
         neighbors.pop(query, None)
         bud_check_list.pop(index)
 
-        if number >= 1:
-            for key_name in list(neighbors.keys()):
-                if len(pruned) > 0:
-                    if key_name not in pruned:
-                        prune(key_name, query)
+        if not mark or PURNE_MARKS:
+            if number >= 1:
+                for key_name in list(neighbors.keys()):
+                    if len(pruned) > 0:
+                        if key_name not in pruned:
+                            do_prune(key_name, query)
+                        else:
+                            print("[Error] Bud already removed")
+
                     else:
-                        print("[Error] Bud already removed")
-
-                else:
-                    prune(key_name, query)
+                        do_prune(key_name, query)
 
 
-    if mark:
+    if mark:    
         location = [location.start_loc for location in referance_object]
         LENGTH = len(location)
         type = ["bud_spacing"]*LENGTH
@@ -105,6 +108,10 @@ def dist_prune(tree_sim_base,
         year = [int(tree_sim_base.current_iteration/tree_sim_base.config.num_iter_per_year)]*LENGTH
         name = [bud.name for bud in referance_object]*LENGTH
 
+        if PURNE_MARKS:
+            for name in names_to_x:
+                del branch_hierarchy[name]
+                del map_names_to_branches[name]
 
         return location, type, radius, normal_vector, year, name
 
@@ -112,5 +119,10 @@ def dist_prune(tree_sim_base,
         for name in names_to_x:
             del branch_hierarchy[name]
             del map_names_to_branches[name]
-
         return None, None, None, None, None, None
+       
+
+
+        
+
+    

@@ -46,22 +46,24 @@ def mark_cuts(location, type, radius, normal_vector, year, name):
                 header=False,
                 index=False)
 
-def prune_tree(tree_sim_base, branch_hierarchy: dict, 
+def prune_tree(tree_sim_base, 
+               branch_hierarchy: dict, 
                map_names_to_branches: dict,
                mark: bool):
     
     # Take out old primary branches
-    prune_primary(tree_sim_base=tree_sim_base, 
+    prune_primary(tree_sim_base, 
                   branch_hierarchy=branch_hierarchy, 
                   map_names_to_branches=map_names_to_branches,
                   mark=mark)
 
     # Cut short any overly long branches
-    prune_length(tree_sim_base=tree_sim_base, 
+    prune_length(tree_sim_base,
                  branch_hierarchy=branch_hierarchy, 
                  map_names_to_branches=map_names_to_branches,
                  mark=mark)
 
+    
     # Prunes everthing in a set radius based of a referance tree object 
     # Currently pruning primary branches which it should not do
     location, type, radius, normal_vector, year, name = dist_prune(tree_sim_base=tree_sim_base, 
@@ -70,10 +72,11 @@ def prune_tree(tree_sim_base, branch_hierarchy: dict,
                                                                    mark = mark)
     
     if mark: mark_cuts(location, type, radius, normal_vector, year, name)
+    
 
     # Placeholder fucntion
     location, type, radius, normal_vector, year, name = primary_heuristic_prune()
-
+    
     # Funciton not working yet
     #location, type, radius, normal_vector, year, name = secondary_heuristic_prune(tree_sim_base=tree_sim_base, 
     #                                                                              branch_hierarchy=branch_hierarchy, 

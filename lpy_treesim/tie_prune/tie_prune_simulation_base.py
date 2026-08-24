@@ -147,7 +147,9 @@ class TreeSimulationBase(ABC):
                     self.generate_geometry = False
                     self.freeze_for_snapshot = False
                     self.mark = False
-                    
+
+                    #del map_names_to_branches
+                    #del branch_hierarchy
                     map_names_to_branches = self.map_copy
                     branch_hierarchy = self.hierarchy_copy
                     del self.map_copy

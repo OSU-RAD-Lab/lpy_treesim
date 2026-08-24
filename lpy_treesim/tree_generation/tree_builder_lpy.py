@@ -262,12 +262,11 @@ class TreeBuilder:
                     lstring = self.__lsystem.derive(lstring, iteration, 1)
    
 
-            elif snapshot_iteration == (SNAPSHOT_ITER_TO_GENERATE + 2): #change back to 2
+            elif snapshot_iteration == (SNAPSHOT_ITER_TO_GENERATE + 1): #change back to 2
                 snapshot_start = False
                 iteration = frozen_iteration
                 lstring = self.__lsystem.derive(frozen_lstring, iteration, 1)
-
-                # print(f"Frozen lstring derived on {self.__lsystem.context().getIterationNb()}")
+                print(f"Frozen lstring derived")
                 
             else:
                 lstring = self.__lsystem.derive(lstring, iteration, 1)
@@ -384,8 +383,8 @@ class TreeBuilder:
                     # Slightly wider than the branch so it's visible, but not massive
                     radius = row.Radius + 0.03  
                     # Trying to make the disc thinner
-                    disc_height = 0.02
-                    TRANSPARENCY = 120
+                    disc_height = 0.01
+                    TRANSPARENCY = 150
                     # Marker radius and height are explicitly passed here
                     # Changed flag_for_no_replace to primary_without_replacement
                     if item_type == "bud_spacing":
@@ -397,11 +396,11 @@ class TreeBuilder:
 
 
                     elif item_type == "primary_to_prune":
-                        # RED: Tied primary branch matched with a replacement
-                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, TRANSPARENCY])
-                    elif item_type == "primary_without_replacement":
-                        # YELLOW: Tied primary branch with no available replacement
+                        # YELLOW: Tied primary branch matched with a replacement
                         marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 255, 0, TRANSPARENCY])
+                    elif item_type == "primary_without_replacement":
+                        # RED: Tied primary branch with no available replacement
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, TRANSPARENCY])
                     # TODO
                     elif item_type == "flag_for_replace":
                         # BLUE: Untied primary branch acting as the replacement

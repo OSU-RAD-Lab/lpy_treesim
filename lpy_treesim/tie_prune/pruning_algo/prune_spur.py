@@ -8,15 +8,27 @@ def spur_prune(tree_sim_base,
                print_to_terminal: bool = False):
     
     PRINT = print_to_terminal
+
+    # How close each spur can be to another spur
     RADIUS = radius
+
     names_to_x = []
     pruned = []
-    referance_object = []
-    PRUNE_MARKS = True
 
-    # TODO: update so that primary branches are not purned only primary branch buds
+    # List of spurs that are used as referance to remove all other spurs that
+    # surround that spur.
+    referance_object = []
+
+    # Set to false if you want the generated trees to not have the current
+    # year's pruning cuts to be cut (if you only want to mark the cuts not 
+    # actually do them).
+    PRUNE_MARKS = True
+    # TODO: PRUNE_MARKS = True is currently causing "could not find" errors?
+
     names_to_check = []
     bud_check_list = []
+
+    # Find all buds that have spur children
     for name, tree_object in map_names_to_branches.items():
         if "bud" in name and "trunk" not in name:
             '''
@@ -33,6 +45,11 @@ def spur_prune(tree_sim_base,
                     if name not in names_to_check:
                         bud_check_list.append(tree_object)
                         names_to_check.append(tree_object.name)
+
+        # Remove all spurs that are on the trunk
+        if "bud" in name and "trunk" in name:
+            if tree_object.spur_child != None:
+                names_to_x.extend(tree_object.prune())
                     
     
     def do_prune(key_name,
@@ -115,7 +132,7 @@ def spur_prune(tree_sim_base,
         year = [int(tree_sim_base.current_iteration/tree_sim_base.config.num_iter_per_year)]*LENGTH
         name = [bud.name for bud in referance_object]
 
-        if PRUNE_MARKS:
+        if len(names_to_x)>0:
             for named in names_to_x:
                 del branch_hierarchy[named]
                 del map_names_to_branches[named]
@@ -127,9 +144,3 @@ def spur_prune(tree_sim_base,
             del branch_hierarchy[named]
             del map_names_to_branches[named]
         return None, None, None, None, None, None
-       
-
-
-        
-
-    

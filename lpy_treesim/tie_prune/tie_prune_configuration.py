@@ -91,7 +91,7 @@ class SimulationConfig(ABC):
 
     def do_pruning(self, current_iteration: int):
         # Prune the iteration after tying (and at 3/4 of growth if doing summer pruning)
-        if current_iteration % self.num_iter_per_year == 0 and current_iteration != 0: #(self.num_iter_per_year - 1):
+        if current_iteration % self.num_iter_per_year == 1 and current_iteration != 1: #(self.num_iter_per_year - 1):
             return True
         if self.prune_summer:
             prune_iteration = 3 * self.num_iter_per_year // 4

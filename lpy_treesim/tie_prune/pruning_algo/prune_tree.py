@@ -2,7 +2,7 @@ from lpy_treesim.tie_prune.pruning_algo.prune_length import prune_length
 from lpy_treesim.tie_prune.pruning_algo.prune_primary import prune_primary
 from lpy_treesim.tie_prune.pruning_algo.primary_heuristic import primary_heuristic_prune
 from lpy_treesim.tie_prune.pruning_algo.secondary_heuristic import secondary_heuristic_prune
-from lpy_treesim.tie_prune.pruning_algo.prune_dist import dist_prune
+from lpy_treesim.tie_prune.pruning_algo.prune_spur import spur_prune
 import pandas as pd
 from pathlib import Path
 
@@ -66,7 +66,7 @@ def prune_tree(tree_sim_base,
     
     # Prunes everthing in a set radius based of a referance tree object 
     # Currently pruning primary branches which it should not do
-    location, type, radius, normal_vector, year, name = dist_prune(tree_sim_base=tree_sim_base, 
+    location, type, radius, normal_vector, year, name = spur_prune(tree_sim_base=tree_sim_base, 
                                                                    branch_hierarchy=branch_hierarchy,
                                                                    map_names_to_branches=map_names_to_branches,
                                                                    mark = mark)

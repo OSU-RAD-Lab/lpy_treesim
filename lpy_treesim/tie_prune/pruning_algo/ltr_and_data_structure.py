@@ -660,7 +660,7 @@ class LtrHuristic:
                 else:
                     df.to_csv(csv_path, mode='w', header=True, index=False)
         
-        # Return the final diagnostic payload
+        # Return the final info
         return {
             "kept_limbs": kept_limbs, 
             "primary_to_prune": primary_to_prune,

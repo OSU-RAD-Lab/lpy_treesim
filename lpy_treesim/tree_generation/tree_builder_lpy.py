@@ -1,6 +1,6 @@
 #supress file print statements
 #original_print = print
-'''
+
 import builtins
 
 original_print = builtins.print
@@ -14,7 +14,7 @@ def smart_print(*args, **kwargs):
 
 # Override the global print function
 builtins.print = smart_print
-'''
+
 
 #!/usr/bin/env python3
 import sys
@@ -396,17 +396,18 @@ class TreeBuilder:
                         marker.visual.material.alphaMode = "BLEND"
 
 
-                    elif item_type == "primary_to_prune":
-                        # RED: Tied primary branch matched with a replacement
-                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, TRANSPARENCY])
                     elif item_type == "primary_without_replacement":
-                        # YELLOW: Tied primary branch with no available replacement
+                        # RED: Tied primary branch with NO available replacement
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, TRANSPARENCY])
+                        
+                    elif item_type == "primary_to_prune":
+                        # YELLOW: Tied primary branch successfully matched with a replacement (Renewal target)
                         marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 255, 0, TRANSPARENCY])
-                    # TODO
+                        
                     elif item_type == "flag_for_replace":
-                        # BLUE: Untied primary branch acting as the replacement
-                        #marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[0, 0, 255, TRANSPARENCY])
-                        print("not marking replacements -- code currently not working")
+                        # CYAN: Untied primary branch acting as the replacement
+                        marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[0, 255, 255, TRANSPARENCY])
+
                     elif item_type == "vigor":
                         marker = self.create_cylinder_mark(normal_vector, location, radius=radius, height=disc_height, color=[255, 0, 0, TRANSPARENCY])
                     elif item_type == "canopy":

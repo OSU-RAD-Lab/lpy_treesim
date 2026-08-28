@@ -130,7 +130,7 @@ class TreeSimulationBase(ABC):
 
         self.current_iteration = get_iteration_number()
         
-        print(f'Base Iteration {self.current_iteration} Starting')
+        # print(f'Base Iteration {self.current_iteration} Starting')
         #print(f'Base snapshot_iteration {self.snapshot_iteration}')
 
         if self.config.get_snapshot(self.current_iteration) and self.freeze_for_snapshot == False:
@@ -148,14 +148,24 @@ class TreeSimulationBase(ABC):
                     self.freeze_for_snapshot = False
                     self.mark = False
                     
-                    map_names_to_branches = self.map_copy
-                    branch_hierarchy = self.hierarchy_copy
+                    # 1. Turn pruning back on so the script runs in Years 2-6
+                    self.prune = True
+                    
+                    # 2. Safely restore BOTH the bud states AND the probabilities from the backup.
+                    for name, original_obj in map_names_to_branches.items():
+                        if name in self.map_copy:
+                            if hasattr(original_obj, 'bud_state'):
+                                original_obj.bud_state = self.map_copy[name].bud_state
+                            if hasattr(original_obj, 'bud_break_probabilities'):
+                                original_obj.bud_break_probabilities = self.map_copy[name].bud_break_probabilities
+                            
+                    # 3. Free up memory safely
                     del self.map_copy
                     del self.hierarchy_copy
+                    
                     self.snapshot_iteration = 0
 
                 else:
-
                     if self.snapshot_iteration >= 0:
                         # First, freeze budding (do not generate any new bud sites)
                         print("ENDING budding")
@@ -295,6 +305,10 @@ class TreeSimulationBase(ABC):
                     for item in items:
                         item.add_year()
 
+        for name, obj in map_names_to_branches.items():
+            if hasattr(obj, 'growth') and obj.growth.length <= 0.0:
+                obj.growth.length = 0.0001
+
     @staticmethod
     def get_trunk_branches(branch_hierarchy: dict) -> list[BasicWood]:
         """ Find all the buds on the trunk that have branches growing from them"""
@@ -304,112 +318,153 @@ class TreeSimulationBase(ABC):
                 if bud_site.branch_child:
                     branches.append(bud_site.branch_child)
         return branches
-
+    # Heavily commented since I won't be continuing my work in the lab. Hopefully this and the little write up is helpful - Marcus
     def get_energy_matrix(self, branches: list, flagged_branch_ids: list[int] = None) -> tuple[np.ndarray, list[int], list]:
         """
         Calculate the energy matrix for optimal branch-to-wire assignment.
-        Evaluates both active BasicWood branches and dormant BudSites.
+        Evaluates strictly active BasicWood branches (untied limbs). Buds are ignored.
         """
+        
+        # Python safety measure: If no flagged branches are passed by the LTR script, 
+        # initialize an empty list to prevent TypeErrors during the wire checks.
         if flagged_branch_ids is None:
             flagged_branch_ids = []
 
+        # 1: Canidate Branch Pool
         open_branches = []
+        
+        # Loop through every object passed into the function
         for branch in branches:
-            # Check if this object is a dormant bud (lacks the 'tying' attribute)
-            is_bud = not hasattr(branch, "tying")
             
-            if is_bud:
-                open_branches.append(branch)
-            elif not branch.tying.is_tied:
+            
+            # 1. hasattr(branch, "tying"): Buds do not have tying data. This filters them out.
+            # 2. not branch.tying.is_tied: Ensures we only look at completely unanchored branches.
+            if hasattr(branch, "tying") and not branch.tying.is_tied:
+                
+                # Ensure the branch is at least half as long as the gap between wires. 
+                # If it's too short to reach the trellis, don't bother evaluating it.
                 if branch.growth.length > 0.5 * self.support.spacing_wires:
                     open_branches.append(branch)
-                else:
-                    pass
-                    #print(f"Skipping {branch.name}, {branch.location.start} too short {branch.growth.length}")
-            else:
-                #print(f"Branch {branch.name} tied to wire")
-                pass
 
+        # 2: Build the avalaibale wire pool
         wire_ids = []
+        
+        # Loop through every physical wire object currently on the 3D trellis
         for wire_id, wire in enumerate(self.branch_attractor):
-            # Keep wire open if it's empty or if its current branch is flagged for removal
+            
+            # Availability Check:
+            # -1 means the wire is completely empty.
+            # flagged_branch_ids contains the ID of the large branch the LTR script wants to mark.
+            # If the wire is held by a flagged branch, we temporarily treat the wire as "open".
             if wire.branch_id == -1 or wire.branch_id in flagged_branch_ids:
                 wire_ids.append(wire_id)
             else:
                 #print(f"Wire {wire_id} tied to {wire.branch_id}")
                 pass
 
+        # 3: GRID
+        # Get the total counts to define the size of our 2D grid
         num_branches = len(open_branches)
         num_wires = len(wire_ids)
 
-        # Initialize energy matrix with infinite values
+        # Create a NumPy grid (rows = branches, columns = wires).
+        # Fill every single cell with 1000 (self.invalid_attractor_value).
+        # This acts as an infinite penalty so SciPy ignores incompatible pairings.
         energy_matrix = np.full((num_branches, num_wires), self.invalid_attractor_value)
 
-        min_start_height = self.config.start_height - self.config.spacing_wires * 0.5
-        min_dist = self.config.spacing_wires * 0.5
-        # print(f"Beginning energy matrix {num_branches} {num_wires}, start height {min_start_height} min dist {min_dist}")
-        
-        for branch_idx, branch in enumerate(open_branches):
-            is_bud = not hasattr(branch, "tying")
-            
-            # Extract metrics based on whether it is a dormant bud or active branch
-            if is_bud:
-                branch_start = np.array(branch.start_loc) if hasattr(branch, 'start_loc') else np.array(branch.location.start)
-                branch_dir = np.array(branch.start_dir) if hasattr(branch, 'start_dir') else np.array([0, 1, 0])
-                tie_type = TyingState.TyingType.TIE_ALONG # Default to along the wire
-            else:
-                branch_start = np.array(branch.location.start)
-                branch_dir = np.array(branch.location.start_dir)
-                tie_type = branch.tying.tie_type
+        # If the LTR script feeds us a tree with zero untied candidates, 
+        # instantly return the empty matrix to prevent the SciPy solver from crashing.
+        if num_branches == 0 or num_wires == 0:
+            return energy_matrix, wire_ids, open_branches
 
+        # Calculate the absolute lowest physical point on the trunk where tying is allowed.
+        # This gives a small buffer zone (half a wire's spacing) below the bottom wire.
+        min_start_height = self.config.start_height - self.config.spacing_wires * 0.5
+        
+        # 4: Evaluate the combinations
+        # Loop through every valid untied branch
+        for branch_idx, branch in enumerate(open_branches):
+            
+            # Extract the exact 3D starting coordinates (X, Y, Z) into a NumPy array
+            branch_start = np.array(branch.location.start)
+            # Extract the directional vector (where the branch is naturally pointing)
+            branch_dir = np.array(branch.location.start_dir)
+            # Find out if this trellis pulls horizontally (V-Trellis) or vertically (UFO)
+            tie_type = branch.tying.tie_type
+
+            # Height Rejection: Check the Z-axis ([2]). If the branch originates 
+            # below the minimum height, skip it. Its row remains filled with 1000s.
             if branch_start[2] < min_start_height:
-                #print(f"Branch {branch.name} on trunk {branch_start} too far below wire ")
                 continue
 
-            # specific 1D distance checks
+            # Axis Selection based on Trellis Architecture:
             if tie_type == TyingState.TyingType.TIE_ACROSS:
-                check_coord = 0  # check that x index is within 2/3 of tie spacing
+                # V-Trellis pulls horizontally. Target the X-axis (index 0) for distance math.
+                check_coord = 0  
                 spacing = self.support.spacing_across_wire()
             else:
-                check_coord = 2  # check that z index is within 2/3 of wire spacing
+                # Standard Trellis pulls vertically. Target the Z-axis (index 2) for distance math.
+                check_coord = 2  
                 spacing = self.support.spacing_wires
 
+            # Inner Loop: Compare the current branch against every available wire
             for wire_idx, wire_id in enumerate(wire_ids):
+                
+                # Grab the physical wire object and its coordinates
                 wire = self.branch_attractor[wire_id]
                 wire_points = np.array(wire.attractor_pts)
-
+                
+                # Create a 3D arrow (vector) pointing from the branch's base exactly to the wire
                 vec_to_wire_pt = wire_points[0, 0:3] - branch_start
+                
+                # Measure the literal physical length of that arrow in 3D space
                 len_vec_to_wire = np.linalg.norm(vec_to_wire_pt)
+                
+                # If the branch isn't already sitting perfectly on the wire (length is not 0.0)
                 if not np.isclose(len_vec_to_wire, 0.0):
+                    # Divide the vector by its own length. This should normalizes the vector???
+                    # down to a length of exactly 1.0, which im using to calculating angles.
                     vec_to_wire_pt /= len_vec_to_wire
                 else:
+                    # If it's already touching, just adopt the wire's natural direction
                     vec_to_wire_pt = wire.attractor_dir
 
+                # Use a dot product to compare the direction the branch naturally grows 
+                # against the direction it MUST be pulled to reach the wire.
                 align_growth = np.dot(branch_dir, vec_to_wire_pt)
+                
+                # A score of < 0.45 means the branch would have to be bent sharper than ~63 degrees.
+                # Reject the pairing and move to the next wire.
                 if align_growth < 0.45:
-                    #print(f"Branch {branch.name} dir {branch_dir}, wire attach dir {vec_to_wire_pt} wrong way")
                     continue
 
+                # Compare the branch's natural growth direction against the flow of the entire trellis.
                 align_wire = np.dot(branch_dir, wire.attractor_dir)
+                
+                # If the score is negative, the branch is growing backward relative to the row. Reject it.
                 if align_wire < 0.0:
-                    #print(f"Branch {branch.name} dir {branch_dir}, wire dir {wire.attractor_dir} wrong way")
                     continue
 
+                # Isolate the 1D distance between the branch and wire on the chosen axis (X or Z)
                 start_distance_energy = branch_start[check_coord] - wire_points[0, check_coord]
 
+                # Get the absolute value. If the physical gap is larger 
+                # than 66% (2/3rds) of the distance to the next wire, it's out of bounds. Reject it.
                 if np.fabs(start_distance_energy) > 2.0 * spacing / 3.0:
-                    #print(f"Branch {branch.name} Too far away {start_distance_energy} spacing {spacing}")
                     continue
                     
-                # print(f"Branch {branch.name} Start {branch_start}  wire {wire_points[0, :]} spacing {spacing}")
+                # 5: Final Score
+                # If the branch survives all rejections, convert the physical distance into a percentage.
                 dist_energy = np.fabs(start_distance_energy) / spacing
-                # print(f"  -> Dist {dist_energy:.4f} | angle {align_growth:.4f}")
-                # print(f" Dist {dist_energy} angle {align_growth}", end="")
+                
+                # Balance the equation: multiply the distance percentage and the angle alignment 
+                # by the custom weights defined in your tree's configuration file.
                 total_energy = self.config.energy_distance_weight * dist_energy + align_growth * self.config.energy_angle_weight
-                #print(f" Total {total_energy}")
 
+                # Overwrite the 1000 penalty in the grid with this final, viable float score.
                 energy_matrix[branch_idx, wire_idx] = total_energy
 
+        # Pass the fully populated grid and lists back out to decide_guide or test_assignment_viability
         return energy_matrix, wire_ids, open_branches
 
     def decide_guide(self, energy_matrix, wire_ids: list, branches):
@@ -428,47 +483,91 @@ class TreeSimulationBase(ABC):
         Returns:
             None: Modifies branches and wire_attractors in-place with new assignments
         """
+        # Read the dimensions of the NumPy grid. 
+        # Rows become num_branches, columns become num_wires.
         num_branches, num_wires = energy_matrix.shape
 
-        # Early return if no branches or wires to assign
+        # Early return safety valve: If the matrix is empty (0 branches or 0 wires), 
+        # instantly exit the function so the SciPy algorithm doesn't crash.
         if num_branches == 0 or num_wires == 0:
             return
 
-        # Run the algorithm
+        # This evaluates the entire grid at once to find 
+        # the global optimal combination of branch-to-wire pairings with the lowest total score.
+        # It outputs two parallel arrays: the row indices (branches) and column indices (wires).
         row_ind, col_ind = linear_sum_assignment(energy_matrix)
         #print(f"Energy matrix {energy_matrix}")
 
         # Wires are organized from left to right (ufo) or up to down (envy);
         # Continue making assignments as long as energy matrix < 1000
 
+        # zip() binds the row and column arrays together so we can iterate through the proposed pairs.
         for branch_indx, wire_indx in zip(row_ind, col_ind):
+            
+            # Map the localized matrix column index (e.g., Column 1) 
+            # back to the global trellis wire ID (e.g., Wire #50)
             wire_id = wire_ids[wire_indx]
+            
+            # Look up the original score of this specific pairing in the grid.
+            # If the score is 1000 (invalid_attractor_value), it means the pairing is won't work
+            # and the script skips it. It only proceeds if the score is < 1000.
             if energy_matrix[branch_indx, wire_indx] < self.invalid_attractor_value:
                 #print(f" Assigning branch {branches[branch_indx].name} to wire {self.branch_attractor[wire_id].attractor_pts[0]} {energy_matrix[branch_indx, wire_indx]}")
-                # Get the branch and wire objects
+                
+                # Use the indices to grab the physical branch object and the physical wire object from memory
                 branch = branches[branch_indx]
                 wire_attach = self.branch_attractor[wire_id]
 
-                # Perform the assignment
+                # Perform the assignment 
+                # Store the wire object inside the branch's tying state. When the 3D geometry generates, 
+                # it will read this variable and bend the branch cylinder to reach the wire.
                 branch.tying.wire_attach = wire_attach
+                
+                # Parse the string name of the branch (e.g., "PrimaryBranch_45") 
+                # Split it at the underscore, grab the last part ("45"), and convert it to an integer (45).
                 branch_id = int(branch.name.split("_")[-1])
+                
+                # Perform the assignment 
+                # Overwrite the wire's default '-1' empty ID with the branch's ID. 
+                # This locks the wire, preventing the energy matrix from evaluating it in future years.
                 wire_attach.branch_id = branch_id
     def test_assignment_viability(self, energy_matrix, wire_ids: list, branches: list) -> dict:
         """
         Runs the algorithm without mutating objects to validate viability.
         Returns a dictionary mapping branch names to their proposed wire IDs.
         """
+        # Read the dimensions of the NumPy grid passed in by the LTR script.
         num_branches, num_wires = energy_matrix.shape
+        
+        # Early return safety valve: If the grid is empty, return a blank dictionary. 
+        # This prevents crashes and fulfills the function's promise to return a dict object.
         if num_branches == 0 or num_wires == 0:
             return {}
 
+        # Run the exact SciPy to find the optimal mathematical pairings.
         row_ind, col_ind = linear_sum_assignment(energy_matrix)
+        
+        # Initialize a blank dictionary. 
+        # to record the hypothetical ties without altering the actual tree.
         proposed_ties = {}
 
+        # Iterate through the proposed pairs generated by the algorithm.
         for branch_indx, wire_indx in zip(row_ind, col_ind):
+            
+            # Ensure the pairing is  possible (score < 1000). 
+            # If the score is exactly 1000, Python  skips the pairing 
             if energy_matrix[branch_indx, wire_indx] < self.invalid_attractor_value:
+                
+                # Grab the physical branch object using the row index
                 branch = branches[branch_indx]
+                # Map the local column index to the global wire ID
                 wire_id = wire_ids[wire_indx]
+                
+                # Non-Destructive Logging: 
+                # Create a new entry in the dictionary. Use the branch's string name (e.g., "PrimaryBranch_12") 
+                # as the key, and set the global wire ID (e.g., 6) as the value.
                 proposed_ties[branch.name] = wire_id
-        
+                
+        # Hand the completed blueprint back 
+        # if its specific target wire successfully secured a replacement branch.
         return proposed_ties

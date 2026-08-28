@@ -5,7 +5,7 @@ import numpy as np
 import time as tm
 import pandas as pd
 from pathlib import Path
-print = lambda *args, **kwargs: None
+# print = lambda *args, **kwargs: None
 
 # Class to have use a dot dictionary data structure for the output
 class DotDict(dict):
@@ -351,26 +351,30 @@ class LtrHuristic:
 
     def get_primary_limbs(self) -> list:
         """
-        Scans the tree dictionary, isolates all primary wood limbs
+        Scans the tree dictionary, isolates all TIED primary limbs
         and stores them in a list for the LCSA calculations.
         """
         primary_limbs = []
-        kept_limbs = []
-        csv_log_queue = []
         
         # 1. Scan every piece of wood/node on the tree
         for name, obj in self.map_names_to_branches.items():
             
-            # 2. Filter for primary limbs, ensuring it has a growth attribute
+            # 2. Filter for primary limbs, ensuring it is NOT a bud
             if "primary" in name.lower() and "bud" not in name.lower():
-                primary_limbs.append((name, obj))
                 
-        # 3. Print the total count and the names of the limbs found
-        print(f"Metrics: Found {len(primary_limbs)} primary limbs.")
+                # 3. Safely verify the branch is physically anchored to the trellis.
+                # BasicWood stores its tying state inside the .tying attribute.
+                if hasattr(obj, "tying") and obj.tying.is_tied:
+                    primary_limbs.append((name, obj))
+                
+        # 4. Print the total count and the names of the limbs found
+        print(f"Metrics: Found {len(primary_limbs)} tied primary limbs.")
         for limb_name, limb_obj in primary_limbs:
             print(f" -> {limb_name} (Length: {limb_obj.growth.length:.2f}m)")
             
         return primary_limbs
+                
+       
     
     def get_lcsa_metrics(self, primary_limbs: list, measurement_dist_m: float = 0.025) -> dict:
         """
@@ -417,19 +421,28 @@ class LtrHuristic:
         return {"valid": valid_limbs, "too_short": too_short_limbs}
     def simulate_ltr_pruning(self, tcsa_cm2: float, limb_metrics: dict, target_ltr: float = 0.5) -> dict:
         """
-        Calculates the initial LTR and iteratively removes the largest valid limbs
-        until the target LTR threshold is achieved. Validates replacements via Energy Matrix.
+        Calculates the initial LTR and iteratively evaluates the largest valid limbs
+        until the target LTR threshold is achieved. 
+        Validates replacements via the Energy Matrix and generates diagnostic visual markers.
+        No pruning involved
         """
+        # Safety check: If the trunk has no mass, we cannot calculate a ratio.
         if tcsa_cm2 <= 0:
             print("Error: Invalid TCSA. Cannot calculate LTR.")
             return {}
 
+        # 1. Setup the initial arrays and baseline math
         valid_limbs = limb_metrics.get("valid", [])
+        
+        # Sort all tied primary limbs from largest cross-sectional area to smallest.
+        # We want to target the thickest branches first to reduce the LTR efficiently.
         sorted_limbs = sorted(valid_limbs, key=lambda x: x['lcsa_cm2'], reverse=True)
         
+        # Sum the total area of all TIED primary branches on the tree.
         total_lcsa = sum(limb['lcsa_cm2'] for limb in sorted_limbs)
+        
+        # Calculate the starting ratio before any hypothetical pruning happens.
         current_ltr = total_lcsa / tcsa_cm2
-
         
         print(f"\nMetrics: Trees to be pruned")
         print(f"Initial Total LCSA: {total_lcsa:.2f} cm²")
@@ -437,87 +450,95 @@ class LtrHuristic:
         print(f"Initial LTR: {current_ltr:.4f}")
         print(f"Target LTR: {target_ltr:.4f}\n")
         
-
+        # Arrays to keep track of diagnostic decisions
         primary_to_prune = []
         kept_limbs = []
-        csv_log_queue = []  # Tracks everything for the CSV
+        csv_log_queue = []  # Tracks everything that needs a colored 3D marker
+        used_replacements = set() # Prevents two branches from claiming the same untied replacement
         
+        # 2. 
+        # Keep running as long as our ratio is too high AND we still have branches left to check.
         while current_ltr > target_ltr and len(sorted_limbs) > 0:
+            
+            # Pop the absolute largest remaining tied branch off the top of the list
             largest_limb = sorted_limbs.pop(0)
             limb_obj = largest_limb['object']
+            
+            # Extract its integer ID so we can feed it to the energy matrix
             branch_id = int(largest_limb['name'].split("_")[-1])
 
             is_viable_replacement = False
             replacement_name = None
 
             if self.tree_sim:
-                # 1. Identify which wire the removable branch is currently tied to
+                # Identify which trellis wire this branch is currently holding.
                 target_wire_id = None
                 for w_id, wire in enumerate(self.tree_sim.branch_attractor):
                     if wire.branch_id == branch_id:
                         target_wire_id = w_id
                         break
 
-                # 2. Gather all untied candidates (buds and untied branches)
+                # Gather the untied replacement candidates.
                 candidates = []
                 for name, obj in self.map_names_to_branches.items():
-                    # Skip the limb we are actively trying to remove
-                    if obj == limb_obj:
+                    # Skip the branch we are trying to cut, and skip any replacements we already used
+                    if obj == limb_obj or name in used_replacements:
                         continue
                     if 'bud' not in name.lower() and 'primary' in name.lower():
                         if not obj.tying.is_tied:
                             candidates.append(obj)
 
-                # 3. Run the Energy Matrix with the removable branch's wire forced open
+                # Energy Matrix if determines if a candidate can reach the wire.
+                # By passing [branch_id], we temporarily force the matrix to treat that wire as empty.
                 energy_matrix, wire_ids, open_branches = self.tree_sim.get_energy_matrix(
                     branches=candidates, 
                     flagged_branch_ids=[branch_id]
                 )
                 
-                # 4. Check the proposed assignments without actually tying them
+                #  Run to get the blueprint of optimal pairings.
                 proposed_ties = self.tree_sim.test_assignment_viability(energy_matrix, wire_ids, open_branches)
                 
-                # 5. See if any candidate successfully map to a newly opened wire
+                # Read the blueprint. Did the algorithm successfully assign an untied 
+                # candidate to our target wire?
                 if target_wire_id is not None:
                     for cand_name, proposed_wire_id in proposed_ties.items():
                         if proposed_wire_id == target_wire_id:
                             is_viable_replacement = True
                             replacement_name = cand_name
+                            
+                            # Lock this candidate so no other branch can claim it in future loop iterations
+                            used_replacements.add(cand_name) 
                             break
                 else:
-                    # If the primary limb wasn't tied to a wire, we don't strictly need a wire replacement
+                    # If the massive branch wasn't actually tied to a wire (should be rare based on our filters), 
+                    # we don't strictly need to find a wire replacement to cut it.
                     is_viable_replacement = True
 
-            '''
-            # Dormancy Roll (Only roll if the chosen replacement is a bud) 
-            if is_viable_replacement and replacement_name and "bud" in replacement_name.lower():
-                import random
-                dormancy_chance = getattr(self.tree_sim.config, 'dormancy_probability', 0.7)
-                
-                if random.random() > dormancy_chance:
-                    print(f"  -> Dormancy Check: Bud {replacement_name} failed to wake up.")
-                    is_viable_replacement = False # Force the fallback
-                else:
-                    print(f"  -> Dormancy Check: Bud {replacement_name} successfully broke dormancy!")
-
-            # 6. Fallback Evaluation
+            
+            # Primary without replacement (RED MARKER)
             if not is_viable_replacement:
                 print(f"Fallback Triggered: Limb {largest_limb['name']} lacks a viable tied replacement. Skipping.")
-                kept_limbs.append(largest_limb) # Save the skipped limb
+                
+                # We cannot cut this branch. We append it to the kept list.
+                kept_limbs.append(largest_limb) 
 
-                # Log the skipped limb (Orange)
+                # Log it as "primary_without_replacement". The tree builder maps this to the RED marker.
                 csv_log_queue.append({
                     "limb_name": largest_limb['name'],
                     "type": "primary_without_replacement",
                     "object": limb_obj,
                     "replacement_name": None
                 })
+                
+                # The LCSA of this Red branch is NEVER subtracted 
+                # from total_lcsa. 
                 continue
-            '''
+                
+            # Successful Renewal (YELLOW & CYAN MARKERS)
             largest_limb['renewal_candidate'] = replacement_name 
             primary_to_prune.append(largest_limb)
             
-            # 1. Log the primary limb getting pruned (Red)
+            # Log the branch as "primary_to_prune". The tree builder maps this to the YELLOW marker.
             csv_log_queue.append({
                 "limb_name": largest_limb['name'],
                 "type": "primary_to_prune",
@@ -525,7 +546,7 @@ class LtrHuristic:
                 "replacement_name": replacement_name
             })
             
-            # 2. Log the replacement if one exists (Cyan)
+            # Log the untied replacement branch as "flag_for_replace". The tree builder maps this to the CYAN marker.
             if replacement_name and replacement_name in self.map_names_to_branches:
                 csv_log_queue.append({
                     "limb_name": replacement_name,
@@ -534,28 +555,29 @@ class LtrHuristic:
                     "replacement_name": None
                 })
 
+            # Because this branch has a safe replacement, the hypothetical cut is authorized .
+            # We subtract its mass from the tree and calculate the new, lower LTR score.
             total_lcsa -= largest_limb['lcsa_cm2']
             current_ltr = total_lcsa / tcsa_cm2
             
             replacement_str = f"Replaced by: {replacement_name}" if replacement_name else "No wire replacement needed"
-            print(f"Limb Marked For Removal: {largest_limb['name']} ({replacement_str}) -> New LTR: {current_ltr:.4f}")
+            print(f"Limb Marked For Renewal: {largest_limb['name']} ({replacement_str}) -> New LTR: {current_ltr:.4f}")
             
+        # 4. Final Output and CSV Generation
         print(f"\nFinal LTR Achieved: {current_ltr:.4f}")
-        print(f"Total Limbs Flagged for Removal: {len(primary_to_prune)}")
+        print(f"Total Limbs Flagged for Removal (Yellow): {len(primary_to_prune)}")
         
-        # Combine any remaining untouched limbs with the skipped limbs
+        # Add any branches we never even looked at (because we hit the 0.5 target) to the kept list
         kept_limbs.extend(sorted_limbs)
-        print(f"Total Limbs Kept: {len(kept_limbs)}")
-        print("\n")
+        print(f"Total Limbs Kept (Red + Unchecked): {len(kept_limbs)}\n")
 
-        
-        # 7. CSV Logging for All Marked Items
+        # Generates the CSV file for tree_builder_lpy to read. 
         if csv_log_queue:
             import pandas as pd
             from pathlib import Path
-
+            
             marker_data = []
-
+            
             for i, log_item in enumerate(csv_log_queue):
                 obj = log_item['object']
                 name = log_item['limb_name']
@@ -577,12 +599,10 @@ class LtrHuristic:
                 loc_x, loc_y, loc_z = base_x, base_y, base_z
                 norm_x2, norm_y2, norm_z2 = loc_x + dir_x, loc_y + dir_y, loc_z + dir_z
 
-                
+                # Visual Logic: Adjusts the marker slightly up the branch to clear the trunk mesh
                 if item_type in ["primary_to_prune", "primary_without_replacement"]:
-                    
-                    # Find the first existing bud on this branch to establish the true curved vector. Stops marker from floating, kinda
                     bud_loc = None
-                    for b_idx in range(10): # Check first 10 possible buds
+                    for b_idx in range(10): # Check first 10 possible buds to find a physical curve point
                         bud_name = f"{name}_bud_{b_idx}"
                         if bud_name in self.map_names_to_branches:
                             bud_loc = self.map_names_to_branches[bud_name].start_loc
@@ -590,23 +610,14 @@ class LtrHuristic:
                     
                     if bud_loc:
                         bx, by, bz = bud_loc.x, bud_loc.y, bud_loc.z
-                        
-                        # Calculate physical distance to the first bud
                         dist_to_bud = ((bx - base_x)**2 + (by - base_y)**2 + (bz - base_z)**2) ** 0.5
-                        
                         if dist_to_bud > 0.001:
-                            # Move 10cm out to clear the  trunk.
-                            # Cap at 90% of the distance to the first bud so it doesn't overshoot.
                             fraction = min(0.10 / dist_to_bud, 0.9)
-                            
                             loc_x = base_x + (bx - base_x) * fraction
                             loc_y = base_y + (by - base_y) * fraction
                             loc_z = base_z + (bz - base_z) * fraction
-                        
-                        # Update normal vector to aim directly at the first bud (perfect tilt)
                         norm_x2, norm_y2, norm_z2 = bx, by, bz
                     else:
-                        # Fallback if no bud exists: use a larger linear offset (10cm)
                         offset_dist = 0.10 
                         loc_x = base_x + (dir_x * offset_dist)
                         loc_y = base_y + (dir_y * offset_dist)
@@ -615,16 +626,14 @@ class LtrHuristic:
                         norm_y2 = loc_y + dir_y
                         norm_z2 = loc_z + dir_z
         
-                
                 norm_x1, norm_y1, norm_z1 = loc_x, loc_y, loc_z
 
-                # Safely extract radius (buds do not have growth attributes)
+                # Safely extract radius 
                 if hasattr(obj, 'growth'):
                     radius = obj.growth.get_diameter(0.0) / 2.0
                 else:
-                    radius = 0.005 # Fallback radius for buds
+                    radius = 0.005 # Fallback radius 
                 
-
                 # Calculate the exact year integer to match the .obj export suffix
                 current_year = 0
                 if getattr(self, 'tree_sim', None) and getattr(self.tree_sim, 'config', None):
@@ -633,17 +642,11 @@ class LtrHuristic:
                         current_year = int((self.tree_sim.current_iteration / iters_per_year))
 
                 marker_data.append({
-                    'Loc_x': loc_x,
-                    'Loc_y': loc_y,
-                    'Loc_z': loc_z,
+                    'Loc_x': loc_x, 'Loc_y': loc_y, 'Loc_z': loc_z,
                     'Type': item_type,
                     'Radius': radius,
-                    'Norm_x1': norm_x1,
-                    'Norm_y1': norm_y1,
-                    'Norm_z1': norm_z1,
-                    'Norm_x2': norm_x2,
-                    'Norm_y2': norm_y2,
-                    'Norm_z2': norm_z2,
+                    'Norm_x1': norm_x1, 'Norm_y1': norm_y1, 'Norm_z1': norm_z1,
+                    'Norm_x2': norm_x2, 'Norm_y2': norm_y2, 'Norm_z2': norm_z2,
                     'Year': current_year,
                     'Name': name
                 })
@@ -657,6 +660,7 @@ class LtrHuristic:
                 else:
                     df.to_csv(csv_path, mode='w', header=True, index=False)
         
+        # Return the final diagnostic payload
         return {
             "kept_limbs": kept_limbs, 
             "primary_to_prune": primary_to_prune,

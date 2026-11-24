@@ -83,8 +83,8 @@ def build_basicwood_prototypes(lpy_rng: np.random.Generator = None, sim_config: 
                                   curve_x_range=(-0.02, 0.02),
                                   curve_y_range=(-0.02, 0.02),
                                   num_iter_per_year=sim_config.num_iter_per_year,
-                                   lpy_rng=lpy_rng,
-                                  prune_length = 0.3 # Tempory control on spur length
+                                  lpy_rng=lpy_rng,
+                                  #prune_length = 0.1 # Control on spur length (temporary?)
                                   )
 
     tertiary_branch_config = BasicWoodConfig(bud_spacing_range=(0.01, 0.02),  # Slightly less than the vertical leaders

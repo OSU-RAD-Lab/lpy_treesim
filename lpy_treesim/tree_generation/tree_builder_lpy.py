@@ -194,16 +194,18 @@ class TreeBuilder:
                 print(f"Could not find name {name} in branch hierarchy")
 
     def create_cylinder_mark(self,
-                             normal_vector:np.ndarray,
-                             location:tuple, 
-                             radius:float = 0.05, 
+                             normal_vector: np.ndarray,
+                             location: tuple, 
+                             radius: float = 0.05, 
                              color: list = [255, 0, 0, 255], 
-                             height=0.005):
+                             height = 0.005):
+        """Function to generate the cylinders that are used to mark locations on the tree
+        after the tree mesh has been generated. """
         
         #mag = np.linalg.norm(vector)
-        # rotation that maps cylinder z-axis [0,0,1] to the desired direction
+        # Rotation that maps cylinder z-axis [0,0,1] to the desired direction
         transform = trimesh.geometry.align_vectors([0.0, 0.0, 1.0], normal_vector)
-        # build 4x4 transform: rotation + translation to midpoint
+        # Build 4x4 transform (rotation and translation to midpoint)
         transform[:3, 3] = location
         marker = trimesh.creation.cylinder(radius=radius, height=height, transform=transform)
         marker.visual.face_colors = color
@@ -211,10 +213,18 @@ class TreeBuilder:
         marker.visual.material.alphaMode = "BLEND"
         return marker
 
-
-    def generate_tree(self, naming, index, radii, name_radii, stage_context):
-        """ Actually build the lpy string
-        @param b_interactive - do you want to have to hit a key every iteration?"""
+    # Most of the changes in this file made to generate the tree per year are in the 
+    # this generate_tree function
+    def generate_tree(self, 
+                      naming: str, 
+                      index: int, 
+                      radii: float, 
+                      name_radii: str, 
+                      stage_context: list):
+        
+        """ Actually build the lpy string and logic to use a copied l-string for per year
+        generation. @param b_interactive - do you want to have to hit a key every iteration? 
+        """
 
         # First string - see base_lpy.lpy axiom module
         frozen_lstring = self.__lsystem.axiom
@@ -229,6 +239,7 @@ class TreeBuilder:
         #  Roughly 28 iterations per year, 3-5 years (depending on SimulationConfig parameters)
         b_check_string = False
 
+        # local variables for snapshot logic, probably should not be hardcoded
         year = 0
         snapshot_start = False
         snapshot_iteration = 0
@@ -238,8 +249,8 @@ class TreeBuilder:
         num_iter_per_year = self.__lsystem.simulation_config.num_iter_per_year
 
         while iteration <= self.__lsystem.derivationLength:
-        #for iteration in range(self.__lsystem.derivationLength):
 
+        #for iteration in range(self.__lsystem.derivationLength):
             #print(f"Iteration {iteration}")
             # print(f"Lpy Iteration {self.__lsystem.context().getIterationNb()}")
 
@@ -262,12 +273,11 @@ class TreeBuilder:
                     lstring = self.__lsystem.derive(lstring, iteration, 1)
    
 
-            elif snapshot_iteration == (SNAPSHOT_ITER_TO_GENERATE + 2): #change back to 2
+            elif snapshot_iteration == (SNAPSHOT_ITER_TO_GENERATE + 1): #change back to 2
                 snapshot_start = False
                 iteration = frozen_iteration
                 lstring = self.__lsystem.derive(frozen_lstring, iteration, 1)
-
-                # print(f"Frozen lstring derived on {self.__lsystem.context().getIterationNb()}")
+                print(f"Frozen lstring derived")
                 
             else:
                 lstring = self.__lsystem.derive(lstring, iteration, 1)
@@ -384,8 +394,8 @@ class TreeBuilder:
                     # Slightly wider than the branch so it's visible, but not massive
                     radius = row.Radius + 0.03  
                     # Trying to make the disc thinner
-                    disc_height = 0.02
-                    TRANSPARENCY = 120
+                    disc_height = 0.01
+                    TRANSPARENCY = 150
                     # Marker radius and height are explicitly passed here
                     # Changed flag_for_no_replace to primary_without_replacement
                     if item_type == "bud_spacing":

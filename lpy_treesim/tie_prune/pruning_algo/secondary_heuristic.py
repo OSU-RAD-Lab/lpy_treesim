@@ -2,7 +2,6 @@
 def secondary_heuristic_prune(tree_sim_base, 
                               branch_hierarchy:dict, 
                               map_names_to_branches:dict):
-    marks = {'location':[], 'type':[], 'radius':[], 'normal_vector':[], 'year':[], 'name':[]}
 
     names_to_x = []
     end_branch_buds = []
@@ -35,7 +34,7 @@ def secondary_heuristic_prune(tree_sim_base,
     for name in names_to_x:
         del branch_hierarchy[name]
         del map_names_to_branches[name]
-    return marks['location'], marks['type'], marks['radius'], marks['normal_vector'], marks['year'], marks['name']
+    return
 
     for name, tree_object in map_names_to_branches.items():
         if "Primary" in name and "bud" in name:

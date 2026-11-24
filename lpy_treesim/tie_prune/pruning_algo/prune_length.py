@@ -1,5 +1,4 @@
-#from lpy_treesim.tie_prune.tie_prune_simulation_base import TreeSimulationBase
-
+from lpy_treesim.tie_prune.pruning_algo.mark_cuts import mark_cuts
 
 def prune_length(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: dict, mark: bool):
     """
@@ -22,28 +21,44 @@ def prune_length(tree_sim_base, branch_hierarchy: dict, map_names_to_branches: d
     # Collect names of all trunks/branches/spurs to be pruned
     # This may indirectly prune bud sites/buds, but not directly
     names_to_x = []
-    branches_shortened = []
-    branches_to_prune = []
+    branches_shortened = [] # Used only for debugging
+    branches_pruned = {}
     for name, branch in map_names_to_branches.items():
-        if "bud" in name:
-            continue
-        noisy_len = branch.config.noisy_prune_length()
-        if branch.growth.length > noisy_len:
-            
-            if not mark: 
-                names_to_x.extend(branch.prune(noisy_len))
+        
+        if "bud" not in name:
+            noisy_len = branch.config.noisy_prune_length()
+            if branch.growth.length > noisy_len:
+                if mark: 
+                    branches_pruned[branch.name] = [branch, noisy_len]
+                else:
+                    names_to_x.extend(branch.prune(noisy_len))
                 
-            branches_shortened.append(branch.name)
-            keep_list = []
-            for child in branch_hierarchy[name]:
-                if child.name not in names_to_x:
-                    keep_list.append(child)
-            branch_hierarchy[name] = keep_list
+                    
+                branches_shortened.append(branch.name)
+                keep_list = []
+                for child in branch_hierarchy[name]:
+                    if child.name not in names_to_x:
+                        keep_list.append(child)
+                branch_hierarchy[name] = keep_list
+
+    if mark:
+        if len(branches_pruned)>0:
+            location = [branch[0].location.end for branch in branches_pruned.values()]
+            LENGTH = len(location)
+            type = ["config_length"]*LENGTH
+            radius = [0]*LENGTH
+            normal_vector = []
+            for vector in [branch[0].location.end_dir for branch in branches_pruned.values()]:
+                normal_vector.append([[0,0,0],vector])
+            name = branches_pruned.keys()
+            year = [int(tree_sim_base.current_iteration/tree_sim_base.config.num_iter_per_year)]*LENGTH
+            mark_cuts(location, type, radius, normal_vector, year, name) # imported function
+
 
     #print(f"Shortened: {branches_shortened}")
     #print(f"{names_to_x}")
     # Now remove any x'd buds etc from the hierarchy
-    if not mark:
+    else:
         for name in names_to_x:
             del branch_hierarchy[name]
             del map_names_to_branches[name]

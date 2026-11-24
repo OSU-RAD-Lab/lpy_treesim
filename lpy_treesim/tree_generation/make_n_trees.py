@@ -49,7 +49,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(args.stage_dir, exist_ok=True)
     
-    # CSV Reset Logic 
+    # Marking locations CSV Reset Logic 
     csv_path = Path(__file__).resolve().parents[1] / "tie_prune" / "pruning_algo" / "marked_locations.csv"
     columns = 'Loc_x,Loc_y,Loc_z,Type,Radius,Norm_x1,Norm_y1,Norm_z1,Norm_x2,Norm_y2,Norm_z2,Year,Name'
     df = pd.DataFrame(columns=columns.split(','))
